@@ -1,0 +1,10 @@
+Just a statistical significance test
+
+My methodology was basically the aidenomics pdh pdl closure thing. So if yesterday got closed above by today, the probability of tomorrow and the day after running todays high. except on the 1hr timeframe
+
+
+Bullish events: 4237
+Runs within next 2 bars: 3316/4237 = 78.26%
+
+Bearish events: 3429
+Runs within next 2 bars: 2511/3429 = 73.23%
