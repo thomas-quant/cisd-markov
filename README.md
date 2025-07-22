@@ -7,4 +7,7 @@ My hypothesis is that CISD candles will be more likely to have their high ran ab
 
 ##### Variables I'm looking to investigate;
 What % will that high be ran above in the 1st candle after, 2nd candle after.
+
 Does the OB size matter? 
+
+Does OB wick being closed above matter?
