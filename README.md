@@ -11,3 +11,8 @@ What % will that high be ran above in the 1st candle after, 2nd candle after.
 Does the OB size matter? eg. how many consecutive downclose candles?
 
 Does OB wick being closed above matter?
+
+### Results
+OB wick getting closed above matters
+
+In the significance, a basic CISD faired worse compared to a bullish candle getting its wick closed above. My theory on this is momentum would skew results. Either way CISD shows its significance once you take wick closures into account
