@@ -1,0 +1,10 @@
+Testing how probable the low will get ran before the high in a bullish scenario. Opposite applies for bearish
+
+
+BULLISH CISDs: 3629 events
+  Low crossed first: 1142/3629 = 31.47%
+  High crossed first: 2220/3629 = 61.17%
+
+BEARISH CISDs: 3652 events
+  Low crossed first: 2055/3652 = 56.27%
+  High crossed first: 1253/3652 = 34.31%

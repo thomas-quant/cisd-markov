@@ -1,0 +1,12 @@
+Testing the significance of # of downclose candles before a CISD
+
+
+BULLISH CISDs segmented by consecutive opposite candles:
+  1 consecutive before: 2012 events; Runs: 1518/2012 = 75.45%
+  2 consecutive before: 920 events; Runs: 705/920 = 76.63%
+  3 consecutive before: 697 events; Runs: 531/697 = 76.18%
+
+BEARISH CISDs segmented by consecutive opposite candles:
+  1 consecutive before: 1810 events; Runs: 1312/1810 = 72.49%
+  2 consecutive before: 947 events; Runs: 681/947 = 71.91%
+  3 consecutive before: 895 events; Runs: 644/895 = 71.96%

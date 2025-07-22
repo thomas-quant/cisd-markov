@@ -1,0 +1,10 @@
+Testing wick closure
+
+
+BULLISH CISDs:
+  Closes above wick: 921/1131 = 81.43%
+  Closes within wick: 1833/2498 = 73.38%
+
+BEARISH CISDs:
+  Closes below wick: 806/1053 = 76.54%
+  Closes within wick: 1831/2599 = 70.45%

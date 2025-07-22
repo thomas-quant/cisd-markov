@@ -1,0 +1,5 @@
+BULLISH CISDs: 3629 events
+  Runs within next 2 bars: 2754 / 3629 = 75.89%
+
+BEARISH CISDs: 3652 events
+  Runs within next 2 bars: 2637 / 3652 = 72.21%

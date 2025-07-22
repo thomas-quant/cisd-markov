@@ -1,0 +1,8 @@
+Just a statistical significance test
+
+
+Bullish events: 4237
+Runs within next 2 bars: 3316/4237 = 78.26%
+
+Bearish events: 3429
+Runs within next 2 bars: 2511/3429 = 73.23%

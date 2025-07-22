@@ -1,0 +1,18 @@
+Combining wick close with multiple consecutive candles
+
+
+BULLISH CISDs combined test:
+  1 consec opp, Closes above wick: 496/620 = 80.00%
+  1 consec opp, Closes within wick: 1022/1392 = 73.42%
+  2 consec opp, Closes above wick: 251/301 = 83.39%
+  2 consec opp, Closes within wick: 454/619 = 73.34%
+  3 consec opp, Closes above wick: 174/210 = 82.86%
+  3 consec opp, Closes within wick: 357/487 = 73.31%
+
+BEARISH CISDs combined test:
+  1 consec opp, Closes below wick: 434/549 = 79.05%
+  1 consec opp, Closes within wick: 878/1261 = 69.63%
+  2 consec opp, Closes below wick: 204/272 = 75.00%
+  2 consec opp, Closes within wick: 477/675 = 70.67%
+  3 consec opp, Closes below wick: 168/232 = 72.41%
+  3 consec opp, Closes within wick: 476/663 = 71.79%
