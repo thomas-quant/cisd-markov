@@ -1,6 +1,6 @@
 # CISD Barrier Analysis Suite
 
-A high-performance analysis engine for testing **CISD (Close Implies Subsequent Direction)** patterns across NQ and ES.
+A high-performance analysis engine for testing **CISD (Change In State of Delivery)** patterns across NQ and ES.
 
 This tool evaluates the "run rate" of the CISD pattern using a strict **Barrier Problem** approach: *Does the price hit the target (CISD High/Low) before hitting the stop (opposite side) within the lookahead window?*
 
@@ -147,4 +147,5 @@ Edit constants at the top of `cisd_analysis.py`:
 ## Requirements
 
 - Python 3.10+
+
 - `pandas`, `numpy`, `matplotlib`, `pyarrow`
