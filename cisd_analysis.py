@@ -352,7 +352,166 @@ def chart_combined(ax, data_nq, data_es):
     _style_ax(ax, "Combined: Wick x Consecutive")
 
 
-# ── Dispatch ──────────────────────────────────────────────────────────────────
+def compute_volume(df: pd.DataFrame) -> dict:
+    """
+    Barrier run rate segmented by volume ratio (CISD candle / previous candle).
+    Buckets: <1x  |  1-1.5x  |  1.5-2.5x  |  >2.5x
+    """
+    prev_vol = df["volume"].shift(1)
+    BINS = [
+        (0,    1.0,  "<1x (lower vol)"),
+        (1.0,  1.5,  "1x-1.5x"),
+        (1.5,  2.5,  "1.5x-2.5x"),
+        (2.5,  1e18, ">2.5x (spike)"),
+    ]
+    df_cisd    = df[df["cisd_type"].notna()]
+    idx_index  = df.index
+    stats = {ct: {lbl: {"total": 0, "runs": 0} for _, _, lbl in BINS}
+             for ct in ("bullish", "bearish")}
+    for ts, row in df_cisd.iterrows():
+        idx   = idx_index.get_loc(ts)
+        pv    = prev_vol.iloc[idx]
+        if not pv or pd.isna(pv) or pv <= 0:
+            continue
+        ratio = row["volume"] / pv
+        ct    = row["cisd_type"]
+        for lo, hi, lbl in BINS:
+            if lo <= ratio < hi:
+                stats[ct][lbl]["total"] += 1
+                if barrier_hit(df, idx, row, ct):
+                    stats[ct][lbl]["runs"] += 1
+                break
+    return stats
+
+
+def chart_volume(ax, data_nq, data_es):
+    all_labels = [lbl for _, _, lbl in
+                  [(0, 1.0, "<1x (lower vol)"), (1.0, 1.5, "1x-1.5x"),
+                   (1.5, 2.5, "1.5x-2.5x"), (2.5, 1e18, ">2.5x (spike)")]]
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for lbl in all_labels:
+                d = data[ct][lbl]
+                rows.append((f"{instr} {ct.capitalize()} {lbl}  (n={d['total']:,})",
+                             pv(d["runs"], d["total"]), COLORS[instr][ct]))
+    bars = [ax.barh(r[0], r[1], color=r[2], height=0.55) for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "Volume Ratio  (CISD candle vs previous)")
+
+
+def compute_candle_size(df: pd.DataFrame) -> dict:
+    """
+    Barrier run rate segmented by CISD body size as multiple of ATR(14).
+    Buckets: <0.5x  |  0.5-1x  |  1-1.5x  |  >1.5x
+    """
+    atr = (df["high"] - df["low"]).rolling(14).mean()
+    BINS = [
+        (0,    0.5,  "<0.5x ATR"),
+        (0.5,  1.0,  "0.5x-1x ATR"),
+        (1.0,  1.5,  "1x-1.5x ATR"),
+        (1.5,  1e18, ">1.5x ATR"),
+    ]
+    df_cisd   = df[df["cisd_type"].notna()]
+    idx_index = df.index
+    stats = {ct: {lbl: {"total": 0, "runs": 0} for _, _, lbl in BINS}
+             for ct in ("bullish", "bearish")}
+    for ts, row in df_cisd.iterrows():
+        idx     = idx_index.get_loc(ts)
+        atr_val = atr.iloc[idx]
+        if pd.isna(atr_val) or atr_val <= 0:
+            continue
+        body  = abs(row["close"] - row["open"])
+        ratio = body / atr_val
+        ct    = row["cisd_type"]
+        for lo, hi, lbl in BINS:
+            if lo <= ratio < hi:
+                stats[ct][lbl]["total"] += 1
+                if barrier_hit(df, idx, row, ct):
+                    stats[ct][lbl]["runs"] += 1
+                break
+    return stats
+
+
+def chart_candle_size(ax, data_nq, data_es):
+    all_labels = [lbl for _, _, lbl in
+                  [(0, 0.5, "<0.5x ATR"), (0.5, 1.0, "0.5x-1x ATR"),
+                   (1.0, 1.5, "1x-1.5x ATR"), (1.5, 1e18, ">1.5x ATR")]]
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for lbl in all_labels:
+                d = data[ct][lbl]
+                rows.append((f"{instr} {ct.capitalize()} {lbl}  (n={d['total']:,})",
+                             pv(d["runs"], d["total"]), COLORS[instr][ct]))
+    bars = [ax.barh(r[0], r[1], color=r[2], height=0.55) for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "Candle Body Size vs ATR(14)")
+
+def compute_size_cross(df: pd.DataFrame) -> dict:
+    """
+    Cross-tab: CISD body size vs previous candle body size, both vs ATR(14).
+    Threshold = 1x ATR for each candle.
+    4 quadrants:
+      big_cisd + small_prev  (CISD >= ATR, prev < ATR)
+      big_cisd + big_prev    (both >= ATR)
+      small_cisd + small_prev(both < ATR)
+      small_cisd + big_prev  (CISD < ATR, prev >= ATR)
+    """
+    atr      = (df["high"] - df["low"]).rolling(14).mean()
+    prev_body = (df["close"].shift(1) - df["open"].shift(1)).abs()
+
+    BUCKETS = [
+        (True,  False, "Big CISD / Small prev"),
+        (True,  True,  "Big CISD / Big prev"),
+        (False, False, "Small CISD / Small prev"),
+        (False, True,  "Small CISD / Big prev"),
+    ]
+    df_cisd   = df[df["cisd_type"].notna()]
+    idx_index = df.index
+    stats = {ct: {lbl: {"total": 0, "runs": 0}
+                  for _, _, lbl in BUCKETS}
+             for ct in ("bullish", "bearish")}
+
+    for ts, row in df_cisd.iterrows():
+        idx     = idx_index.get_loc(ts)
+        atr_val = atr.iloc[idx]
+        if pd.isna(atr_val) or atr_val <= 0:
+            continue
+        cisd_big = abs(row["close"] - row["open"]) >= atr_val
+        prev_big = prev_body.iloc[idx] >= atr_val
+        ct = row["cisd_type"]
+        for bc, bp, lbl in BUCKETS:
+            if cisd_big == bc and prev_big == bp:
+                stats[ct][lbl]["total"] += 1
+                if barrier_hit(df, idx, row, ct):
+                    stats[ct][lbl]["runs"] += 1
+                break
+    return stats
+
+
+def chart_size_cross(ax, data_nq, data_es):
+    bucket_labels = ["Big CISD / Small prev", "Big CISD / Big prev",
+                     "Small CISD / Small prev", "Small CISD / Big prev"]
+    # Alpha: full for Big CISD rows, dimmed for Small CISD rows
+    alphas = [1.0, 0.7, 0.5, 0.35]
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for lbl, alpha in zip(bucket_labels, alphas):
+                d = data[ct][lbl]
+                rows.append((f"{instr} {ct.capitalize()} — {lbl}  (n={d['total']:,})",
+                             pv(d["runs"], d["total"]),
+                             COLORS[instr][ct], alpha))
+    bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55)
+            for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "CISD Body x Prev Body vs ATR(14)")
+
+
 
 ANALYSES = {
     "basic":        ("Basic Barrier Run Rate",               compute_basic,        chart_basic),
@@ -360,6 +519,9 @@ ANALYSES = {
     "significance": ("Significance Test",                    compute_significance, chart_significance),
     "wick":         ("Wick Position",                        compute_wick,         chart_wick),
     "combined":     ("Combined: Wick x Consecutive",         compute_combined,     chart_combined),
+    "volume":       ("Volume Ratio",                         compute_volume,       chart_volume),
+    "candle_size":  ("Candle Body vs ATR(14)",               compute_candle_size,  chart_candle_size),
+    "size_cross":   ("CISD Body x Prev Body vs ATR",         compute_size_cross,   chart_size_cross),
 }
 
 
@@ -409,6 +571,12 @@ def build_csv_rows(keys: list, df_nq: pd.DataFrame, df_es: pd.DataFrame) -> pd.D
                             add(label, instr, ct, f"{n}c_{grp}",
                                 d["total"], d["runs"])
 
+            elif key in ("volume", "candle_size", "size_cross"):
+                # Generic: data[ct] is a dict of label -> {total, runs}
+                for ct in ("bullish", "bearish"):
+                    for bucket_lbl, d in data[ct].items():
+                        add(label, instr, ct, bucket_lbl, d["total"], d["runs"])
+
     return pd.DataFrame(rows)
 
 
@@ -418,8 +586,9 @@ def build_figure(tf_label: str, df_nq: pd.DataFrame, df_es: pd.DataFrame, keys: 
     ncols = 2 if n > 1 else 1
     nrows = (n + 1) // 2
 
-    # Combined chart taller since rows scale with data
-    base_h = {"basic": 3, "significance": 3, "mc": 6, "wick": 5, "combined": 10}
+    # Per-subplot height hints (rows of bar chart content)
+    base_h = {"basic": 3, "significance": 3, "mc": 6, "wick": 5,
+              "combined": 10, "volume": 6, "candle_size": 6, "size_cross": 6}
     row_heights = []
     for i, key in enumerate(keys):
         if i % 2 == 0:
@@ -468,13 +637,65 @@ def build_figure(tf_label: str, df_nq: pd.DataFrame, df_es: pd.DataFrame, keys: 
     return fig
 
 
+def build_standalone_figure(key: str, prepared: dict) -> plt.Figure:
+    """
+    Dedicated figure for a single analysis showing all 4 timeframes in a 2x2 grid.
+    `prepared` = {"NQ": {tf_label: df, ...}, "ES": {tf_label: df, ...}}
+    """
+    from matplotlib.patches import Patch
+    _, compute_fn, chart_fn = ANALYSES[key]
+    tf_labels = list(TIMEFRAMES.keys())   # Daily, 4H, 1H, 15min
+
+    base_h = {"volume": 6, "candle_size": 6}
+    subplot_h = base_h.get(key, 6)
+    fig, axes = plt.subplots(
+        2, 2,
+        figsize=(20, subplot_h * 2),
+        squeeze=False,
+    )
+    axes_flat = [ax for row in axes for ax in row]
+
+    analysis_label = ANALYSES[key][0]
+    fig.suptitle(
+        f"{analysis_label}  —  All Timeframes  |  Lookahead = {LOOKAHEAD} bars",
+        fontsize=13, fontweight="bold", color="#e0e4f0", y=1.01,
+    )
+
+    for i, tf_label in enumerate(tf_labels):
+        ax = axes_flat[i]
+        d_nq = compute_fn(prepared["NQ"][tf_label])
+        d_es = compute_fn(prepared["ES"][tf_label])
+        chart_fn(ax, d_nq, d_es)
+        # Prefix the subplot title with the timeframe
+        ax.set_title(f"{tf_label}  —  {ax.get_title()}", fontsize=10,
+                     fontweight="bold", pad=6)
+
+    legend_handles = [
+        Patch(color=COLORS["NQ"]["bullish"], label="NQ Bullish"),
+        Patch(color=COLORS["NQ"]["bearish"], label="NQ Bearish"),
+        Patch(color=COLORS["ES"]["bullish"], label="ES Bullish"),
+        Patch(color=COLORS["ES"]["bearish"], label="ES Bearish"),
+    ]
+    fig.legend(handles=legend_handles, loc="upper right", ncol=4,
+               fontsize=9, framealpha=0.8)
+
+    fig.tight_layout()
+    return fig
+
+
 def main() -> None:
+    # Keys that get their own all-TF figure rather than appearing per-TF
+    STANDALONE_KEYS = {"volume", "candle_size", "size_cross"}
+
     requested = sys.argv[1:] if len(sys.argv) > 1 else list(ANALYSES.keys())
     invalid = [k for k in requested if k not in ANALYSES]
     if invalid:
         print(f"Unknown key(s): {', '.join(invalid)}")
         print(f"Valid: {', '.join(ANALYSES.keys())}")
         sys.exit(1)
+
+    per_tf_keys  = [k for k in requested if k not in STANDALONE_KEYS]
+    standalone   = [k for k in requested if k in STANDALONE_KEYS]
 
     out_dir = Path(__file__).parent / "output"
     out_dir.mkdir(exist_ok=True)
@@ -487,25 +708,44 @@ def main() -> None:
         dfs_1m[instr] = load_1m(path)
         print(f"{len(dfs_1m[instr]):,} bars")
 
+    # Cache prepared DFs — needed for standalone figures
+    prepared = {"NQ": {}, "ES": {}}
+
     for tf_label, tf_rule in TIMEFRAMES.items():
         print(f"\nComputing {tf_label} ...", end=" ", flush=True)
         df_nq = prepare(resample_ohlcv(dfs_1m["NQ"], tf_rule))
         df_es = prepare(resample_ohlcv(dfs_1m["ES"], tf_rule))
+        prepared["NQ"][tf_label] = df_nq
+        prepared["ES"][tf_label] = df_es
 
-        # Chart
-        fig  = build_figure(tf_label, df_nq, df_es, requested)
-        png  = out_dir / f"{tf_label}.png"
+        if per_tf_keys:
+            fig  = build_figure(tf_label, df_nq, df_es, per_tf_keys)
+            png  = out_dir / f"{tf_label}.png"
+            fig.savefig(png, dpi=150, bbox_inches="tight")
+            plt.close(fig)
+
+            csv_df   = build_csv_rows(per_tf_keys, df_nq, df_es)
+            csv_path = out_dir / f"{tf_label}.csv"
+            csv_df.to_csv(csv_path, index=False)
+            print(f"saved -> {png.name}  +  {csv_path.name}")
+        else:
+            print("(per-TF analyses skipped)")
+
+    # ── Standalone all-TF figures ─────────────────────────────────────────────
+    FILENAMES = {
+        "volume":      "Volume_All_Timeframes.png",
+        "candle_size": "CandleSize_All_Timeframes.png",
+        "size_cross":   "SizeCross_All_Timeframes.png",
+    }
+    for key in standalone:
+        print(f"\nBuilding standalone: {key} ...", end=" ", flush=True)
+        fig  = build_standalone_figure(key, prepared)
+        png  = out_dir / FILENAMES[key]
         fig.savefig(png, dpi=150, bbox_inches="tight")
         plt.close(fig)
+        print(f"saved -> {png.name}")
 
-        # CSV
-        csv_df = build_csv_rows(requested, df_nq, df_es)
-        csv_path = out_dir / f"{tf_label}.csv"
-        csv_df.to_csv(csv_path, index=False)
-
-        print(f"saved -> {png.name}  +  {csv_path.name}")
-
-    print(f"\nDone. Charts saved to: {out_dir}")
+    print(f"\nDone. Output: {out_dir}")
 
 
 if __name__ == "__main__":
