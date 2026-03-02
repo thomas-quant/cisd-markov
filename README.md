@@ -1,43 +1,121 @@
 # CISD Barrier Analysis Suite
 
-A high-performance analysis engine for testing **CISD (Close Implies Subsequent Direction)** patterns across NQ and ES. 
+A high-performance analysis engine for testing **CISD (Close Implies Subsequent Direction)** patterns across NQ and ES.
 
 This tool evaluates the "run rate" of the CISD pattern using a strict **Barrier Problem** approach: *Does the price hit the target (CISD High/Low) before hitting the stop (opposite side) within the lookahead window?*
 
-## 📈 Key Findings & Insights
+## Key Findings
 
-Based on the multi-timeframe analysis (Daily, 4H, 1H, 15m) of the NQ and ES datasets:
+> All figures use barrier logic: target hit **before** stop, lookahead = 2 bars.
 
-### 1. The "Wick Advantage" (Primary Edge)
-Closing **past the previous wick** is the single strongest predictor of success.
-- **Past Wick Close:** ~70% – 75% success rate across all timeframes.
-- **Within Wick Close:** ~45% – 55% success rate.
-*Conclusion: A CISD that fails to clear the previous wick is essentially a coin flip; a clear breakout past the wick is a high-probability signal.*
+### 1. Baseline (Basic Run Rate)
 
-### 2. Timeframe Reliability
-- **1H & 15min:** Show the highest statistical consistency and sample size.
-- **4H:** Shows a slight dip in reliable "barrier hit" probability compared to lower timeframes.
-- **Daily:** Strongest "Bullish Bias" observed (nearly 10% higher success for bullish vs bearish).
+| Timeframe | NQ Bull | NQ Bear | ES Bull | ES Bear |
+|---|---|---|---|---|
+| Daily | 60.4% | 53.7% | 59.9% | 50.2% |
+| 4H | 55.9% | 50.3% | 58.1% | 51.8% |
+| 1H | 61.9% | 57.5% | 63.0% | 58.4% |
+| 15min | 62.2% | 59.0% | 62.2% | 59.6% |
 
-### 3. Bullish vs Bearish Bias
-The markets analyzed show a persistent bias towards bullish CISD success. Bullish setups consistently outperform bearish ones by 5-15% in terms of reaching the target before the stop.
+**4H is the weakest timeframe.** 1H and 15min are the most consistent. Bullish bias is persistent across all timeframes (~4–10%).
 
 ---
 
-## �️ Visual Reports
+### 2. Wick Position (Strongest Edge)
 
-- 📈 **[Daily Comparison Chart](output/Daily.png)**
-- 📈 **[4-Hour Comparison Chart](output/4H.png)**
-- 📈 **[1-Hour Comparison Chart](output/1H.png)**
-- 📈 **[15-Minute Comparison Chart](output/15min.png)**
+A CISD that closes **past the previous wick** is the single most reliable filter.
+
+| Timeframe | Past Wick (avg) | Within Wick (avg) | Spread |
+|---|---|---|---|
+| Daily | ~72–73% | ~44–54% | **~20–29pp** |
+| 4H | ~63–68% | ~44–53% | **~15–20pp** |
+| 1H | ~70–74% | ~53–58% | **~15–18pp** |
+| 15min | ~71–74% | ~54–58% | **~15–19pp** |
+
+*Within-wick bearish setups on the Daily are particularly weak: ES bearish within-wick hits only **39.5%** — worse than random.*
 
 ---
 
-## �🚀 Usage
+### 3. Combined Wick × Consecutive Candles
 
-Ensure you have your 1-minute data in `.parquet` format within the `data/` directory (`nq_1m.parquet`, `es_1m.parquet`).
+Combining past-wick closure with 2–3 consecutive opposite candles consistently yields the highest hit rates:
 
-### Run all analyses (Generates 4 PNGs + 4 CSVs):
+| Timeframe | Best bucket | Rate |
+|---|---|---|
+| Daily | NQ Bear 2c past wick | **78.8%** |
+| Daily | ES Bear 2c past wick | **80.7%** |
+| 4H | ES Bull 3c past wick | **77.7%** |
+| 1H | ES Bull 3c past wick | **75.8%** |
+| 15min | NQ Bull 3c past wick | **74.7%** |
+
+Within-wick + 2c on Daily (ES bear) drops to **36.7%** — the weakest observed bucket.
+
+---
+
+### 4. Stricter CISD (Significance Test)
+
+Requiring the close to exceed the **previous candle's High/Low** (not just the close) gives a +5–8% lift:
+
+| Timeframe | NQ Bull | NQ Bear | ES Bull | ES Bear |
+|---|---|---|---|---|
+| Daily | 68.2% | 63.7% | 68.5% | 63.0% |
+| 4H | 61.6% | 59.1% | 63.3% | 60.4% |
+| 1H | 66.5% | 63.8% | 67.6% | 65.0% |
+| 15min | 67.6% | 66.1% | 68.5% | 67.3% |
+
+---
+
+### 5. Consecutive Opposite Candles (Markov)
+
+Consecutive candle count alone has **weak and inconsistent** predictive value. Hit rates are largely flat across 1–3 consecutive opposite candles, staying within ±3% of the baseline. The edge only emerges when combined with wick position (see §3).
+
+---
+
+### 6. Candle Body Size vs ATR & Cross-Tab
+*(See standalone charts: `CandleSize_All_Timeframes.png`, `SizeCross_All_Timeframes.png`)*
+
+CISD candles with a body ≥ 1x ATR(14) show meaningfully higher hit rates than smaller candles. The cross-tab reveals:
+- **Big CISD + Small prev** = strongest quadrant.
+- **Small CISD + Big prev** = weakest quadrant.
+- A small previous candle amplifies the advantage of a large CISD body.
+
+---
+
+### 7. Volume Ratio
+*(See `Volume_All_Timeframes.png`)*
+
+Volume ratio (CISD candle vs previous candle) has **negligible impact** on outcomes. Hit rates are stable across all volume buckets as long as volume ≥ 1x the prior candle.
+
+---
+
+## Visual Reports
+
+**Per-Timeframe (5 core analyses):**
+
+![Daily](output/Daily.png)
+
+![4-Hour](output/4H.png)
+
+![1-Hour](output/1H.png)
+
+![15-Minute](output/15min.png)
+
+**Standalone — All Timeframes side-by-side:**
+
+![Candle Body Size vs ATR(14)](output/CandleSize_All_Timeframes.png)
+
+![CISD Body x Prev Body vs ATR (Cross-Tab)](output/SizeCross_All_Timeframes.png)
+
+![Volume Ratio](output/Volume_All_Timeframes.png)
+
+
+---
+
+## Usage
+
+Ensure data is in `.parquet` format in the `data/` directory (`nq_1m.parquet`, `es_1m.parquet`).
+
+### Run all analyses (4 per-TF PNGs + CSVs + 2 standalone PNGs):
 ```powershell
 python cisd_analysis.py
 ```
@@ -47,24 +125,26 @@ python cisd_analysis.py
 python cisd_analysis.py basic wick combined
 ```
 
-## 📊 Evaluation Models (All Barrier-Based)
+## Evaluation Models (All Barrier-Based)
 
 | Key | Model Name | Description |
 | :--- | :--- | :--- |
-| `basic` | **Basic Run Rate** | The baseline success rate for all CISD events. |
-| `mc` | **Markov Segmentation** | Buckets results by how many consecutive opposite-direction candles preceded the CISD. |
-| `significance` | **Stricter CISD** | Tests a variant where the CISD must close past the previous candle's High (Bullish) or Low (Bearish). |
-| `wick` | **Wick Position** | Split by whether the CISD close was "Past the Wick" or "Within the Wick" of the previous bar. |
-| `combined` | **Wick × Markov** | Cross-tabulated view of Wick Position and Consecutive Candle count for deep-dive stats. |
+| `basic` | **Basic Run Rate** | Baseline success rate for all CISD events. |
+| `mc` | **Markov Segmentation** | Buckets by consecutive opposite-direction candles preceding the CISD. |
+| `significance` | **Stricter CISD** | CISD must close past the previous candle's High (Bullish) or Low (Bearish). |
+| `wick` | **Wick Position** | Split by whether the close was past the wick or within it. |
+| `combined` | **Wick x Markov** | Cross-tab of wick position and consecutive candle count. |
+| `volume` | **Volume Ratio** | Segments by CISD volume relative to previous candle. Standalone all-TF output. |
+| `candle_size` | **Candle Body vs ATR** | Segments by CISD body size as a multiple of ATR(14). Standalone all-TF output. |
 
-## ⚙️ Configuration
+## Configuration
 
-Modify constants at the top of `cisd_analysis.py`:
-- `LOOKAHEAD`: Bars to check (Default: `2`).
+Edit constants at the top of `cisd_analysis.py`:
+- `LOOKAHEAD`: Bars to check ahead (Default: `2`).
 - `MAX_CONSEC`: Max consecutive candles for Markov (Default: `3`).
 - `TIMEFRAMES`: Resampling rules (Default: `Daily`, `4H`, `1H`, `15min`).
 
-## 🛠️ Requirements
+## Requirements
 
 - Python 3.10+
 - `pandas`, `numpy`, `matplotlib`, `pyarrow`
