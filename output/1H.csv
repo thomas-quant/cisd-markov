@@ -1,0 +1,53 @@
+Analysis,Instrument,Direction,Category,N,Runs,Rate_pct
+Basic Barrier Run Rate,NQ,bullish,all,7807,4834,61.92
+Basic Barrier Run Rate,NQ,bearish,all,7786,4474,57.46
+Basic Barrier Run Rate,ES,bullish,all,7472,4709,63.02
+Basic Barrier Run Rate,ES,bearish,all,7398,4321,58.41
+Consecutive Candles (Markov),NQ,bullish,1_consecutive,4119,2519,61.16
+Consecutive Candles (Markov),NQ,bullish,2_consecutive,2000,1247,62.35
+Consecutive Candles (Markov),NQ,bullish,3_consecutive,1688,1068,63.27
+Consecutive Candles (Markov),NQ,bearish,1_consecutive,3791,2176,57.4
+Consecutive Candles (Markov),NQ,bearish,2_consecutive,1931,1112,57.59
+Consecutive Candles (Markov),NQ,bearish,3_consecutive,2064,1186,57.46
+Consecutive Candles (Markov),ES,bullish,1_consecutive,3942,2451,62.18
+Consecutive Candles (Markov),ES,bullish,2_consecutive,1916,1240,64.72
+Consecutive Candles (Markov),ES,bullish,3_consecutive,1614,1018,63.07
+Consecutive Candles (Markov),ES,bearish,1_consecutive,3605,2120,58.81
+Consecutive Candles (Markov),ES,bearish,2_consecutive,1844,1062,57.59
+Consecutive Candles (Markov),ES,bearish,3_consecutive,1949,1139,58.44
+Significance Test,NQ,bullish,all,8093,5385,66.54
+Significance Test,NQ,bearish,all,6622,4223,63.77
+Significance Test,ES,bullish,all,7966,5386,67.61
+Significance Test,ES,bearish,all,6545,4256,65.03
+Wick Position,NQ,bullish,past_wick,2397,1720,71.76
+Wick Position,NQ,bullish,within_wick,5410,3114,57.56
+Wick Position,NQ,bearish,past_wick,2201,1528,69.42
+Wick Position,NQ,bearish,within_wick,5585,2946,52.75
+Wick Position,ES,bullish,past_wick,2295,1697,73.94
+Wick Position,ES,bullish,within_wick,5177,3012,58.18
+Wick Position,ES,bearish,past_wick,2106,1475,70.04
+Wick Position,ES,bearish,within_wick,5292,2846,53.78
+Combined: Wick x Consecutive,NQ,bullish,1c_past_wick,1267,893,70.48
+Combined: Wick x Consecutive,NQ,bullish,1c_within_wick,2852,1626,57.01
+Combined: Wick x Consecutive,NQ,bullish,2c_past_wick,635,459,72.28
+Combined: Wick x Consecutive,NQ,bullish,2c_within_wick,1365,788,57.73
+Combined: Wick x Consecutive,NQ,bullish,3c_past_wick,495,368,74.34
+Combined: Wick x Consecutive,NQ,bullish,3c_within_wick,1193,700,58.68
+Combined: Wick x Consecutive,NQ,bearish,1c_past_wick,1086,769,70.81
+Combined: Wick x Consecutive,NQ,bearish,1c_within_wick,2705,1407,52.01
+Combined: Wick x Consecutive,NQ,bearish,2c_past_wick,552,384,69.57
+Combined: Wick x Consecutive,NQ,bearish,2c_within_wick,1379,728,52.79
+Combined: Wick x Consecutive,NQ,bearish,3c_past_wick,563,375,66.61
+Combined: Wick x Consecutive,NQ,bearish,3c_within_wick,1501,811,54.03
+Combined: Wick x Consecutive,ES,bullish,1c_past_wick,1226,886,72.27
+Combined: Wick x Consecutive,ES,bullish,1c_within_wick,2716,1565,57.62
+Combined: Wick x Consecutive,ES,bullish,2c_past_wick,610,463,75.9
+Combined: Wick x Consecutive,ES,bullish,2c_within_wick,1306,777,59.49
+Combined: Wick x Consecutive,ES,bullish,3c_past_wick,459,348,75.82
+Combined: Wick x Consecutive,ES,bullish,3c_within_wick,1155,670,58.01
+Combined: Wick x Consecutive,ES,bearish,1c_past_wick,1048,732,69.85
+Combined: Wick x Consecutive,ES,bearish,1c_within_wick,2557,1388,54.28
+Combined: Wick x Consecutive,ES,bearish,2c_past_wick,533,363,68.11
+Combined: Wick x Consecutive,ES,bearish,2c_within_wick,1311,699,53.32
+Combined: Wick x Consecutive,ES,bearish,3c_past_wick,525,380,72.38
+Combined: Wick x Consecutive,ES,bearish,3c_within_wick,1424,759,53.3
