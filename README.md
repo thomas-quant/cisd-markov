@@ -1,6 +1,6 @@
 # CISD Barrier Analysis Suite
 
-A high-performance analysis engine for testing **CISD (Change In State of Delivery)** patterns across NQ and ES.
+A high-performance analysis engine for testing **CISD (Close Implies Subsequent Direction)** patterns across NQ and ES.
 
 This tool evaluates the "run rate" of the CISD pattern using a strict **Barrier Problem** approach: *Does the price hit the target (CISD High/Low) before hitting the stop (opposite side) within the lookahead window?*
 
@@ -125,6 +125,17 @@ python cisd_analysis.py
 python cisd_analysis.py basic wick combined
 ```
 
+### Forward return fan charts (static PNGs, sliced by feature):
+```powershell
+python cisd_analysis.py fan fan_smt fan_size fan_wick fan_consec
+```
+
+### Interactive HTML report (compound filter UI):
+```powershell
+python cisd_analysis.py export_html
+```
+Opens `output/forward_returns.html` in any browser — no server needed. Filter rows for Timeframe, SMT, Size × Prev, Wick, and Consec can be combined freely; the fan chart updates to the intersection instantly.
+
 ## Evaluation Models (All Barrier-Based)
 
 | Key | Model Name | Description |
@@ -136,6 +147,19 @@ python cisd_analysis.py basic wick combined
 | `combined` | **Wick x Markov** | Cross-tab of wick position and consecutive candle count. |
 | `volume` | **Volume Ratio** | Segments by CISD volume relative to previous candle. Standalone all-TF output. |
 | `candle_size` | **Candle Body vs ATR** | Segments by CISD body size as a multiple of ATR(14). Standalone all-TF output. |
+| `size_cross` | **CISD Body × Prev Body** | Cross-tab: both candles vs ATR(14). Standalone all-TF output. |
+| `smt_cisd` | **Swing SMT Confirmation** | Barrier rate split by whether a same-direction Swing SMT co-occurs. Standalone. |
+
+## Forward Return Fan Keys
+
+| Key | Output | Description |
+| :--- | :--- | :--- |
+| `fan` | `Fan_<TF>.png` + `Fan_All_Timeframes.png` | Unfiltered fan, all events. |
+| `fan_smt` | `Fan_Smt_All_Timeframes.png` | Fan sliced by SMT presence. |
+| `fan_size` | `Fan_Size_All_Timeframes.png` | Fan sliced by CISD body × prev body vs ATR. |
+| `fan_wick` | `Fan_Wick_All_Timeframes.png` | Fan sliced by wick position. |
+| `fan_consec` | `Fan_Consec_All_Timeframes.png` | Fan sliced by consecutive opposite candle count. |
+| `export_html` | `forward_returns.html` | Interactive compound-filter report (all 180 combinations pre-computed). |
 
 ## Configuration
 
@@ -147,5 +171,4 @@ Edit constants at the top of `cisd_analysis.py`:
 ## Requirements
 
 - Python 3.10+
-
 - `pandas`, `numpy`, `matplotlib`, `pyarrow`
