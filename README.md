@@ -88,6 +88,40 @@ Volume ratio (CISD candle vs previous candle) has **negligible impact** on outco
 
 ---
 
+### 8. Swing SMT Confirmation
+*(See `SMT_CISD_All_Timeframes.png`)*
+
+A co-occurring same-direction **Swing SMT** (divergence between NQ and ES swing highs/lows, lookback=20) is used as a confirmation filter. Results vary sharply by timeframe.
+
+| Timeframe | Instrument | Direction | w/ SMT | no SMT | Δ |
+|---|---|---|---|---|---|
+| Daily | NQ | Bullish | **70.8%** (n=24) | 59.7% | +11.1pp |
+| Daily | NQ | Bearish | **63.6%** (n=11) | 53.4% | +10.2pp |
+| Daily | ES | Bullish | 61.5% (n=26) | 59.7% | +1.8pp |
+| Daily | ES | Bearish | **27.8%** (n=18) | 51.3% | −23.5pp |
+| 4H | NQ | Bullish | 53.1% (n=81) | 56.0% | −2.9pp |
+| 4H | NQ | Bearish | 51.1% (n=94) | 50.3% | +0.8pp |
+| 4H | ES | Bullish | 61.0% (n=82) | 58.0% | +3.0pp |
+| 4H | ES | Bearish | 51.0% (n=98) | 51.8% | −0.8pp |
+| 1H | NQ | Bullish | 62.8% (n=301) | 61.9% | +0.9pp |
+| 1H | NQ | Bearish | 59.3% (n=388) | 57.4% | +1.9pp |
+| 1H | ES | Bullish | 63.6% (n=272) | 63.0% | +0.6pp |
+| 1H | ES | Bearish | 58.2% (n=364) | 58.4% | −0.2pp |
+| 15min | NQ | Bullish | **64.7%** (n=1,237) | 62.1% | +2.6pp |
+| 15min | NQ | Bearish | **62.5%** (n=1,363) | 58.8% | +3.7pp |
+| 15min | ES | Bullish | **64.3%** (n=1,219) | 62.1% | +2.2pp |
+| 15min | ES | Bearish | **62.2%** (n=1,335) | 59.5% | +2.7pp |
+
+**Key takeaways:**
+- **Daily** SMT sample sizes are very small (n=11–26) making results unreliable. The ES Bearish w/ SMT result (27.8%) is a notable outlier but based on only 18 events.
+- **4H** SMT has negligible impact — differences are within ±3pp and no directional consistency.
+- **1H** SMT is similarly flat — lifts of <2pp across all four instrument/direction combos.
+- **15min** shows the most consistent positive effect: +2–4pp across all combos with large sample sizes (n=1,200–1,400).
+
+SMT confirmation adds the most value at **15min**, where it provides a small but consistent edge across both instruments and both directions.
+
+---
+
 ## Visual Reports
 
 **Per-Timeframe (5 core analyses):**
@@ -108,6 +142,7 @@ Volume ratio (CISD candle vs previous candle) has **negligible impact** on outco
 
 ![Volume Ratio](output/Volume_All_Timeframes.png)
 
+![Swing SMT Confirmation](output/SMT_CISD_All_Timeframes.png)
 
 ---
 
