@@ -97,6 +97,69 @@ def prepare(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _annotate_swing_smt_from_events(df: pd.DataFrame, events: pd.DataFrame, instrument: str) -> pd.DataFrame:
+    annotated = df.copy()
+    annotated["has_swing_smt"] = False
+    annotated["swing_smt_tag"] = "no SMT"
+    annotated["swing_smt_match_ts"] = pd.NaT
+    annotated["swing_smt_role"] = "none"
+
+    if annotated.empty or events.empty or "cisd_type" not in annotated.columns:
+        return annotated
+
+    event_rows = []
+    for row in events.itertuples(index=False):
+        signal_type = getattr(row, "signal_type", None)
+        created_ts = getattr(row, "created_ts", None)
+        sweeping_asset = getattr(row, "sweeping_asset", None)
+        failing_asset = getattr(row, "failing_asset", None)
+        if pd.isna(created_ts) or signal_type is None:
+            continue
+        direction = "bullish" if str(signal_type).startswith("Bullish") else "bearish" if str(signal_type).startswith("Bearish") else None
+        if direction is None:
+            continue
+        event_rows.append(
+            {
+                "created_ts": created_ts,
+                "direction": direction,
+                "sweeping_asset": sweeping_asset,
+                "failing_asset": failing_asset,
+            }
+        )
+
+    if not event_rows:
+        return annotated
+
+    event_rows.sort(key=lambda r: r["created_ts"])
+
+    for idx, ts in enumerate(annotated.index):
+        ct = annotated.iat[idx, annotated.columns.get_loc("cisd_type")]
+        if ct not in ("bullish", "bearish"):
+            continue
+
+        lower_idx = max(0, idx - 2)
+        lower_ts = annotated.index[lower_idx]
+        best_event = None
+        for event in event_rows:
+            if event["direction"] != ct:
+                continue
+            if lower_ts <= event["created_ts"] <= ts:
+                best_event = event
+
+        if best_event is None:
+            continue
+
+        annotated.iat[idx, annotated.columns.get_loc("has_swing_smt")] = True
+        annotated.iat[idx, annotated.columns.get_loc("swing_smt_tag")] = "w/ SMT"
+        annotated.iat[idx, annotated.columns.get_loc("swing_smt_match_ts")] = best_event["created_ts"]
+        if instrument == best_event["sweeping_asset"]:
+            annotated.iat[idx, annotated.columns.get_loc("swing_smt_role")] = "swept"
+        elif instrument == best_event["failing_asset"]:
+            annotated.iat[idx, annotated.columns.get_loc("swing_smt_role")] = "failed_to_sweep"
+
+    return annotated
+
+
 # ── Core Barrier Logic ────────────────────────────────────────────────────────
 
 def barrier_hit(df: pd.DataFrame, idx: int, row: pd.Series, ct: str) -> bool:
