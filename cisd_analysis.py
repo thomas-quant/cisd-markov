@@ -59,6 +59,8 @@ TIMEFRAMES = {
 }
 LOOKAHEAD  = 2   # bars to look ahead after a CISD
 MAX_CONSEC = 3   # max consecutive opposite candles to segment by
+SMT_LOOKBACK = 20
+_SMT_PKG_PATH = Path("/mnt/e/backup/code/Finance/Misc/SMT")
 
 
 # ── Data Loading & Resampling ─────────────────────────────────────────────────
@@ -166,6 +168,66 @@ def _annotate_swing_smt_from_events(df: pd.DataFrame, events: pd.DataFrame, inst
             annotated.iat[idx, annotated.columns.get_loc("swing_smt_role")] = "failed_to_sweep"
 
     return annotated
+
+
+def _to_smt_ohlc(df: pd.DataFrame) -> pd.DataFrame:
+    required_columns = ("open", "high", "low", "close")
+    missing_columns = [column for column in required_columns if column not in df.columns]
+    if missing_columns:
+        raise ValueError(f"df must contain columns: {', '.join(missing_columns)}")
+    return df.rename(
+        columns={"open": "Open", "high": "High", "low": "Low", "close": "Close"}
+    )[["Open", "High", "Low", "Close"]].copy()
+
+
+def _load_scan_smts_historical():
+    if not _SMT_PKG_PATH.exists():
+        raise FileNotFoundError(f"SMT package path does not exist: {_SMT_PKG_PATH}")
+    pkg_path = str(_SMT_PKG_PATH)
+    if pkg_path not in sys.path:
+        sys.path.insert(0, pkg_path)
+    try:
+        from smt import scan_smts_historical
+    except ImportError as exc:
+        raise ImportError(f"Could not import scan_smts_historical from {_SMT_PKG_PATH}") from exc
+    return scan_smts_historical
+
+
+def _scan_swing_smt_events(df_nq: pd.DataFrame, df_es: pd.DataFrame) -> pd.DataFrame:
+    if not df_nq.index.equals(df_es.index):
+        raise ValueError("df_nq and df_es must share the same index")
+    scan_smts_historical = _load_scan_smts_historical()
+    events = scan_smts_historical(
+        _to_smt_ohlc(df_nq),
+        _to_smt_ohlc(df_es),
+        asset_names=("NQ", "ES"),
+        lookback_period=SMT_LOOKBACK,
+        enable_micro=False,
+        enable_swing=True,
+        enable_fvg=False,
+    )
+    return events[events["signal_type"].isin(("Bullish Swing SMT", "Bearish Swing SMT"))].reset_index(drop=True)
+
+
+def prepare_pair(
+    df_nq_1m: pd.DataFrame,
+    df_es_1m: pd.DataFrame,
+    rule: str,
+    with_swing_smt: bool = False,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    resampled_nq = resample_ohlcv(df_nq_1m, rule)
+    resampled_es = resample_ohlcv(df_es_1m, rule)
+    df_nq = prepare(resampled_nq)
+    df_es = prepare(resampled_es)
+
+    if not with_swing_smt:
+        return df_nq, df_es
+
+    events = _scan_swing_smt_events(resampled_nq, resampled_es)
+    return (
+        _annotate_swing_smt_from_events(df_nq, events, instrument="NQ"),
+        _annotate_swing_smt_from_events(df_es, events, instrument="ES"),
+    )
 
 
 # ── Core Barrier Logic ────────────────────────────────────────────────────────
@@ -784,8 +846,7 @@ def main() -> None:
 
     for tf_label, tf_rule in TIMEFRAMES.items():
         print(f"\nComputing {tf_label} ...", end=" ", flush=True)
-        df_nq = prepare(resample_ohlcv(dfs_1m["NQ"], tf_rule))
-        df_es = prepare(resample_ohlcv(dfs_1m["ES"], tf_rule))
+        df_nq, df_es = prepare_pair(dfs_1m["NQ"], dfs_1m["ES"], tf_rule)
         prepared["NQ"][tf_label] = df_nq
         prepared["ES"][tf_label] = df_es
 

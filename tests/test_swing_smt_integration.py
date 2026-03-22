@@ -1,3 +1,4 @@
+import cisd_analysis
 import pytest
 import pandas as pd
 
@@ -83,3 +84,37 @@ def test_annotate_swing_smt_raises_on_missing_event_columns(missing_column):
 
     with pytest.raises(ValueError, match=missing_column):
         _annotate_swing_smt_from_events(df, events, instrument="NQ")
+
+
+def test_prepare_pair_applies_vectorized_swing_smt_annotations(monkeypatch):
+    index = pd.date_range("2026-01-01 09:30", periods=6, freq="15min")
+    minute = pd.DataFrame(
+        {
+            "open": [1, 2, 3, 4, 5, 6],
+            "high": [2, 3, 4, 5, 6, 7],
+            "low": [0, 1, 2, 3, 4, 5],
+            "close": [1.5, 2.5, 3.5, 4.5, 5.5, 6.5],
+            "volume": [10, 10, 10, 10, 10, 10],
+        },
+        index=index,
+    )
+
+    monkeypatch.setattr(
+        cisd_analysis,
+        "_scan_swing_smt_events",
+        lambda df_nq, df_es: pd.DataFrame(
+            [
+                {
+                    "signal_type": "Bullish Swing SMT",
+                    "created_ts": index[2],
+                    "sweeping_asset": "NQ",
+                    "failing_asset": "ES",
+                }
+            ]
+        ),
+    )
+
+    df_nq, df_es = cisd_analysis.prepare_pair(minute, minute, "15min", with_swing_smt=True)
+
+    assert "swing_smt_tag" in df_nq.columns
+    assert "swing_smt_tag" in df_es.columns
