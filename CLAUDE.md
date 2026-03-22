@@ -45,9 +45,6 @@ Everything lives in a single file: `cisd_analysis.py`. The flow is:
 2. Write `chart_<name>(ax, data_nq, data_es)` using `_bar_label` / `_style_ax` helpers.
 3. Add to `ANALYSES` dict. If it should be standalone (all-TF figure), add its key to `STANDALONE_KEYS` and `FILENAMES` in `main()`.
 
-## Future Testing
+## Research Backlog
 
-- Investigate whether `candle[1]` after a CISD helps predict continuation.
-- Test whether continuation is more probable when `candle[1]` closes in the direction of the CISD.
-- Test whether closing beyond the wick of `candle[1]` further improves continuation probabilities.
-- Consider related `candle[1]` follow-through variants if they can be expressed cleanly as feature tags or barrier buckets.
+Planned research ideas live in `docs/research_backlog.md`. Keep `README.md` focused on current behavior and findings, and use the backlog for future studies and rough ideas copied in from Discord.
