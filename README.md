@@ -162,7 +162,7 @@ python cisd_analysis.py
 python cisd_analysis.py basic wick combined smt_cisd
 ```
 
-The older `fan*` and `export_html` commands mentioned in some notes are not implemented in this branch.
+The current CLI surface is limited to the analysis keys listed below.
 
 ## Evaluation Models (All Barrier-Based)
 
