@@ -4,6 +4,8 @@ A high-performance analysis engine for testing **CISD (Close Implies Subsequent 
 
 This tool evaluates the "run rate" of the CISD pattern using a strict **Barrier Problem** approach: *Does the price hit the target (CISD High/Low) before hitting the stop (opposite side) within the lookahead window?*
 
+Swing SMT confirmation is now backed by the local SMT library at `/mnt/e/backup/code/Finance/Misc/SMT`. The matching rule is left-only: a CISD at bar `t` counts when a same-direction Swing SMT was created on `t`, `t-1`, or `t-2`.
+
 ## Key Findings
 
 > All figures use barrier logic: target hit **before** stop, lookahead = 2 bars.
@@ -150,26 +152,17 @@ SMT confirmation adds the most value at **15min**, where it provides a small but
 
 Ensure data is in `.parquet` format in the `data/` directory (`nq_1m.parquet`, `es_1m.parquet`).
 
-### Run all analyses (4 per-TF PNGs + CSVs + 2 standalone PNGs):
+### Run all analyses (4 per-TF PNGs + CSVs + 4 standalone PNGs):
 ```powershell
 python cisd_analysis.py
 ```
 
 ### Run specific models:
 ```powershell
-python cisd_analysis.py basic wick combined
+python cisd_analysis.py basic wick combined smt_cisd
 ```
 
-### Forward return fan charts (static PNGs, sliced by feature):
-```powershell
-python cisd_analysis.py fan fan_smt fan_size fan_wick fan_consec
-```
-
-### Interactive HTML report (compound filter UI):
-```powershell
-python cisd_analysis.py export_html
-```
-Opens `output/forward_returns.html` in any browser — no server needed. Filter rows for Timeframe, SMT, Size × Prev, Wick, and Consec can be combined freely; the fan chart updates to the intersection instantly.
+The older `fan*` and `export_html` commands mentioned in some notes are not implemented in this branch.
 
 ## Evaluation Models (All Barrier-Based)
 
@@ -185,23 +178,13 @@ Opens `output/forward_returns.html` in any browser — no server needed. Filter 
 | `size_cross` | **CISD Body × Prev Body** | Cross-tab: both candles vs ATR(14). Standalone all-TF output. |
 | `smt_cisd` | **Swing SMT Confirmation** | Barrier rate split by whether a same-direction Swing SMT co-occurs. Standalone. |
 
-## Forward Return Fan Keys
-
-| Key | Output | Description |
-| :--- | :--- | :--- |
-| `fan` | `Fan_<TF>.png` + `Fan_All_Timeframes.png` | Unfiltered fan, all events. |
-| `fan_smt` | `Fan_Smt_All_Timeframes.png` | Fan sliced by SMT presence. |
-| `fan_size` | `Fan_Size_All_Timeframes.png` | Fan sliced by CISD body × prev body vs ATR. |
-| `fan_wick` | `Fan_Wick_All_Timeframes.png` | Fan sliced by wick position. |
-| `fan_consec` | `Fan_Consec_All_Timeframes.png` | Fan sliced by consecutive opposite candle count. |
-| `export_html` | `forward_returns.html` | Interactive compound-filter report (all 180 combinations pre-computed). |
-
 ## Configuration
 
 Edit constants at the top of `cisd_analysis.py`:
 - `LOOKAHEAD`: Bars to check ahead (Default: `2`).
 - `MAX_CONSEC`: Max consecutive candles for Markov (Default: `3`).
 - `TIMEFRAMES`: Resampling rules (Default: `Daily`, `4H`, `1H`, `15min`).
+- Swing SMT support depends on the local SMT package at `/mnt/e/backup/code/Finance/Misc/SMT`.
 
 ## Requirements
 

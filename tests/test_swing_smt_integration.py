@@ -2,7 +2,7 @@ import cisd_analysis
 import pytest
 import pandas as pd
 
-from cisd_analysis import _annotate_swing_smt_from_events
+from cisd_analysis import _SMT_PKG_PATH, _annotate_swing_smt_from_events
 
 
 def test_annotate_swing_smt_uses_left_window_and_sets_role():
@@ -118,6 +118,85 @@ def test_prepare_pair_applies_vectorized_swing_smt_annotations(monkeypatch):
 
     assert "swing_smt_tag" in df_nq.columns
     assert "swing_smt_tag" in df_es.columns
+
+
+def test_prepare_pair_aligns_misaligned_resampled_frames(monkeypatch):
+    nq_index = pd.date_range("2026-01-01 09:30", periods=120, freq="15min")
+    es_index = pd.date_range("2026-01-01 09:30", periods=60, freq="15min")
+    nq_1m = pd.DataFrame(
+        {
+            "open": range(len(nq_index)),
+            "high": [value + 1 for value in range(len(nq_index))],
+            "low": [value - 1 for value in range(len(nq_index))],
+            "close": [value + 0.5 for value in range(len(nq_index))],
+            "volume": [100] * len(nq_index),
+        },
+        index=nq_index,
+    )
+    es_1m = pd.DataFrame(
+        {
+            "open": range(len(es_index)),
+            "high": [value + 1 for value in range(len(es_index))],
+            "low": [value - 1 for value in range(len(es_index))],
+            "close": [value + 0.5 for value in range(len(es_index))],
+            "volume": [100] * len(es_index),
+        },
+        index=es_index,
+    )
+
+    seen = {}
+
+    def fake_scan(df_nq, df_es):
+        seen["nq_index"] = df_nq.index
+        seen["es_index"] = df_es.index
+        return pd.DataFrame(
+            columns=["signal_type", "created_ts", "sweeping_asset", "failing_asset"]
+        )
+
+    monkeypatch.setattr(cisd_analysis, "_scan_swing_smt_events", fake_scan)
+
+    df_nq, df_es = cisd_analysis.prepare_pair(nq_1m, es_1m, "1H", with_swing_smt=True)
+
+    assert df_nq.index.equals(df_es.index)
+    assert df_nq.index.equals(seen["nq_index"])
+    assert df_es.index.equals(seen["es_index"])
+    assert len(df_nq) == len(seen["nq_index"])
+    assert len(df_es) == len(seen["es_index"])
+
+
+def test_prepare_pair_swing_smt_columns_exist_when_scanner_runs():
+    if not _SMT_PKG_PATH.exists():
+        pytest.skip("SMT package not available")
+
+    index = pd.date_range("2026-01-01 09:30", periods=40, freq="15min")
+    base = pd.Series(range(len(index)), index=index, dtype=float)
+    df_nq_1m = pd.DataFrame(
+        {
+            "open": 100 + base * 0.2,
+            "high": 100.5 + base * 0.2,
+            "low": 99.5 + base * 0.2,
+            "close": 100.1 + base * 0.2,
+            "volume": 1000 + base.astype(int),
+        },
+        index=index,
+    )
+    df_es_1m = pd.DataFrame(
+        {
+            "open": 200 + base * 0.15,
+            "high": 200.4 + base * 0.15,
+            "low": 199.6 + base * 0.15,
+            "close": 200.05 + base * 0.15,
+            "volume": 1200 + base.astype(int),
+        },
+        index=index,
+    )
+
+    df_nq, df_es = cisd_analysis.prepare_pair(df_nq_1m, df_es_1m, "15min", with_swing_smt=True)
+
+    expected_columns = {"has_swing_smt", "swing_smt_tag", "swing_smt_match_ts", "swing_smt_role"}
+    assert expected_columns <= set(df_nq.columns)
+    assert expected_columns <= set(df_es.columns)
+    assert set(df_nq["swing_smt_tag"].unique()) <= {"w/ SMT", "no SMT"}
 
 
 def test_compute_smt_cisd_splits_runs_by_swing_smt_tag():
