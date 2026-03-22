@@ -118,3 +118,28 @@ def test_prepare_pair_applies_vectorized_swing_smt_annotations(monkeypatch):
 
     assert "swing_smt_tag" in df_nq.columns
     assert "swing_smt_tag" in df_es.columns
+
+
+def test_compute_smt_cisd_splits_runs_by_swing_smt_tag():
+    index = pd.date_range("2026-01-01 09:30", periods=5, freq="15min")
+    df = pd.DataFrame(
+        {
+            "open": [10, 9, 11, 12, 12],
+            "high": [11, 10, 13, 13, 14],
+            "low": [9, 8, 10, 11, 11],
+            "close": [9, 11, 12, 12, 13],
+            "direction": ["bearish", "bullish", "bullish", "neutral", "bullish"],
+            "prev_close": [None, 9, 11, 12, 12],
+            "prev_direction": [None, "bearish", "bullish", "bullish", "neutral"],
+            "prev_high": [None, 11, 10, 13, 13],
+            "prev_low": [None, 9, 8, 10, 11],
+            "cisd_type": [None, "bullish", None, None, None],
+            "swing_smt_tag": ["no SMT", "w/ SMT", "no SMT", "no SMT", "no SMT"],
+        },
+        index=index,
+    )
+
+    stats = cisd_analysis.compute_smt_cisd(df)
+
+    assert stats["bullish"]["w/ SMT"]["total"] == 1
+    assert stats["bullish"]["no SMT"]["total"] == 0

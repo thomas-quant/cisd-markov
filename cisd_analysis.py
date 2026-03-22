@@ -645,6 +645,44 @@ def chart_size_cross(ax, data_nq, data_es):
     _style_ax(ax, "CISD Body x Prev Body vs ATR(14)")
 
 
+def compute_smt_cisd(df: pd.DataFrame) -> dict:
+    """Barrier run rate split by whether a matching Swing SMT co-occurs."""
+    if "swing_smt_tag" not in df.columns:
+        raise ValueError("df must contain swing_smt_tag column")
+
+    stats = {
+        "bullish": {"w/ SMT": {"total": 0, "runs": 0}, "no SMT": {"total": 0, "runs": 0}},
+        "bearish": {"w/ SMT": {"total": 0, "runs": 0}, "no SMT": {"total": 0, "runs": 0}},
+    }
+
+    df_cisd = df[df["cisd_type"].notna()]
+    idx_index = df.index
+    for ts, row in df_cisd.iterrows():
+        ct = row["cisd_type"]
+        tag = row["swing_smt_tag"]
+        if ct not in stats or tag not in stats[ct]:
+            continue
+        stats[ct][tag]["total"] += 1
+        if barrier_hit(df, idx_index.get_loc(ts), row, ct):
+            stats[ct][tag]["runs"] += 1
+    return stats
+
+
+def chart_smt_cisd(ax, data_nq, data_es):
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for tag, alpha in (("w/ SMT", 1.0), ("no SMT", 0.55)):
+                d = data[ct][tag]
+                rows.append((f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})",
+                             pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+    bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55)
+            for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "Swing SMT Confirmation")
+
+
 
 ANALYSES = {
     "basic":        ("Basic Barrier Run Rate",               compute_basic,        chart_basic),
@@ -655,6 +693,7 @@ ANALYSES = {
     "volume":       ("Volume Ratio",                         compute_volume,       chart_volume),
     "candle_size":  ("Candle Body vs ATR(14)",               compute_candle_size,  chart_candle_size),
     "size_cross":   ("CISD Body x Prev Body vs ATR",         compute_size_cross,   chart_size_cross),
+    "smt_cisd":     ("Swing SMT Confirmation",               compute_smt_cisd,     chart_smt_cisd),
 }
 
 
@@ -710,6 +749,11 @@ def build_csv_rows(keys: list, df_nq: pd.DataFrame, df_es: pd.DataFrame) -> pd.D
                     for bucket_lbl, d in data[ct].items():
                         add(label, instr, ct, bucket_lbl, d["total"], d["runs"])
 
+            elif key == "smt_cisd":
+                for ct in ("bullish", "bearish"):
+                    for tag, d in data[ct].items():
+                        add(label, instr, ct, tag, d["total"], d["runs"])
+
     return pd.DataFrame(rows)
 
 
@@ -721,7 +765,8 @@ def build_figure(tf_label: str, df_nq: pd.DataFrame, df_es: pd.DataFrame, keys: 
 
     # Per-subplot height hints (rows of bar chart content)
     base_h = {"basic": 3, "significance": 3, "mc": 6, "wick": 5,
-              "combined": 10, "volume": 6, "candle_size": 6, "size_cross": 6}
+              "combined": 10, "volume": 6, "candle_size": 6, "size_cross": 6,
+              "smt_cisd": 4}
     row_heights = []
     for i, key in enumerate(keys):
         if i % 2 == 0:
@@ -818,7 +863,7 @@ def build_standalone_figure(key: str, prepared: dict) -> plt.Figure:
 
 def main() -> None:
     # Keys that get their own all-TF figure rather than appearing per-TF
-    STANDALONE_KEYS = {"volume", "candle_size", "size_cross"}
+    STANDALONE_KEYS = {"volume", "candle_size", "size_cross", "smt_cisd"}
 
     requested = sys.argv[1:] if len(sys.argv) > 1 else list(ANALYSES.keys())
     invalid = [k for k in requested if k not in ANALYSES]
@@ -829,6 +874,7 @@ def main() -> None:
 
     per_tf_keys  = [k for k in requested if k not in STANDALONE_KEYS]
     standalone   = [k for k in requested if k in STANDALONE_KEYS]
+    needs_swing_smt = "smt_cisd" in requested
 
     out_dir = Path(__file__).parent / "output"
     out_dir.mkdir(exist_ok=True)
@@ -846,7 +892,7 @@ def main() -> None:
 
     for tf_label, tf_rule in TIMEFRAMES.items():
         print(f"\nComputing {tf_label} ...", end=" ", flush=True)
-        df_nq, df_es = prepare_pair(dfs_1m["NQ"], dfs_1m["ES"], tf_rule)
+        df_nq, df_es = prepare_pair(dfs_1m["NQ"], dfs_1m["ES"], tf_rule, with_swing_smt=needs_swing_smt)
         prepared["NQ"][tf_label] = df_nq
         prepared["ES"][tf_label] = df_es
 
@@ -868,6 +914,7 @@ def main() -> None:
         "volume":      "Volume_All_Timeframes.png",
         "candle_size": "CandleSize_All_Timeframes.png",
         "size_cross":   "SizeCross_All_Timeframes.png",
+        "smt_cisd":    "SMT_CISD_All_Timeframes.png",
     }
     for key in standalone:
         print(f"\nBuilding standalone: {key} ...", end=" ", flush=True)
