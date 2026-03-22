@@ -98,13 +98,21 @@ def prepare(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _annotate_swing_smt_from_events(df: pd.DataFrame, events: pd.DataFrame, instrument: str) -> pd.DataFrame:
+    required_event_columns = ("signal_type", "created_ts", "sweeping_asset", "failing_asset")
+    if "cisd_type" not in df.columns:
+        raise ValueError("df must contain cisd_type column")
+
+    missing_event_columns = [column for column in required_event_columns if column not in events.columns]
+    if missing_event_columns:
+        raise ValueError(f"events must contain columns: {', '.join(missing_event_columns)}")
+
     annotated = df.copy()
     annotated["has_swing_smt"] = False
     annotated["swing_smt_tag"] = "no SMT"
     annotated["swing_smt_match_ts"] = pd.NaT
     annotated["swing_smt_role"] = "none"
 
-    if annotated.empty or events.empty or "cisd_type" not in annotated.columns:
+    if annotated.empty or events.empty:
         return annotated
 
     event_rows = []

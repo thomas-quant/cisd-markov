@@ -1,3 +1,4 @@
+import pytest
 import pandas as pd
 
 from cisd_analysis import _annotate_swing_smt_from_events
@@ -31,8 +32,54 @@ def test_annotate_swing_smt_uses_left_window_and_sets_role():
     nq = _annotate_swing_smt_from_events(df, events, instrument="NQ")
     es = _annotate_swing_smt_from_events(df, events, instrument="ES")
 
+    assert nq.loc[index[1], "has_swing_smt"]
     assert nq.loc[index[1], "swing_smt_tag"] == "w/ SMT"
-    assert nq.loc[index[3], "swing_smt_tag"] == "w/ SMT"   # t-2 match still counts
-    assert nq.loc[index[4], "swing_smt_tag"] == "no SMT"   # t-4 bearish event must not count
+    assert nq.loc[index[1], "swing_smt_match_ts"] == index[1]
     assert nq.loc[index[1], "swing_smt_role"] == "swept"
     assert es.loc[index[1], "swing_smt_role"] == "failed_to_sweep"
+
+    assert nq.loc[index[3], "has_swing_smt"]
+    assert nq.loc[index[3], "swing_smt_tag"] == "w/ SMT"   # t-2 match still counts
+    assert nq.loc[index[3], "swing_smt_match_ts"] == index[1]
+    assert not nq.loc[index[4], "has_swing_smt"]
+    assert nq.loc[index[4], "swing_smt_tag"] == "no SMT"   # t-4 bearish event must not count
+    assert nq.loc[index[4], "swing_smt_match_ts"] is pd.NaT
+    assert nq.loc[index[4], "swing_smt_role"] == "none"
+    assert es.loc[index[1], "swing_smt_role"] == "failed_to_sweep"
+
+
+def test_annotate_swing_smt_raises_on_missing_cisd_type():
+    index = pd.date_range("2026-01-01 09:30", periods=2, freq="15min")
+    df = pd.DataFrame({"open": [1, 2]}, index=index)
+    events = pd.DataFrame(
+        [
+            {
+                "signal_type": "Bullish Swing SMT",
+                "created_ts": index[1],
+                "sweeping_asset": "NQ",
+                "failing_asset": "ES",
+            }
+        ]
+    )
+
+    with pytest.raises(ValueError, match="cisd_type"):
+        _annotate_swing_smt_from_events(df, events, instrument="NQ")
+
+
+@pytest.mark.parametrize("missing_column", ["signal_type", "created_ts", "sweeping_asset", "failing_asset"])
+def test_annotate_swing_smt_raises_on_missing_event_columns(missing_column):
+    index = pd.date_range("2026-01-01 09:30", periods=2, freq="15min")
+    df = pd.DataFrame({"cisd_type": [None, "bullish"]}, index=index)
+    events = pd.DataFrame(
+        [
+            {
+                "signal_type": "Bullish Swing SMT",
+                "created_ts": index[1],
+                "sweeping_asset": "NQ",
+                "failing_asset": "ES",
+            }
+        ]
+    ).drop(columns=[missing_column])
+
+    with pytest.raises(ValueError, match=missing_column):
+        _annotate_swing_smt_from_events(df, events, instrument="NQ")
