@@ -156,12 +156,15 @@ def test_prepare_pair_aligns_misaligned_resampled_frames(monkeypatch):
     monkeypatch.setattr(cisd_analysis, "_scan_swing_smt_events", fake_scan)
 
     df_nq, df_es = cisd_analysis.prepare_pair(nq_1m, es_1m, "1H", with_swing_smt=True)
+    expected_nq = cisd_analysis.resample_ohlcv(nq_1m, "1H")
+    expected_es = cisd_analysis.resample_ohlcv(es_1m, "1H")
+    expected_shared = expected_nq.index.intersection(expected_es.index)
 
-    assert df_nq.index.equals(df_es.index)
-    assert df_nq.index.equals(seen["nq_index"])
-    assert df_es.index.equals(seen["es_index"])
-    assert len(df_nq) == len(seen["nq_index"])
-    assert len(df_es) == len(seen["es_index"])
+    assert df_nq.index.equals(expected_nq.index)
+    assert df_es.index.equals(expected_es.index)
+    assert seen["nq_index"].equals(expected_shared)
+    assert seen["es_index"].equals(expected_shared)
+    assert seen["nq_index"].equals(seen["es_index"])
 
 
 def test_prepare_pair_swing_smt_columns_exist_when_scanner_runs():

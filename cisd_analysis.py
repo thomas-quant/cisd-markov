@@ -217,16 +217,17 @@ def prepare_pair(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     resampled_nq = resample_ohlcv(df_nq_1m, rule)
     resampled_es = resample_ohlcv(df_es_1m, rule)
-    shared_index = resampled_nq.index.intersection(resampled_es.index)
-    resampled_nq = resampled_nq.loc[shared_index]
-    resampled_es = resampled_es.loc[shared_index]
     df_nq = prepare(resampled_nq)
     df_es = prepare(resampled_es)
 
     if not with_swing_smt:
         return df_nq, df_es
 
-    events = _scan_swing_smt_events(resampled_nq, resampled_es)
+    shared_index = resampled_nq.index.intersection(resampled_es.index)
+    events = _scan_swing_smt_events(
+        resampled_nq.loc[shared_index],
+        resampled_es.loc[shared_index],
+    )
     return (
         _annotate_swing_smt_from_events(df_nq, events, instrument="NQ"),
         _annotate_swing_smt_from_events(df_es, events, instrument="ES"),
