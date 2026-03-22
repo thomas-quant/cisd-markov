@@ -6,6 +6,8 @@ This tool evaluates the "run rate" of the CISD pattern using a strict **Barrier 
 
 Swing SMT confirmation is now backed by the local SMT library at `/mnt/e/backup/code/Finance/Misc/SMT`. The matching rule is left-only: a CISD at bar `t` counts when a same-direction Swing SMT was created on `t`, `t-1`, or `t-2`.
 
+Planned future research ideas live in `docs/research_backlog.md`.
+
 ## Key Findings
 
 > All figures use barrier logic: target hit **before** stop, lookahead = 2 bars.
