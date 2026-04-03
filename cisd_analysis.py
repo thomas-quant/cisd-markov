@@ -60,6 +60,9 @@ TIMEFRAMES = {
 LOOKAHEAD  = 2   # bars to look ahead after a CISD
 MAX_CONSEC = 3   # max consecutive opposite candles to segment by
 SMT_LOOKBACK = 20
+FVG_HOLD_LOOKAHEAD = 10
+SWEEP_TOLERANCE = 5
+SWEEP_SWING_LOOKBACK = 20
 _SMT_PKG_PATH = Path("/mnt/e/backup/code/Finance/Misc/SMT")
 
 
@@ -73,9 +76,15 @@ def load_1m(path: Path) -> pd.DataFrame:
     return df
 
 
+def _normalize_resample_rule(rule: str) -> str:
+    if rule.endswith("H"):
+        return f"{rule[:-1]}h"
+    return rule
+
+
 def resample_ohlcv(df_1m: pd.DataFrame, rule: str) -> pd.DataFrame:
     agg = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
-    return df_1m.resample(rule).agg(agg).dropna(subset=["open"])
+    return df_1m.resample(_normalize_resample_rule(rule)).agg(agg).dropna(subset=["open"])
 
 
 def prepare(df: pd.DataFrame) -> pd.DataFrame:
@@ -96,7 +105,145 @@ def prepare(df: pd.DataFrame) -> pd.DataFrame:
         ["bullish", "bearish"],
         default=None,
     )
-    return df
+    return _annotate_cisd_research(df)
+
+
+def _compute_three_bar_swings(df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+    swing_low = pd.Series(False, index=df.index, dtype=bool)
+    swing_high = pd.Series(False, index=df.index, dtype=bool)
+
+    if len(df) < 3:
+        return swing_low, swing_high
+
+    low_mask = (df["low"] < df["low"].shift(1)) & (df["low"] < df["low"].shift(-1))
+    high_mask = (df["high"] > df["high"].shift(1)) & (df["high"] > df["high"].shift(-1))
+
+    for idx in df.index[low_mask.fillna(False)]:
+        swing_low.at[idx] = True
+    for idx in df.index[high_mask.fillna(False)]:
+        swing_high.at[idx] = True
+
+    return swing_low, swing_high
+
+
+def _has_directional_fvg(df: pd.DataFrame, middle_idx: int, direction: str) -> bool:
+    if middle_idx <= 0 or middle_idx >= len(df) - 1:
+        return False
+
+    left = df.iloc[middle_idx - 1]
+    right = df.iloc[middle_idx + 1]
+    if direction == "bullish":
+        return left["high"] < right["low"]
+    if direction == "bearish":
+        return left["low"] > right["high"]
+    return False
+
+
+def _classify_fvg_hold(df: pd.DataFrame, middle_idx: int, direction: str, failure_mode: str) -> str:
+    if direction not in ("bullish", "bearish"):
+        raise ValueError("direction must be 'bullish' or 'bearish'")
+    if failure_mode not in ("close_near", "wick_far"):
+        raise ValueError("failure_mode must be 'close_near' or 'wick_far'")
+
+    if middle_idx + FVG_HOLD_LOOKAHEAD >= len(df):
+        return "none"
+
+    left = df.iloc[middle_idx - 1]
+    future = df.iloc[middle_idx + 1 : middle_idx + 1 + FVG_HOLD_LOOKAHEAD]
+
+    if direction == "bullish":
+        if failure_mode == "close_near":
+            failed = (future["close"] < left["high"]).any()
+        else:
+            failed = (future["low"] < left["low"]).any()
+    else:
+        if failure_mode == "close_near":
+            failed = (future["close"] > left["low"]).any()
+        else:
+            failed = (future["high"] > left["high"]).any()
+
+    return "failed" if failed else "held"
+
+
+def _has_directional_sweep(
+    df: pd.DataFrame,
+    idx: int,
+    direction: str,
+    swing_low: pd.Series,
+    swing_high: pd.Series,
+) -> bool:
+    start = max(0, idx - (SWEEP_TOLERANCE - 1))
+    for sweep_idx in range(start, idx + 1):
+        history_start = max(0, sweep_idx - SWEEP_SWING_LOOKBACK)
+        if direction == "bullish":
+            mask = swing_low.iloc[history_start:sweep_idx]
+            prior_lows = df["low"].iloc[history_start:sweep_idx][mask]
+            if not prior_lows.empty and df["low"].iloc[sweep_idx] < prior_lows.min():
+                return True
+        else:
+            mask = swing_high.iloc[history_start:sweep_idx]
+            prior_highs = df["high"].iloc[history_start:sweep_idx][mask]
+            if not prior_highs.empty and df["high"].iloc[sweep_idx] > prior_highs.max():
+                return True
+    return False
+
+
+def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
+    if "cisd_type" not in df.columns:
+        raise ValueError("df must contain cisd_type column")
+
+    annotated = df.copy()
+    swing_low, swing_high = _compute_three_bar_swings(annotated)
+
+    annotated["has_dir_fvg_mid0"] = pd.Series(False, index=annotated.index, dtype=bool)
+    annotated["has_dir_fvg_mid1"] = pd.Series(False, index=annotated.index, dtype=bool)
+    annotated["fvg_mid0_hold_close_near"] = "none"
+    annotated["fvg_mid0_hold_wick_far"] = "none"
+    annotated["fvg_mid1_hold_close_near"] = "none"
+    annotated["fvg_mid1_hold_wick_far"] = "none"
+    annotated["has_dir_sweep"] = pd.Series(False, index=annotated.index, dtype=bool)
+    annotated["prev_bar_is_dir_swing"] = pd.Series(False, index=annotated.index, dtype=bool)
+    annotated["cisd_bar_is_dir_swing"] = pd.Series(False, index=annotated.index, dtype=bool)
+
+    for idx, ct in enumerate(annotated["cisd_type"]):
+        if ct not in ("bullish", "bearish"):
+            continue
+
+        if ct == "bullish":
+            annotated.iat[idx, annotated.columns.get_loc("prev_bar_is_dir_swing")] = bool(swing_low.iloc[idx - 1]) if idx > 0 else False
+            annotated.iat[idx, annotated.columns.get_loc("cisd_bar_is_dir_swing")] = bool(swing_low.iloc[idx])
+        else:
+            annotated.iat[idx, annotated.columns.get_loc("prev_bar_is_dir_swing")] = bool(swing_high.iloc[idx - 1]) if idx > 0 else False
+            annotated.iat[idx, annotated.columns.get_loc("cisd_bar_is_dir_swing")] = bool(swing_high.iloc[idx])
+
+        annotated.iat[idx, annotated.columns.get_loc("has_dir_sweep")] = _has_directional_sweep(
+            annotated,
+            idx,
+            ct,
+            swing_low,
+            swing_high,
+        )
+
+        if _has_directional_fvg(annotated, idx, ct):
+            annotated.iat[idx, annotated.columns.get_loc("has_dir_fvg_mid0")] = True
+            annotated.iat[idx, annotated.columns.get_loc("fvg_mid0_hold_close_near")] = _classify_fvg_hold(
+                annotated, idx, ct, "close_near"
+            )
+            annotated.iat[idx, annotated.columns.get_loc("fvg_mid0_hold_wick_far")] = _classify_fvg_hold(
+                annotated, idx, ct, "wick_far"
+            )
+
+        mid1_idx = idx + 1
+        if _has_directional_fvg(annotated, mid1_idx, ct):
+            annotated.iat[idx, annotated.columns.get_loc("has_dir_fvg_mid1")] = True
+            annotated.iat[idx, annotated.columns.get_loc("fvg_mid1_hold_close_near")] = _classify_fvg_hold(
+                annotated, mid1_idx, ct, "close_near"
+            )
+            annotated.iat[idx, annotated.columns.get_loc("fvg_mid1_hold_wick_far")] = _classify_fvg_hold(
+                annotated, mid1_idx, ct, "wick_far"
+            )
+
+    return annotated
 
 
 def _annotate_swing_smt_from_events(df: pd.DataFrame, events: pd.DataFrame, instrument: str) -> pd.DataFrame:
@@ -672,6 +819,171 @@ def compute_smt_cisd(df: pd.DataFrame) -> dict:
     return stats
 
 
+def compute_cisd_fvg(df: pd.DataFrame) -> dict:
+    stats = {
+        "bullish": {
+            "mid0_fvg": {"total": 0, "runs": 0},
+            "mid1_fvg": {"total": 0, "runs": 0},
+            "no_fvg": {"total": 0, "runs": 0},
+        },
+        "bearish": {
+            "mid0_fvg": {"total": 0, "runs": 0},
+            "mid1_fvg": {"total": 0, "runs": 0},
+            "no_fvg": {"total": 0, "runs": 0},
+        },
+    }
+    idx_index = df.index
+    for ts, row in df[df["cisd_type"].notna()].iterrows():
+        idx = idx_index.get_loc(ts)
+        ct = row["cisd_type"]
+        hit = barrier_hit(df, idx, row, ct)
+        if row["has_dir_fvg_mid0"]:
+            stats[ct]["mid0_fvg"]["total"] += 1
+            if hit:
+                stats[ct]["mid0_fvg"]["runs"] += 1
+        if row["has_dir_fvg_mid1"]:
+            stats[ct]["mid1_fvg"]["total"] += 1
+            if hit:
+                stats[ct]["mid1_fvg"]["runs"] += 1
+        if not row["has_dir_fvg_mid0"] and not row["has_dir_fvg_mid1"]:
+            stats[ct]["no_fvg"]["total"] += 1
+            if hit:
+                stats[ct]["no_fvg"]["runs"] += 1
+    return stats
+
+
+def compute_fvg_hold(df: pd.DataFrame) -> dict:
+    stats = {
+        "bullish": {
+            "mid0": {
+                "close_through_near_edge": {"total": 0, "held": 0},
+                "wick_break_far_extreme": {"total": 0, "held": 0},
+            },
+            "mid1": {
+                "close_through_near_edge": {"total": 0, "held": 0},
+                "wick_break_far_extreme": {"total": 0, "held": 0},
+            },
+        },
+        "bearish": {
+            "mid0": {
+                "close_through_near_edge": {"total": 0, "held": 0},
+                "wick_break_far_extreme": {"total": 0, "held": 0},
+            },
+            "mid1": {
+                "close_through_near_edge": {"total": 0, "held": 0},
+                "wick_break_far_extreme": {"total": 0, "held": 0},
+            },
+        },
+    }
+    for _, row in df[df["cisd_type"].notna()].iterrows():
+        ct = row["cisd_type"]
+        for bucket, close_col, wick_col in (
+            ("mid0", "fvg_mid0_hold_close_near", "fvg_mid0_hold_wick_far"),
+            ("mid1", "fvg_mid1_hold_close_near", "fvg_mid1_hold_wick_far"),
+        ):
+            close_state = row[close_col]
+            if close_state != "none":
+                stats[ct][bucket]["close_through_near_edge"]["total"] += 1
+                if close_state == "held":
+                    stats[ct][bucket]["close_through_near_edge"]["held"] += 1
+            wick_state = row[wick_col]
+            if wick_state != "none":
+                stats[ct][bucket]["wick_break_far_extreme"]["total"] += 1
+                if wick_state == "held":
+                    stats[ct][bucket]["wick_break_far_extreme"]["held"] += 1
+    return stats
+
+
+def compute_cisd_fvg_interaction(df: pd.DataFrame) -> dict:
+    stats = {
+        "bullish": {
+            "mid0": {
+                "close_through_near_edge": {"held": {"total": 0, "runs": 0}, "failed": {"total": 0, "runs": 0}},
+                "wick_break_far_extreme": {"held": {"total": 0, "runs": 0}, "failed": {"total": 0, "runs": 0}},
+            },
+            "mid1": {
+                "close_through_near_edge": {"held": {"total": 0, "runs": 0}, "failed": {"total": 0, "runs": 0}},
+                "wick_break_far_extreme": {"held": {"total": 0, "runs": 0}, "failed": {"total": 0, "runs": 0}},
+            },
+        },
+        "bearish": {
+            "mid0": {
+                "close_through_near_edge": {"held": {"total": 0, "runs": 0}, "failed": {"total": 0, "runs": 0}},
+                "wick_break_far_extreme": {"held": {"total": 0, "runs": 0}, "failed": {"total": 0, "runs": 0}},
+            },
+            "mid1": {
+                "close_through_near_edge": {"held": {"total": 0, "runs": 0}, "failed": {"total": 0, "runs": 0}},
+                "wick_break_far_extreme": {"held": {"total": 0, "runs": 0}, "failed": {"total": 0, "runs": 0}},
+            },
+        },
+    }
+    idx_index = df.index
+    for ts, row in df[df["cisd_type"].notna()].iterrows():
+        idx = idx_index.get_loc(ts)
+        ct = row["cisd_type"]
+        hit = barrier_hit(df, idx, row, ct)
+        for bucket, close_col, wick_col in (
+            ("mid0", "fvg_mid0_hold_close_near", "fvg_mid0_hold_wick_far"),
+            ("mid1", "fvg_mid1_hold_close_near", "fvg_mid1_hold_wick_far"),
+        ):
+            close_state = row[close_col]
+            if close_state in ("held", "failed"):
+                stats[ct][bucket]["close_through_near_edge"][close_state]["total"] += 1
+                if hit:
+                    stats[ct][bucket]["close_through_near_edge"][close_state]["runs"] += 1
+            wick_state = row[wick_col]
+            if wick_state in ("held", "failed"):
+                stats[ct][bucket]["wick_break_far_extreme"][wick_state]["total"] += 1
+                if hit:
+                    stats[ct][bucket]["wick_break_far_extreme"][wick_state]["runs"] += 1
+    return stats
+
+
+def compute_sweep(df: pd.DataFrame) -> dict:
+    stats = {
+        "bullish": {"w/ sweep": {"total": 0, "runs": 0}, "no sweep": {"total": 0, "runs": 0}},
+        "bearish": {"w/ sweep": {"total": 0, "runs": 0}, "no sweep": {"total": 0, "runs": 0}},
+    }
+    idx_index = df.index
+    for ts, row in df[df["cisd_type"].notna()].iterrows():
+        idx = idx_index.get_loc(ts)
+        ct = row["cisd_type"]
+        tag = "w/ sweep" if row["has_dir_sweep"] else "no sweep"
+        stats[ct][tag]["total"] += 1
+        if barrier_hit(df, idx, row, ct):
+            stats[ct][tag]["runs"] += 1
+    return stats
+
+
+def compute_sssf_swing(df: pd.DataFrame) -> dict:
+    stats = {
+        "bullish": {
+            "prev_bar_is_swing": {"total": 0, "runs": 0},
+            "cisd_bar_is_swing": {"total": 0, "runs": 0},
+            "neither": {"total": 0, "runs": 0},
+        },
+        "bearish": {
+            "prev_bar_is_swing": {"total": 0, "runs": 0},
+            "cisd_bar_is_swing": {"total": 0, "runs": 0},
+            "neither": {"total": 0, "runs": 0},
+        },
+    }
+    idx_index = df.index
+    for ts, row in df[df["cisd_type"].notna()].iterrows():
+        idx = idx_index.get_loc(ts)
+        ct = row["cisd_type"]
+        if row["prev_bar_is_dir_swing"]:
+            tag = "prev_bar_is_swing"
+        elif row["cisd_bar_is_dir_swing"]:
+            tag = "cisd_bar_is_swing"
+        else:
+            tag = "neither"
+        stats[ct][tag]["total"] += 1
+        if barrier_hit(df, idx, row, ct):
+            stats[ct][tag]["runs"] += 1
+    return stats
+
+
 def chart_smt_cisd(ax, data_nq, data_es):
     rows = []
     for instr, data in (("NQ", data_nq), ("ES", data_es)):
@@ -687,6 +999,86 @@ def chart_smt_cisd(ax, data_nq, data_es):
     _style_ax(ax, "Swing SMT Confirmation")
 
 
+def chart_cisd_fvg(ax, data_nq, data_es):
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for tag, alpha in (("mid0_fvg", 1.0), ("mid1_fvg", 0.75), ("no_fvg", 0.45)):
+                d = data[ct][tag]
+                rows.append(
+                    (f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})", pv(d["runs"], d["total"]), COLORS[instr][ct], alpha)
+                )
+    bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55) for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "CISD FVG Creation")
+
+
+def chart_fvg_hold(ax, data_nq, data_es):
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for bucket, alpha in (("mid0", 1.0), ("mid1", 0.7)):
+                for mode, label in (("close_through_near_edge", "close near"), ("wick_break_far_extreme", "wick far")):
+                    d = data[ct][bucket][mode]
+                    rows.append(
+                        (f"{instr} {ct.capitalize()} {bucket} {label}  (n={d['total']:,})", pv(d["held"], d["total"]), COLORS[instr][ct], alpha)
+                    )
+    bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55) for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "FVG Hold")
+    ax.set_xlabel("Hold Rate (%)")
+
+
+def chart_cisd_fvg_interaction(ax, data_nq, data_es):
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for bucket, alpha in (("mid0", 1.0), ("mid1", 0.7)):
+                for mode, label in (("close_through_near_edge", "close near"), ("wick_break_far_extreme", "wick far")):
+                    for state in ("held", "failed"):
+                        d = data[ct][bucket][mode][state]
+                        rows.append(
+                            (
+                                f"{instr} {ct.capitalize()} {bucket} {label} {state}  (n={d['total']:,})",
+                                pv(d["runs"], d["total"]),
+                                COLORS[instr][ct],
+                                alpha,
+                            )
+                        )
+    bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.5) for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "CISD FVG Interaction")
+
+
+def chart_sweep(ax, data_nq, data_es):
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for tag, alpha in (("w/ sweep", 1.0), ("no sweep", 0.55)):
+                d = data[ct][tag]
+                rows.append((f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})", pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+    bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55) for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "Sweep Confirmation")
+
+
+def chart_sssf_swing(ax, data_nq, data_es):
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for tag, alpha in (("prev_bar_is_swing", 1.0), ("cisd_bar_is_swing", 0.75), ("neither", 0.45)):
+                d = data[ct][tag]
+                rows.append((f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})", pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+    bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55) for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "SSSF Swing")
+
+
 
 ANALYSES = {
     "basic":        ("Basic Barrier Run Rate",               compute_basic,        chart_basic),
@@ -698,6 +1090,11 @@ ANALYSES = {
     "candle_size":  ("Candle Body vs ATR(14)",               compute_candle_size,  chart_candle_size),
     "size_cross":   ("CISD Body x Prev Body vs ATR",         compute_size_cross,   chart_size_cross),
     "smt_cisd":     ("Swing SMT Confirmation",               compute_smt_cisd,     chart_smt_cisd),
+    "cisd_fvg":     ("CISD FVG Creation",                    compute_cisd_fvg,     chart_cisd_fvg),
+    "fvg_hold":     ("FVG Hold",                             compute_fvg_hold,     chart_fvg_hold),
+    "cisd_fvg_interaction": ("CISD FVG Interaction",         compute_cisd_fvg_interaction, chart_cisd_fvg_interaction),
+    "sweep":        ("Sweep Confirmation",                   compute_sweep,        chart_sweep),
+    "sssf_swing":   ("SSSF Swing",                           compute_sssf_swing,   chart_sssf_swing),
 }
 
 
@@ -758,6 +1155,29 @@ def build_csv_rows(keys: list, df_nq: pd.DataFrame, df_es: pd.DataFrame) -> pd.D
                     for tag, d in data[ct].items():
                         add(label, instr, ct, tag, d["total"], d["runs"])
 
+            elif key == "cisd_fvg":
+                for ct in ("bullish", "bearish"):
+                    for tag, d in data[ct].items():
+                        add(label, instr, ct, tag, d["total"], d["runs"])
+
+            elif key == "fvg_hold":
+                for ct in ("bullish", "bearish"):
+                    for bucket in ("mid0", "mid1"):
+                        for mode, d in data[ct][bucket].items():
+                            add(label, instr, ct, f"{bucket}_{mode}", d["total"], d["held"])
+
+            elif key == "cisd_fvg_interaction":
+                for ct in ("bullish", "bearish"):
+                    for bucket in ("mid0", "mid1"):
+                        for mode, state_map in data[ct][bucket].items():
+                            for state, d in state_map.items():
+                                add(label, instr, ct, f"{bucket}_{mode}_{state}", d["total"], d["runs"])
+
+            elif key in ("smt_cisd", "sweep", "sssf_swing"):
+                for ct in ("bullish", "bearish"):
+                    for tag, d in data[ct].items():
+                        add(label, instr, ct, tag, d["total"], d["runs"])
+
     return pd.DataFrame(rows)
 
 
@@ -770,7 +1190,8 @@ def build_figure(tf_label: str, df_nq: pd.DataFrame, df_es: pd.DataFrame, keys: 
     # Per-subplot height hints (rows of bar chart content)
     base_h = {"basic": 3, "significance": 3, "mc": 6, "wick": 5,
               "combined": 10, "volume": 6, "candle_size": 6, "size_cross": 6,
-              "smt_cisd": 4}
+              "smt_cisd": 4, "cisd_fvg": 6, "fvg_hold": 8,
+              "cisd_fvg_interaction": 10, "sweep": 4, "sssf_swing": 5}
     row_heights = []
     for i, key in enumerate(keys):
         if i % 2 == 0:
@@ -828,7 +1249,8 @@ def build_standalone_figure(key: str, prepared: dict) -> plt.Figure:
     _, compute_fn, chart_fn = ANALYSES[key]
     tf_labels = list(TIMEFRAMES.keys())   # Daily, 4H, 1H, 15min
 
-    base_h = {"volume": 6, "candle_size": 6}
+    base_h = {"volume": 6, "candle_size": 6, "cisd_fvg": 6, "fvg_hold": 8,
+              "cisd_fvg_interaction": 10, "sweep": 4, "sssf_swing": 5}
     subplot_h = base_h.get(key, 6)
     fig, axes = plt.subplots(
         2, 2,
@@ -867,7 +1289,17 @@ def build_standalone_figure(key: str, prepared: dict) -> plt.Figure:
 
 def main() -> None:
     # Keys that get their own all-TF figure rather than appearing per-TF
-    STANDALONE_KEYS = {"volume", "candle_size", "size_cross", "smt_cisd"}
+    STANDALONE_KEYS = {
+        "volume",
+        "candle_size",
+        "size_cross",
+        "smt_cisd",
+        "cisd_fvg",
+        "fvg_hold",
+        "cisd_fvg_interaction",
+        "sweep",
+        "sssf_swing",
+    }
 
     requested = sys.argv[1:] if len(sys.argv) > 1 else list(ANALYSES.keys())
     invalid = [k for k in requested if k not in ANALYSES]
@@ -919,6 +1351,11 @@ def main() -> None:
         "candle_size": "CandleSize_All_Timeframes.png",
         "size_cross":   "SizeCross_All_Timeframes.png",
         "smt_cisd":    "SMT_CISD_All_Timeframes.png",
+        "cisd_fvg":    "CISD_FVG_All_Timeframes.png",
+        "fvg_hold":    "FVG_Hold_All_Timeframes.png",
+        "cisd_fvg_interaction": "CISD_FVG_Interaction_All_Timeframes.png",
+        "sweep":       "Sweep_CISD_All_Timeframes.png",
+        "sssf_swing":  "SSSF_Swing_All_Timeframes.png",
     }
     for key in standalone:
         print(f"\nBuilding standalone: {key} ...", end=" ", flush=True)
