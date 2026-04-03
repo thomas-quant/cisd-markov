@@ -109,8 +109,8 @@ def prepare(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _compute_three_bar_swings(df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
-    swing_low = pd.Series([False] * len(df), index=df.index, dtype=object)
-    swing_high = pd.Series([False] * len(df), index=df.index, dtype=object)
+    swing_low = pd.Series(False, index=df.index, dtype=bool)
+    swing_high = pd.Series(False, index=df.index, dtype=bool)
 
     if len(df) < 3:
         return swing_low, swing_high
@@ -140,6 +140,11 @@ def _has_directional_fvg(df: pd.DataFrame, middle_idx: int, direction: str) -> b
 
 
 def _classify_fvg_hold(df: pd.DataFrame, middle_idx: int, direction: str, failure_mode: str) -> str:
+    if direction not in ("bullish", "bearish"):
+        raise ValueError("direction must be 'bullish' or 'bearish'")
+    if failure_mode not in ("close_near", "wick_far"):
+        raise ValueError("failure_mode must be 'close_near' or 'wick_far'")
+
     if middle_idx + FVG_HOLD_LOOKAHEAD >= len(df):
         return "none"
 
@@ -149,19 +154,13 @@ def _classify_fvg_hold(df: pd.DataFrame, middle_idx: int, direction: str, failur
     if direction == "bullish":
         if failure_mode == "close_near":
             failed = (future["close"] < left["high"]).any()
-        elif failure_mode == "wick_far":
-            failed = (future["low"] < left["low"]).any()
         else:
-            failed = False
-    elif direction == "bearish":
+            failed = (future["low"] < left["low"]).any()
+    else:
         if failure_mode == "close_near":
             failed = (future["close"] > left["low"]).any()
-        elif failure_mode == "wick_far":
-            failed = (future["high"] > left["high"]).any()
         else:
-            failed = False
-    else:
-        failed = False
+            failed = (future["high"] > left["high"]).any()
 
     return "failed" if failed else "held"
 
@@ -173,15 +172,15 @@ def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
     annotated = df.copy()
     swing_low, swing_high = _compute_three_bar_swings(annotated)
 
-    annotated["has_dir_fvg_mid0"] = pd.Series([False] * len(annotated), index=annotated.index, dtype=object)
-    annotated["has_dir_fvg_mid1"] = pd.Series([False] * len(annotated), index=annotated.index, dtype=object)
+    annotated["has_dir_fvg_mid0"] = pd.Series(False, index=annotated.index, dtype=bool)
+    annotated["has_dir_fvg_mid1"] = pd.Series(False, index=annotated.index, dtype=bool)
     annotated["fvg_mid0_hold_close_near"] = "none"
     annotated["fvg_mid0_hold_wick_far"] = "none"
     annotated["fvg_mid1_hold_close_near"] = "none"
     annotated["fvg_mid1_hold_wick_far"] = "none"
-    annotated["has_dir_sweep"] = pd.Series([False] * len(annotated), index=annotated.index, dtype=object)
-    annotated["prev_bar_is_dir_swing"] = pd.Series([False] * len(annotated), index=annotated.index, dtype=object)
-    annotated["cisd_bar_is_dir_swing"] = pd.Series([False] * len(annotated), index=annotated.index, dtype=object)
+    annotated["has_dir_sweep"] = pd.Series(False, index=annotated.index, dtype=bool)
+    annotated["prev_bar_is_dir_swing"] = pd.Series(False, index=annotated.index, dtype=bool)
+    annotated["cisd_bar_is_dir_swing"] = pd.Series(False, index=annotated.index, dtype=bool)
 
     for idx, ct in enumerate(annotated["cisd_type"]):
         if ct not in ("bullish", "bearish"):

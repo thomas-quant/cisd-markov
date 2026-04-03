@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 
 import cisd_analysis
 
@@ -108,9 +109,9 @@ def test_compute_three_bar_swings_marks_local_extrema():
 
     swing_low, swing_high = cisd_analysis._compute_three_bar_swings(df)
 
-    assert swing_low.iloc[1] is True
-    assert swing_low.iloc[2] is False
-    assert swing_high.iloc[3] is True
+    assert swing_low.iloc[1] == True
+    assert swing_low.iloc[2] == False
+    assert swing_high.iloc[3] == True
 
 
 def test_annotate_cisd_research_sets_mid0_mid1_fvg_and_hold_columns():
@@ -118,10 +119,75 @@ def test_annotate_cisd_research_sets_mid0_mid1_fvg_and_hold_columns():
 
     annotated = cisd_analysis._annotate_cisd_research(df)
 
-    assert annotated.loc[df.index[2], "has_dir_fvg_mid0"] is True
+    assert annotated.loc[df.index[2], "has_dir_fvg_mid0"] == True
     assert annotated.loc[df.index[2], "fvg_mid0_hold_close_near"] == "held"
     assert annotated.loc[df.index[2], "fvg_mid0_hold_wick_far"] == "held"
 
-    assert annotated.loc[df.index[4], "has_dir_fvg_mid1"] is True
+    assert annotated.loc[df.index[4], "has_dir_fvg_mid1"] == True
     assert annotated.loc[df.index[4], "fvg_mid1_hold_close_near"] == "held"
     assert annotated.loc[df.index[4], "fvg_mid1_hold_wick_far"] == "held"
+
+
+def test_prepare_returns_research_annotation_columns():
+    df = _research_frame_for_fvg().drop(columns=["cisd_type"])
+
+    prepared = cisd_analysis.prepare(df)
+
+    expected_columns = {
+        "cisd_type",
+        "has_dir_fvg_mid0",
+        "has_dir_fvg_mid1",
+        "fvg_mid0_hold_close_near",
+        "fvg_mid0_hold_wick_far",
+        "fvg_mid1_hold_close_near",
+        "fvg_mid1_hold_wick_far",
+        "has_dir_sweep",
+        "prev_bar_is_dir_swing",
+        "cisd_bar_is_dir_swing",
+    }
+
+    assert expected_columns <= set(prepared.columns)
+
+
+def test_annotate_cisd_research_raises_on_missing_cisd_type():
+    df = _research_frame_for_fvg().drop(columns=["cisd_type"])
+
+    with pytest.raises(ValueError, match="cisd_type"):
+        cisd_analysis._annotate_cisd_research(df)
+
+
+def test_research_annotation_flags_start_false():
+    df = _research_frame_for_fvg()
+
+    annotated = cisd_analysis._annotate_cisd_research(df)
+
+    assert annotated["has_dir_sweep"].dtype == bool
+    assert annotated["prev_bar_is_dir_swing"].dtype == bool
+    assert annotated["cisd_bar_is_dir_swing"].dtype == bool
+    assert not annotated["has_dir_sweep"].any()
+    assert not annotated["prev_bar_is_dir_swing"].any()
+    assert not annotated["cisd_bar_is_dir_swing"].any()
+
+
+def test_classify_fvg_hold_returns_none_when_window_is_incomplete():
+    df = _research_frame_for_fvg().iloc[:12]
+
+    result = cisd_analysis._classify_fvg_hold(df, 2, "bullish", "close_near")
+
+    assert result == "none"
+
+
+@pytest.mark.parametrize("direction", ["sideways", ""])
+def test_classify_fvg_hold_rejects_invalid_direction(direction):
+    df = _research_frame_for_fvg()
+
+    with pytest.raises(ValueError, match="direction"):
+        cisd_analysis._classify_fvg_hold(df, 2, direction, "close_near")
+
+
+@pytest.mark.parametrize("failure_mode", ["invalid", "held"])
+def test_classify_fvg_hold_rejects_invalid_failure_mode(failure_mode):
+    df = _research_frame_for_fvg()
+
+    with pytest.raises(ValueError, match="failure_mode"):
+        cisd_analysis._classify_fvg_hold(df, 2, "bullish", failure_mode)
