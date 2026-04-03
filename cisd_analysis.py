@@ -436,6 +436,14 @@ def _style_ax(ax, title: str):
     ax.spines[["top", "right"]].set_visible(False)
 
 
+def _standalone_lookahead_caption(key: str) -> str:
+    if key == "fvg_hold":
+        return f"FVG hold window = {FVG_HOLD_LOOKAHEAD} bars"
+    if key == "cisd_fvg_interaction":
+        return f"CISD barrier = {LOOKAHEAD} bars | FVG hold window = {FVG_HOLD_LOOKAHEAD} bars"
+    return f"Lookahead = {LOOKAHEAD} bars"
+
+
 # ── Compute Functions ─────────────────────────────────────────────────────────
 
 def compute_basic(df: pd.DataFrame) -> dict:
@@ -1261,7 +1269,7 @@ def build_standalone_figure(key: str, prepared: dict) -> plt.Figure:
 
     analysis_label = ANALYSES[key][0]
     fig.suptitle(
-        f"{analysis_label}  —  All Timeframes  |  Lookahead = {LOOKAHEAD} bars",
+        f"{analysis_label}  —  All Timeframes  |  {_standalone_lookahead_caption(key)}",
         fontsize=13, fontweight="bold", color="#e0e4f0", y=1.01,
     )
 

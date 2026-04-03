@@ -314,3 +314,9 @@ def test_build_csv_rows_supports_new_research_keys():
     assert "mid0_close_through_near_edge_held" in set(csv_df["Category"])
     assert "w/ sweep" in set(csv_df["Category"])
     assert "prev_bar_is_swing" in set(csv_df["Category"])
+
+
+def test_standalone_lookahead_caption_matches_analysis_semantics():
+    assert cisd_analysis._standalone_lookahead_caption("fvg_hold") == "FVG hold window = 10 bars"
+    assert cisd_analysis._standalone_lookahead_caption("cisd_fvg_interaction") == "CISD barrier = 2 bars | FVG hold window = 10 bars"
+    assert cisd_analysis._standalone_lookahead_caption("sweep") == "Lookahead = 2 bars"
