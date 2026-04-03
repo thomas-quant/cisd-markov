@@ -120,6 +120,26 @@ def test_prepare_pair_applies_vectorized_swing_smt_annotations(monkeypatch):
     assert "swing_smt_tag" in df_es.columns
 
 
+@pytest.mark.parametrize("rule,normalized_rule", [("1H", "1h"), ("4H", "4h")])
+def test_resample_ohlcv_accepts_legacy_uppercase_hour_aliases(rule, normalized_rule):
+    index = pd.date_range("2026-01-01 09:30", periods=8, freq="15min")
+    df = pd.DataFrame(
+        {
+            "open": range(8),
+            "high": [value + 1 for value in range(8)],
+            "low": [value - 1 for value in range(8)],
+            "close": [value + 0.5 for value in range(8)],
+            "volume": [100] * 8,
+        },
+        index=index,
+    )
+
+    resampled = cisd_analysis.resample_ohlcv(df, rule)
+    expected = cisd_analysis.resample_ohlcv(df, normalized_rule)
+
+    pd.testing.assert_frame_equal(resampled, expected)
+
+
 def test_prepare_pair_aligns_misaligned_resampled_frames(monkeypatch):
     nq_index = pd.date_range("2026-01-01 09:30", periods=120, freq="15min")
     es_index = pd.date_range("2026-01-01 09:30", periods=60, freq="15min")
