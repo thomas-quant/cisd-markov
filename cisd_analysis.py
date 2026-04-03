@@ -60,6 +60,9 @@ TIMEFRAMES = {
 LOOKAHEAD  = 2   # bars to look ahead after a CISD
 MAX_CONSEC = 3   # max consecutive opposite candles to segment by
 SMT_LOOKBACK = 20
+FVG_HOLD_LOOKAHEAD = 10
+SWEEP_TOLERANCE = 5
+SWEEP_SWING_LOOKBACK = 20
 _SMT_PKG_PATH = Path("/mnt/e/backup/code/Finance/Misc/SMT")
 
 
@@ -102,7 +105,108 @@ def prepare(df: pd.DataFrame) -> pd.DataFrame:
         ["bullish", "bearish"],
         default=None,
     )
-    return df
+    return _annotate_cisd_research(df)
+
+
+def _compute_three_bar_swings(df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+    swing_low = pd.Series([False] * len(df), index=df.index, dtype=object)
+    swing_high = pd.Series([False] * len(df), index=df.index, dtype=object)
+
+    if len(df) < 3:
+        return swing_low, swing_high
+
+    low_mask = (df["low"] < df["low"].shift(1)) & (df["low"] < df["low"].shift(-1))
+    high_mask = (df["high"] > df["high"].shift(1)) & (df["high"] > df["high"].shift(-1))
+
+    for idx in df.index[low_mask.fillna(False)]:
+        swing_low.at[idx] = True
+    for idx in df.index[high_mask.fillna(False)]:
+        swing_high.at[idx] = True
+
+    return swing_low, swing_high
+
+
+def _has_directional_fvg(df: pd.DataFrame, middle_idx: int, direction: str) -> bool:
+    if middle_idx <= 0 or middle_idx >= len(df) - 1:
+        return False
+
+    left = df.iloc[middle_idx - 1]
+    right = df.iloc[middle_idx + 1]
+    if direction == "bullish":
+        return left["high"] < right["low"]
+    if direction == "bearish":
+        return left["low"] > right["high"]
+    return False
+
+
+def _classify_fvg_hold(df: pd.DataFrame, middle_idx: int, direction: str, failure_mode: str) -> str:
+    if middle_idx + FVG_HOLD_LOOKAHEAD >= len(df):
+        return "none"
+
+    left = df.iloc[middle_idx - 1]
+    future = df.iloc[middle_idx + 1 : middle_idx + 1 + FVG_HOLD_LOOKAHEAD]
+
+    if direction == "bullish":
+        if failure_mode == "close_near":
+            failed = (future["close"] < left["high"]).any()
+        elif failure_mode == "wick_far":
+            failed = (future["low"] < left["low"]).any()
+        else:
+            failed = False
+    elif direction == "bearish":
+        if failure_mode == "close_near":
+            failed = (future["close"] > left["low"]).any()
+        elif failure_mode == "wick_far":
+            failed = (future["high"] > left["high"]).any()
+        else:
+            failed = False
+    else:
+        failed = False
+
+    return "failed" if failed else "held"
+
+
+def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
+    if "cisd_type" not in df.columns:
+        raise ValueError("df must contain cisd_type column")
+
+    annotated = df.copy()
+    swing_low, swing_high = _compute_three_bar_swings(annotated)
+
+    annotated["has_dir_fvg_mid0"] = pd.Series([False] * len(annotated), index=annotated.index, dtype=object)
+    annotated["has_dir_fvg_mid1"] = pd.Series([False] * len(annotated), index=annotated.index, dtype=object)
+    annotated["fvg_mid0_hold_close_near"] = "none"
+    annotated["fvg_mid0_hold_wick_far"] = "none"
+    annotated["fvg_mid1_hold_close_near"] = "none"
+    annotated["fvg_mid1_hold_wick_far"] = "none"
+    annotated["has_dir_sweep"] = pd.Series([False] * len(annotated), index=annotated.index, dtype=object)
+    annotated["prev_bar_is_dir_swing"] = pd.Series([False] * len(annotated), index=annotated.index, dtype=object)
+    annotated["cisd_bar_is_dir_swing"] = pd.Series([False] * len(annotated), index=annotated.index, dtype=object)
+
+    for idx, ct in enumerate(annotated["cisd_type"]):
+        if ct not in ("bullish", "bearish"):
+            continue
+
+        if _has_directional_fvg(annotated, idx, ct):
+            annotated.iat[idx, annotated.columns.get_loc("has_dir_fvg_mid0")] = True
+            annotated.iat[idx, annotated.columns.get_loc("fvg_mid0_hold_close_near")] = _classify_fvg_hold(
+                annotated, idx, ct, "close_near"
+            )
+            annotated.iat[idx, annotated.columns.get_loc("fvg_mid0_hold_wick_far")] = _classify_fvg_hold(
+                annotated, idx, ct, "wick_far"
+            )
+
+        mid1_idx = idx + 1
+        if _has_directional_fvg(annotated, mid1_idx, ct):
+            annotated.iat[idx, annotated.columns.get_loc("has_dir_fvg_mid1")] = True
+            annotated.iat[idx, annotated.columns.get_loc("fvg_mid1_hold_close_near")] = _classify_fvg_hold(
+                annotated, mid1_idx, ct, "close_near"
+            )
+            annotated.iat[idx, annotated.columns.get_loc("fvg_mid1_hold_wick_far")] = _classify_fvg_hold(
+                annotated, mid1_idx, ct, "wick_far"
+            )
+
+    return annotated
 
 
 def _annotate_swing_smt_from_events(df: pd.DataFrame, events: pd.DataFrame, instrument: str) -> pd.DataFrame:
