@@ -73,9 +73,15 @@ def load_1m(path: Path) -> pd.DataFrame:
     return df
 
 
+def _normalize_resample_rule(rule: str) -> str:
+    if rule.endswith("H"):
+        return f"{rule[:-1]}h"
+    return rule
+
+
 def resample_ohlcv(df_1m: pd.DataFrame, rule: str) -> pd.DataFrame:
     agg = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
-    return df_1m.resample(rule).agg(agg).dropna(subset=["open"])
+    return df_1m.resample(_normalize_resample_rule(rule)).agg(agg).dropna(subset=["open"])
 
 
 def prepare(df: pd.DataFrame) -> pd.DataFrame:
