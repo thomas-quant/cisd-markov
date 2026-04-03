@@ -18,12 +18,12 @@ When an item graduates into the live analysis surface or published findings, mov
 
 ### Near-Term CISD Extensions
 
-- `[next]` `cisd_fvg`: measure the hold rate of CISDs that create FVGs.
-- `[next]` `fvg_hold`: measure the hold rate of FVGs created by CISDs.
-- `[next]` `cisd_fvg_interaction`: test whether an FVG holding increases the hold rate of the parent CISD.
-- `[next]` `sssf_swing`: measure the hold rate of CISDs where either `candle[0]` (the CISD candle) or `candle[-1]` creates a swing, and differentiate which candle created the swing.
+- `[done]` `cisd_fvg`: measure the hold rate of CISDs that create same-direction FVGs via `mid0_fvg`, `mid1_fvg`, and `no_fvg` buckets. Implemented via `cisd_fvg`.
+- `[done]` `fvg_hold`: measure the hold rate of same-direction FVGs created by CISDs over a 10-bar hold window. Implemented via `fvg_hold`.
+- `[done]` `cisd_fvg_interaction`: test whether an FVG holding increases the hold rate of the parent CISD, split by failure mode and `mid0`/`mid1`. Implemented via `cisd_fvg_interaction`.
+- `[done]` `sssf_swing`: measure the hold rate of CISDs where either `candle[0]` or `candle[-1]` is the direction-matched 3-candle swing point. Implemented via `sssf_swing`.
 - `[done]` `smt`: hold rate of CISDs that create an SMT. Implemented via `smt_cisd`.
-- `[next]` `sweep`: measure the hold rate of CISDs that sweep a previous low.
+- `[done]` `sweep`: measure the hold rate of CISDs that have a same-direction sweep of a prior swing in the `[t-4, t]` window. Implemented via `sweep`.
 
 ### CISD Follow-Through on `candle[1]`
 
