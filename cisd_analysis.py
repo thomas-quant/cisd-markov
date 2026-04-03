@@ -939,6 +939,51 @@ def compute_cisd_fvg_interaction(df: pd.DataFrame) -> dict:
     return stats
 
 
+def compute_sweep(df: pd.DataFrame) -> dict:
+    stats = {
+        "bullish": {"w/ sweep": {"total": 0, "runs": 0}, "no sweep": {"total": 0, "runs": 0}},
+        "bearish": {"w/ sweep": {"total": 0, "runs": 0}, "no sweep": {"total": 0, "runs": 0}},
+    }
+    idx_index = df.index
+    for ts, row in df[df["cisd_type"].notna()].iterrows():
+        idx = idx_index.get_loc(ts)
+        ct = row["cisd_type"]
+        tag = "w/ sweep" if row["has_dir_sweep"] else "no sweep"
+        stats[ct][tag]["total"] += 1
+        if barrier_hit(df, idx, row, ct):
+            stats[ct][tag]["runs"] += 1
+    return stats
+
+
+def compute_sssf_swing(df: pd.DataFrame) -> dict:
+    stats = {
+        "bullish": {
+            "prev_bar_is_swing": {"total": 0, "runs": 0},
+            "cisd_bar_is_swing": {"total": 0, "runs": 0},
+            "neither": {"total": 0, "runs": 0},
+        },
+        "bearish": {
+            "prev_bar_is_swing": {"total": 0, "runs": 0},
+            "cisd_bar_is_swing": {"total": 0, "runs": 0},
+            "neither": {"total": 0, "runs": 0},
+        },
+    }
+    idx_index = df.index
+    for ts, row in df[df["cisd_type"].notna()].iterrows():
+        idx = idx_index.get_loc(ts)
+        ct = row["cisd_type"]
+        if row["prev_bar_is_dir_swing"]:
+            tag = "prev_bar_is_swing"
+        elif row["cisd_bar_is_dir_swing"]:
+            tag = "cisd_bar_is_swing"
+        else:
+            tag = "neither"
+        stats[ct][tag]["total"] += 1
+        if barrier_hit(df, idx, row, ct):
+            stats[ct][tag]["runs"] += 1
+    return stats
+
+
 def chart_smt_cisd(ax, data_nq, data_es):
     rows = []
     for instr, data in (("NQ", data_nq), ("ES", data_es)):
@@ -954,6 +999,86 @@ def chart_smt_cisd(ax, data_nq, data_es):
     _style_ax(ax, "Swing SMT Confirmation")
 
 
+def chart_cisd_fvg(ax, data_nq, data_es):
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for tag, alpha in (("mid0_fvg", 1.0), ("mid1_fvg", 0.75), ("no_fvg", 0.45)):
+                d = data[ct][tag]
+                rows.append(
+                    (f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})", pv(d["runs"], d["total"]), COLORS[instr][ct], alpha)
+                )
+    bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55) for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "CISD FVG Creation")
+
+
+def chart_fvg_hold(ax, data_nq, data_es):
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for bucket, alpha in (("mid0", 1.0), ("mid1", 0.7)):
+                for mode, label in (("close_through_near_edge", "close near"), ("wick_break_far_extreme", "wick far")):
+                    d = data[ct][bucket][mode]
+                    rows.append(
+                        (f"{instr} {ct.capitalize()} {bucket} {label}  (n={d['total']:,})", pv(d["held"], d["total"]), COLORS[instr][ct], alpha)
+                    )
+    bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55) for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "FVG Hold")
+    ax.set_xlabel("Hold Rate (%)")
+
+
+def chart_cisd_fvg_interaction(ax, data_nq, data_es):
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for bucket, alpha in (("mid0", 1.0), ("mid1", 0.7)):
+                for mode, label in (("close_through_near_edge", "close near"), ("wick_break_far_extreme", "wick far")):
+                    for state in ("held", "failed"):
+                        d = data[ct][bucket][mode][state]
+                        rows.append(
+                            (
+                                f"{instr} {ct.capitalize()} {bucket} {label} {state}  (n={d['total']:,})",
+                                pv(d["runs"], d["total"]),
+                                COLORS[instr][ct],
+                                alpha,
+                            )
+                        )
+    bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.5) for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "CISD FVG Interaction")
+
+
+def chart_sweep(ax, data_nq, data_es):
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for tag, alpha in (("w/ sweep", 1.0), ("no sweep", 0.55)):
+                d = data[ct][tag]
+                rows.append((f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})", pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+    bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55) for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "Sweep Confirmation")
+
+
+def chart_sssf_swing(ax, data_nq, data_es):
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for tag, alpha in (("prev_bar_is_swing", 1.0), ("cisd_bar_is_swing", 0.75), ("neither", 0.45)):
+                d = data[ct][tag]
+                rows.append((f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})", pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+    bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55) for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "SSSF Swing")
+
+
 
 ANALYSES = {
     "basic":        ("Basic Barrier Run Rate",               compute_basic,        chart_basic),
@@ -965,6 +1090,11 @@ ANALYSES = {
     "candle_size":  ("Candle Body vs ATR(14)",               compute_candle_size,  chart_candle_size),
     "size_cross":   ("CISD Body x Prev Body vs ATR",         compute_size_cross,   chart_size_cross),
     "smt_cisd":     ("Swing SMT Confirmation",               compute_smt_cisd,     chart_smt_cisd),
+    "cisd_fvg":     ("CISD FVG Creation",                    compute_cisd_fvg,     chart_cisd_fvg),
+    "fvg_hold":     ("FVG Hold",                             compute_fvg_hold,     chart_fvg_hold),
+    "cisd_fvg_interaction": ("CISD FVG Interaction",         compute_cisd_fvg_interaction, chart_cisd_fvg_interaction),
+    "sweep":        ("Sweep Confirmation",                   compute_sweep,        chart_sweep),
+    "sssf_swing":   ("SSSF Swing",                           compute_sssf_swing,   chart_sssf_swing),
 }
 
 
@@ -1025,6 +1155,29 @@ def build_csv_rows(keys: list, df_nq: pd.DataFrame, df_es: pd.DataFrame) -> pd.D
                     for tag, d in data[ct].items():
                         add(label, instr, ct, tag, d["total"], d["runs"])
 
+            elif key == "cisd_fvg":
+                for ct in ("bullish", "bearish"):
+                    for tag, d in data[ct].items():
+                        add(label, instr, ct, tag, d["total"], d["runs"])
+
+            elif key == "fvg_hold":
+                for ct in ("bullish", "bearish"):
+                    for bucket in ("mid0", "mid1"):
+                        for mode, d in data[ct][bucket].items():
+                            add(label, instr, ct, f"{bucket}_{mode}", d["total"], d["held"])
+
+            elif key == "cisd_fvg_interaction":
+                for ct in ("bullish", "bearish"):
+                    for bucket in ("mid0", "mid1"):
+                        for mode, state_map in data[ct][bucket].items():
+                            for state, d in state_map.items():
+                                add(label, instr, ct, f"{bucket}_{mode}_{state}", d["total"], d["runs"])
+
+            elif key in ("smt_cisd", "sweep", "sssf_swing"):
+                for ct in ("bullish", "bearish"):
+                    for tag, d in data[ct].items():
+                        add(label, instr, ct, tag, d["total"], d["runs"])
+
     return pd.DataFrame(rows)
 
 
@@ -1037,7 +1190,8 @@ def build_figure(tf_label: str, df_nq: pd.DataFrame, df_es: pd.DataFrame, keys: 
     # Per-subplot height hints (rows of bar chart content)
     base_h = {"basic": 3, "significance": 3, "mc": 6, "wick": 5,
               "combined": 10, "volume": 6, "candle_size": 6, "size_cross": 6,
-              "smt_cisd": 4}
+              "smt_cisd": 4, "cisd_fvg": 6, "fvg_hold": 8,
+              "cisd_fvg_interaction": 10, "sweep": 4, "sssf_swing": 5}
     row_heights = []
     for i, key in enumerate(keys):
         if i % 2 == 0:
@@ -1095,7 +1249,8 @@ def build_standalone_figure(key: str, prepared: dict) -> plt.Figure:
     _, compute_fn, chart_fn = ANALYSES[key]
     tf_labels = list(TIMEFRAMES.keys())   # Daily, 4H, 1H, 15min
 
-    base_h = {"volume": 6, "candle_size": 6}
+    base_h = {"volume": 6, "candle_size": 6, "cisd_fvg": 6, "fvg_hold": 8,
+              "cisd_fvg_interaction": 10, "sweep": 4, "sssf_swing": 5}
     subplot_h = base_h.get(key, 6)
     fig, axes = plt.subplots(
         2, 2,
@@ -1134,7 +1289,17 @@ def build_standalone_figure(key: str, prepared: dict) -> plt.Figure:
 
 def main() -> None:
     # Keys that get their own all-TF figure rather than appearing per-TF
-    STANDALONE_KEYS = {"volume", "candle_size", "size_cross", "smt_cisd"}
+    STANDALONE_KEYS = {
+        "volume",
+        "candle_size",
+        "size_cross",
+        "smt_cisd",
+        "cisd_fvg",
+        "fvg_hold",
+        "cisd_fvg_interaction",
+        "sweep",
+        "sssf_swing",
+    }
 
     requested = sys.argv[1:] if len(sys.argv) > 1 else list(ANALYSES.keys())
     invalid = [k for k in requested if k not in ANALYSES]
@@ -1186,6 +1351,11 @@ def main() -> None:
         "candle_size": "CandleSize_All_Timeframes.png",
         "size_cross":   "SizeCross_All_Timeframes.png",
         "smt_cisd":    "SMT_CISD_All_Timeframes.png",
+        "cisd_fvg":    "CISD_FVG_All_Timeframes.png",
+        "fvg_hold":    "FVG_Hold_All_Timeframes.png",
+        "cisd_fvg_interaction": "CISD_FVG_Interaction_All_Timeframes.png",
+        "sweep":       "Sweep_CISD_All_Timeframes.png",
+        "sssf_swing":  "SSSF_Swing_All_Timeframes.png",
     }
     for key in standalone:
         print(f"\nBuilding standalone: {key} ...", end=" ", flush=True)
