@@ -274,3 +274,43 @@ def test_compute_cisd_fvg_interaction_splits_parent_cisd_by_linked_outcome():
     assert stats["bullish"]["mid0"]["close_through_near_edge"]["held"]["runs"] == 1
     assert stats["bullish"]["mid1"]["close_through_near_edge"]["failed"]["total"] == 1
     assert stats["bullish"]["mid1"]["close_through_near_edge"]["failed"]["runs"] == 0
+
+
+def test_compute_sweep_splits_binary_tag():
+    stats = cisd_analysis.compute_sweep(_annotated_barrier_df())
+
+    assert stats["bullish"]["w/ sweep"]["total"] == 1
+    assert stats["bullish"]["w/ sweep"]["runs"] == 1
+    assert stats["bullish"]["no sweep"]["total"] == 1
+    assert stats["bullish"]["no sweep"]["runs"] == 0
+
+
+def test_compute_sssf_swing_splits_prev_current_and_neither():
+    stats = cisd_analysis.compute_sssf_swing(_annotated_barrier_df())
+
+    assert stats["bullish"]["prev_bar_is_swing"]["total"] == 1
+    assert stats["bullish"]["prev_bar_is_swing"]["runs"] == 1
+    assert stats["bullish"]["neither"]["total"] == 1
+    assert stats["bearish"]["cisd_bar_is_swing"]["total"] == 1
+
+
+def test_build_csv_rows_supports_new_research_keys():
+    df = _annotated_barrier_df()
+
+    csv_df = cisd_analysis.build_csv_rows(
+        ["cisd_fvg", "fvg_hold", "cisd_fvg_interaction", "sweep", "sssf_swing"],
+        df,
+        df,
+    )
+
+    assert {
+        "CISD FVG Creation",
+        "FVG Hold",
+        "CISD FVG Interaction",
+        "Sweep Confirmation",
+        "SSSF Swing",
+    } <= set(csv_df["Analysis"])
+    assert "mid0_fvg" in set(csv_df["Category"])
+    assert "mid0_close_through_near_edge_held" in set(csv_df["Category"])
+    assert "w/ sweep" in set(csv_df["Category"])
+    assert "prev_bar_is_swing" in set(csv_df["Category"])
