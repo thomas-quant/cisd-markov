@@ -104,6 +104,21 @@ def _research_frame_for_fvg():
     )
 
 
+def _research_frame_for_sweep_and_swing():
+    index = pd.date_range("2026-01-02 09:30", periods=11, freq="15min")
+    return pd.DataFrame(
+        {
+            "open": [12, 11, 12, 13, 11, 12, 13, 14, 17, 14, 13],
+            "high": [13, 12, 13, 14, 13, 15, 14, 16, 18, 15, 14],
+            "low": [11, 9, 10, 11, 8, 12, 11, 13, 14, 13, 12],
+            "close": [12.5, 10, 12.5, 13.5, 12, 14.5, 13.5, 15.5, 15, 14, 13],
+            "volume": [100] * 11,
+            "cisd_type": [None, None, None, None, None, "bullish", None, None, "bearish", None, None],
+        },
+        index=index,
+    )
+
+
 def test_compute_three_bar_swings_marks_local_extrema():
     df = _research_frame_for_fvg()
 
@@ -156,7 +171,7 @@ def test_annotate_cisd_research_raises_on_missing_cisd_type():
         cisd_analysis._annotate_cisd_research(df)
 
 
-def test_research_annotation_flags_start_false():
+def test_research_annotation_flags_use_boolean_dtype():
     df = _research_frame_for_fvg()
 
     annotated = cisd_analysis._annotate_cisd_research(df)
@@ -165,8 +180,6 @@ def test_research_annotation_flags_start_false():
     assert annotated["prev_bar_is_dir_swing"].dtype == bool
     assert annotated["cisd_bar_is_dir_swing"].dtype == bool
     assert not annotated["has_dir_sweep"].any()
-    assert not annotated["prev_bar_is_dir_swing"].any()
-    assert not annotated["cisd_bar_is_dir_swing"].any()
 
 
 def test_classify_fvg_hold_returns_none_when_window_is_incomplete():
@@ -191,3 +204,16 @@ def test_classify_fvg_hold_rejects_invalid_failure_mode(failure_mode):
 
     with pytest.raises(ValueError, match="failure_mode"):
         cisd_analysis._classify_fvg_hold(df, 2, "bullish", failure_mode)
+
+
+def test_annotate_cisd_research_tags_directional_sweeps_and_swing_positions():
+    df = _research_frame_for_sweep_and_swing()
+
+    annotated = cisd_analysis._annotate_cisd_research(df)
+
+    assert annotated.loc[df.index[5], "has_dir_sweep"]
+    assert annotated.loc[df.index[5], "prev_bar_is_dir_swing"]
+    assert not annotated.loc[df.index[5], "cisd_bar_is_dir_swing"]
+
+    assert annotated.loc[df.index[8], "cisd_bar_is_dir_swing"]
+    assert not annotated.loc[df.index[8], "prev_bar_is_dir_swing"]

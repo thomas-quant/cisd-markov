@@ -165,6 +165,29 @@ def _classify_fvg_hold(df: pd.DataFrame, middle_idx: int, direction: str, failur
     return "failed" if failed else "held"
 
 
+def _has_directional_sweep(
+    df: pd.DataFrame,
+    idx: int,
+    direction: str,
+    swing_low: pd.Series,
+    swing_high: pd.Series,
+) -> bool:
+    start = max(0, idx - (SWEEP_TOLERANCE - 1))
+    for sweep_idx in range(start, idx + 1):
+        history_start = max(0, sweep_idx - SWEEP_SWING_LOOKBACK)
+        if direction == "bullish":
+            mask = swing_low.iloc[history_start:sweep_idx]
+            prior_lows = df["low"].iloc[history_start:sweep_idx][mask]
+            if not prior_lows.empty and df["low"].iloc[sweep_idx] < prior_lows.min():
+                return True
+        else:
+            mask = swing_high.iloc[history_start:sweep_idx]
+            prior_highs = df["high"].iloc[history_start:sweep_idx][mask]
+            if not prior_highs.empty and df["high"].iloc[sweep_idx] > prior_highs.max():
+                return True
+    return False
+
+
 def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
     if "cisd_type" not in df.columns:
         raise ValueError("df must contain cisd_type column")
@@ -185,6 +208,21 @@ def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
     for idx, ct in enumerate(annotated["cisd_type"]):
         if ct not in ("bullish", "bearish"):
             continue
+
+        if ct == "bullish":
+            annotated.iat[idx, annotated.columns.get_loc("prev_bar_is_dir_swing")] = bool(swing_low.iloc[idx - 1]) if idx > 0 else False
+            annotated.iat[idx, annotated.columns.get_loc("cisd_bar_is_dir_swing")] = bool(swing_low.iloc[idx])
+        else:
+            annotated.iat[idx, annotated.columns.get_loc("prev_bar_is_dir_swing")] = bool(swing_high.iloc[idx - 1]) if idx > 0 else False
+            annotated.iat[idx, annotated.columns.get_loc("cisd_bar_is_dir_swing")] = bool(swing_high.iloc[idx])
+
+        annotated.iat[idx, annotated.columns.get_loc("has_dir_sweep")] = _has_directional_sweep(
+            annotated,
+            idx,
+            ct,
+            swing_low,
+            swing_high,
+        )
 
         if _has_directional_fvg(annotated, idx, ct):
             annotated.iat[idx, annotated.columns.get_loc("has_dir_fvg_mid0")] = True
