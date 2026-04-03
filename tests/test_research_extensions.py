@@ -119,6 +119,34 @@ def _research_frame_for_sweep_and_swing():
     )
 
 
+def _annotated_barrier_df():
+    index = pd.date_range("2026-01-03 09:30", periods=6, freq="15min")
+    return pd.DataFrame(
+        {
+            "open": [10, 9, 11, 12, 11, 10],
+            "high": [11, 11, 15, 14, 12, 11],
+            "low": [9, 9, 10, 10, 10, 9],
+            "close": [9.5, 10.5, 12, 11.5, 10.5, 9.5],
+            "direction": [None, "bullish", "bullish", "bearish", "bearish", "bearish"],
+            "prev_close": [None, 9.5, 10.5, 12, 11.5, 10.5],
+            "prev_direction": [None, "bearish", "bearish", "bullish", "bullish", "bullish"],
+            "prev_high": [None, 11, 11, 15, 14, 12],
+            "prev_low": [None, 9, 9, 10, 10, 10],
+            "cisd_type": [None, "bullish", "bullish", "bearish", None, None],
+            "has_dir_fvg_mid0": [False, True, False, False, False, False],
+            "has_dir_fvg_mid1": [False, False, True, False, False, False],
+            "fvg_mid0_hold_close_near": ["none", "held", "none", "none", "none", "none"],
+            "fvg_mid0_hold_wick_far": ["none", "held", "none", "none", "none", "none"],
+            "fvg_mid1_hold_close_near": ["none", "none", "failed", "none", "none", "none"],
+            "fvg_mid1_hold_wick_far": ["none", "none", "failed", "none", "none", "none"],
+            "has_dir_sweep": [False, True, False, False, False, False],
+            "prev_bar_is_dir_swing": [False, True, False, False, False, False],
+            "cisd_bar_is_dir_swing": [False, False, False, True, False, False],
+        },
+        index=index,
+    )
+
+
 def test_compute_three_bar_swings_marks_local_extrema():
     df = _research_frame_for_fvg()
 
@@ -217,3 +245,32 @@ def test_annotate_cisd_research_tags_directional_sweeps_and_swing_positions():
 
     assert annotated.loc[df.index[8], "cisd_bar_is_dir_swing"]
     assert not annotated.loc[df.index[8], "prev_bar_is_dir_swing"]
+
+
+def test_compute_cisd_fvg_splits_mid_buckets_and_baseline():
+    stats = cisd_analysis.compute_cisd_fvg(_annotated_barrier_df())
+
+    assert stats["bullish"]["mid0_fvg"]["total"] == 1
+    assert stats["bullish"]["mid0_fvg"]["runs"] == 1
+    assert stats["bullish"]["mid1_fvg"]["total"] == 1
+    assert stats["bullish"]["mid1_fvg"]["runs"] == 0
+    assert stats["bearish"]["no_fvg"]["total"] == 1
+    assert stats["bearish"]["no_fvg"]["runs"] == 1
+
+
+def test_compute_fvg_hold_counts_hold_rate_by_bucket_and_failure_mode():
+    stats = cisd_analysis.compute_fvg_hold(_annotated_barrier_df())
+
+    assert stats["bullish"]["mid0"]["close_through_near_edge"]["total"] == 1
+    assert stats["bullish"]["mid0"]["close_through_near_edge"]["held"] == 1
+    assert stats["bullish"]["mid1"]["wick_break_far_extreme"]["total"] == 1
+    assert stats["bullish"]["mid1"]["wick_break_far_extreme"]["held"] == 0
+
+
+def test_compute_cisd_fvg_interaction_splits_parent_cisd_by_linked_outcome():
+    stats = cisd_analysis.compute_cisd_fvg_interaction(_annotated_barrier_df())
+
+    assert stats["bullish"]["mid0"]["close_through_near_edge"]["held"]["total"] == 1
+    assert stats["bullish"]["mid0"]["close_through_near_edge"]["held"]["runs"] == 1
+    assert stats["bullish"]["mid1"]["close_through_near_edge"]["failed"]["total"] == 1
+    assert stats["bullish"]["mid1"]["close_through_near_edge"]["failed"]["runs"] == 0
