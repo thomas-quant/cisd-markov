@@ -7,6 +7,7 @@ This tool evaluates the "run rate" of the CISD pattern using a strict **Barrier 
 Swing SMT confirmation is now backed by the local SMT library at `/mnt/e/backup/code/Finance/Misc/SMT`. The matching rule is left-only: a CISD at bar `t` counts when a same-direction Swing SMT was created on `t`, `t-1`, or `t-2`.
 
 Planned future research ideas live in `docs/research_backlog.md`.
+The current research surface also includes standalone analyses for CISD-linked FVG creation/hold, sweep confirmation, and direction-specific swing-position buckets.
 
 ## Key Findings
 
@@ -154,14 +155,14 @@ SMT confirmation adds the most value at **15min**, where it provides a small but
 
 Ensure data is in `.parquet` format in the `data/` directory (`nq_1m.parquet`, `es_1m.parquet`).
 
-### Run all analyses (4 per-TF PNGs + CSVs + 4 standalone PNGs):
+### Run all analyses (4 per-TF PNGs + CSVs + 9 standalone PNGs):
 ```powershell
 python cisd_analysis.py
 ```
 
 ### Run specific models:
 ```powershell
-python cisd_analysis.py basic wick combined smt_cisd
+python cisd_analysis.py cisd_fvg fvg_hold cisd_fvg_interaction sweep sssf_swing
 ```
 
 The current CLI surface is limited to the analysis keys listed below.
@@ -179,6 +180,32 @@ The current CLI surface is limited to the analysis keys listed below.
 | `candle_size` | **Candle Body vs ATR** | Segments by CISD body size as a multiple of ATR(14). Standalone all-TF output. |
 | `size_cross` | **CISD Body × Prev Body** | Cross-tab: both candles vs ATR(14). Standalone all-TF output. |
 | `smt_cisd` | **Swing SMT Confirmation** | Barrier rate split by whether a same-direction Swing SMT co-occurs. Standalone. |
+| `cisd_fvg` | **CISD FVG Creation** | Barrier rate split by whether the CISD is the middle candle of a same-direction FVG (`mid0`), the next bar is the middle candle (`mid1`), or no linked FVG exists. Standalone. |
+| `fvg_hold` | **FVG Hold** | Hold rate of same-direction CISD-linked FVGs over a 10-bar window from the FVG middle candle, reported for both hold-failure modes and both `mid0`/`mid1` buckets. Standalone. |
+| `cisd_fvg_interaction` | **CISD FVG Interaction** | Barrier rate of the parent CISD split by whether its linked same-direction FVG later held or failed, for both failure modes and both `mid0`/`mid1` buckets. Standalone. |
+| `sweep` | **Sweep Confirmation** | Barrier rate split by whether a same-direction sweep of a prior swing occurred in the `[t-4, t]` window around the CISD. Standalone. |
+| `sssf_swing` | **SSSF Swing** | Barrier rate split by whether `candle[-1]` or `candle[0]` is the direction-matched 3-candle swing point, with a baseline `neither` bucket. Standalone. |
+
+## Research Tag Rules
+
+- FVG formation uses the standard 3-candle wick-to-wick rule.
+  - Bullish: left high `<` right low.
+  - Bearish: left low `>` right high.
+  - `mid0` means the CISD bar is the middle candle; `mid1` means the next bar is the middle candle.
+- FVG direction must match the parent CISD direction.
+- FVG hold is measured over `FVG_HOLD_LOOKAHEAD = 10` bars from the FVG middle candle with two failure modes:
+  - `close_through_near_edge`
+  - `wick_break_far_extreme`
+- Sweep confirmation is direction-specific and binary:
+  - bullish CISD checks for a low sweep
+  - bearish CISD checks for a high sweep
+  - the sweep can occur on any bar in `[t-4, t]`
+  - prior swing points are sourced from a `20`-bar swing lookback
+- Swing-position buckets use a 3-candle swing rule (`N=1`):
+  - bullish CISDs use swing lows
+  - bearish CISDs use swing highs
+  - `prev_bar_is_swing` corresponds to `candle[-1]`
+  - `cisd_bar_is_swing` corresponds to `candle[0]`
 
 ## Configuration
 
@@ -186,6 +213,9 @@ Edit constants at the top of `cisd_analysis.py`:
 - `LOOKAHEAD`: Bars to check ahead (Default: `2`).
 - `MAX_CONSEC`: Max consecutive candles for Markov (Default: `3`).
 - `TIMEFRAMES`: Resampling rules (Default: `Daily`, `4H`, `1H`, `15min`).
+- `FVG_HOLD_LOOKAHEAD`: Bars used to judge whether a linked FVG held (Default: `10`).
+- `SWEEP_TOLERANCE`: Bars in the CISD-relative sweep window `[t-4, t]` (Default: `5`).
+- `SWEEP_SWING_LOOKBACK`: Lookback used to source prior swing points for sweeps (Default: `20`).
 - Swing SMT support depends on the local SMT package at `/mnt/e/backup/code/Finance/Misc/SMT`.
 
 ## Requirements
