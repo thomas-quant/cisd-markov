@@ -819,6 +819,126 @@ def compute_smt_cisd(df: pd.DataFrame) -> dict:
     return stats
 
 
+def compute_cisd_fvg(df: pd.DataFrame) -> dict:
+    stats = {
+        "bullish": {
+            "mid0_fvg": {"total": 0, "runs": 0},
+            "mid1_fvg": {"total": 0, "runs": 0},
+            "no_fvg": {"total": 0, "runs": 0},
+        },
+        "bearish": {
+            "mid0_fvg": {"total": 0, "runs": 0},
+            "mid1_fvg": {"total": 0, "runs": 0},
+            "no_fvg": {"total": 0, "runs": 0},
+        },
+    }
+    idx_index = df.index
+    for ts, row in df[df["cisd_type"].notna()].iterrows():
+        idx = idx_index.get_loc(ts)
+        ct = row["cisd_type"]
+        hit = barrier_hit(df, idx, row, ct)
+        if row["has_dir_fvg_mid0"]:
+            stats[ct]["mid0_fvg"]["total"] += 1
+            if hit:
+                stats[ct]["mid0_fvg"]["runs"] += 1
+        if row["has_dir_fvg_mid1"]:
+            stats[ct]["mid1_fvg"]["total"] += 1
+            if hit:
+                stats[ct]["mid1_fvg"]["runs"] += 1
+        if not row["has_dir_fvg_mid0"] and not row["has_dir_fvg_mid1"]:
+            stats[ct]["no_fvg"]["total"] += 1
+            if hit:
+                stats[ct]["no_fvg"]["runs"] += 1
+    return stats
+
+
+def compute_fvg_hold(df: pd.DataFrame) -> dict:
+    stats = {
+        "bullish": {
+            "mid0": {
+                "close_through_near_edge": {"total": 0, "held": 0},
+                "wick_break_far_extreme": {"total": 0, "held": 0},
+            },
+            "mid1": {
+                "close_through_near_edge": {"total": 0, "held": 0},
+                "wick_break_far_extreme": {"total": 0, "held": 0},
+            },
+        },
+        "bearish": {
+            "mid0": {
+                "close_through_near_edge": {"total": 0, "held": 0},
+                "wick_break_far_extreme": {"total": 0, "held": 0},
+            },
+            "mid1": {
+                "close_through_near_edge": {"total": 0, "held": 0},
+                "wick_break_far_extreme": {"total": 0, "held": 0},
+            },
+        },
+    }
+    for _, row in df[df["cisd_type"].notna()].iterrows():
+        ct = row["cisd_type"]
+        for bucket, close_col, wick_col in (
+            ("mid0", "fvg_mid0_hold_close_near", "fvg_mid0_hold_wick_far"),
+            ("mid1", "fvg_mid1_hold_close_near", "fvg_mid1_hold_wick_far"),
+        ):
+            close_state = row[close_col]
+            if close_state != "none":
+                stats[ct][bucket]["close_through_near_edge"]["total"] += 1
+                if close_state == "held":
+                    stats[ct][bucket]["close_through_near_edge"]["held"] += 1
+            wick_state = row[wick_col]
+            if wick_state != "none":
+                stats[ct][bucket]["wick_break_far_extreme"]["total"] += 1
+                if wick_state == "held":
+                    stats[ct][bucket]["wick_break_far_extreme"]["held"] += 1
+    return stats
+
+
+def compute_cisd_fvg_interaction(df: pd.DataFrame) -> dict:
+    stats = {
+        "bullish": {
+            "mid0": {
+                "close_through_near_edge": {"held": {"total": 0, "runs": 0}, "failed": {"total": 0, "runs": 0}},
+                "wick_break_far_extreme": {"held": {"total": 0, "runs": 0}, "failed": {"total": 0, "runs": 0}},
+            },
+            "mid1": {
+                "close_through_near_edge": {"held": {"total": 0, "runs": 0}, "failed": {"total": 0, "runs": 0}},
+                "wick_break_far_extreme": {"held": {"total": 0, "runs": 0}, "failed": {"total": 0, "runs": 0}},
+            },
+        },
+        "bearish": {
+            "mid0": {
+                "close_through_near_edge": {"held": {"total": 0, "runs": 0}, "failed": {"total": 0, "runs": 0}},
+                "wick_break_far_extreme": {"held": {"total": 0, "runs": 0}, "failed": {"total": 0, "runs": 0}},
+            },
+            "mid1": {
+                "close_through_near_edge": {"held": {"total": 0, "runs": 0}, "failed": {"total": 0, "runs": 0}},
+                "wick_break_far_extreme": {"held": {"total": 0, "runs": 0}, "failed": {"total": 0, "runs": 0}},
+            },
+        },
+    }
+    idx_index = df.index
+    for ts, row in df[df["cisd_type"].notna()].iterrows():
+        idx = idx_index.get_loc(ts)
+        ct = row["cisd_type"]
+        hit = barrier_hit(df, idx, row, ct)
+        for bucket, close_col, wick_col in (
+            ("mid0", "fvg_mid0_hold_close_near", "fvg_mid0_hold_wick_far"),
+            ("mid1", "fvg_mid1_hold_close_near", "fvg_mid1_hold_wick_far"),
+        ):
+            close_state = row[close_col]
+            if close_state in ("held", "failed"):
+                stats[ct][bucket]["close_through_near_edge"][close_state]["total"] += 1
+                if hit:
+                    stats[ct][bucket]["close_through_near_edge"][close_state]["runs"] += 1
+            wick_state = row[wick_col]
+            if wick_state in ("held", "failed"):
+                stats[ct][bucket]["wick_break_far_extreme"][wick_state]["total"] += 1
+                if hit:
+                    stats[ct][bucket]["wick_break_far_extreme"][wick_state]["runs"] += 1
+    return stats
+
+
 def chart_smt_cisd(ax, data_nq, data_es):
     rows = []
     for instr, data in (("NQ", data_nq), ("ES", data_es)):
