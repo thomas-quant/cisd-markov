@@ -343,3 +343,25 @@ def test_write_html_persists_generated_family_controls(tmp_path):
     assert "Core" in html
     assert "FVG" in html
     assert "Structure" in html
+
+
+def test_resolve_data_root_prefers_local_worktree_data(tmp_path, monkeypatch):
+    worktree_root = tmp_path / ".worktrees" / "forward-returns-research-families"
+    local_data = worktree_root / "data"
+    parent_data = tmp_path / "data"
+    local_data.mkdir(parents=True)
+    parent_data.mkdir(parents=True)
+
+    monkeypatch.setattr(fr, "REPO_ROOT", worktree_root)
+
+    assert fr.resolve_data_root() == local_data
+
+
+def test_resolve_data_root_falls_back_to_parent_checkout_data(tmp_path, monkeypatch):
+    worktree_root = tmp_path / ".worktrees" / "forward-returns-research-families"
+    parent_data = tmp_path / "data"
+    parent_data.mkdir(parents=True)
+
+    monkeypatch.setattr(fr, "REPO_ROOT", worktree_root)
+
+    assert fr.resolve_data_root() == parent_data
