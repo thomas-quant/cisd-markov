@@ -28,6 +28,11 @@ def percentile_payload(series: pd.Series) -> dict[str, float] | None:
     return {str(level): float(np.percentile(values, level)) for level in PERCENTILE_LEVELS}
 
 
+def _ensure_column(frame: pd.DataFrame, column: str, default) -> None:
+    if column not in frame.columns:
+        frame[column] = default
+
+
 def _classify_wick(prepared: pd.DataFrame, idx: int, cisd_type: str) -> str:
     row = prepared.iloc[idx]
     if cisd_type == "bullish":
@@ -37,8 +42,8 @@ def _classify_wick(prepared: pd.DataFrame, idx: int, cisd_type: str) -> str:
     return "all"
 
 
-def _classify_size_cross(prepared: pd.DataFrame, idx: int) -> str:
-    atr = (prepared["high"] - prepared["low"]).rolling(14).mean().iloc[idx]
+def _classify_size_cross(prepared: pd.DataFrame, idx: int, atr_series: pd.Series) -> str:
+    atr = atr_series.iloc[idx]
     if pd.isna(atr) or atr <= 0:
         return "all"
 
@@ -58,11 +63,23 @@ def _classify_size_cross(prepared: pd.DataFrame, idx: int) -> str:
 
 def build_forward_return_rows(prepared: pd.DataFrame, instrument: str) -> pd.DataFrame:
     rows = prepared[prepared["cisd_type"].notna()].copy()
-    if rows.empty:
-        return rows.copy()
+
+    for column, default in (
+        ("swing_smt_tag", "no SMT"),
+        ("has_dir_fvg_mid0", False),
+        ("has_dir_fvg_mid1", False),
+        ("fvg_mid0_hold_close_near", "none"),
+        ("fvg_mid1_hold_close_near", "none"),
+        ("fvg_mid0_hold_wick_far", "none"),
+        ("fvg_mid1_hold_wick_far", "none"),
+        ("has_dir_sweep", False),
+        ("prev_bar_is_dir_swing", False),
+        ("cisd_bar_is_dir_swing", False),
+    ):
+        _ensure_column(rows, column, default)
 
     rows["instrument"] = instrument
-    rows["smt"] = rows["swing_smt_tag"] if "swing_smt_tag" in rows.columns else "no SMT"
+    rows["smt"] = rows["swing_smt_tag"]
     rows["size_cross"] = "all"
     rows["wick"] = "all"
     rows["consec"] = "all"
@@ -86,10 +103,11 @@ def build_forward_return_rows(prepared: pd.DataFrame, instrument: str) -> pd.Dat
     rows["prev_swing"] = np.where(rows["prev_bar_is_dir_swing"], "yes", "no")
     rows["cisd_swing"] = np.where(rows["cisd_bar_is_dir_swing"], "yes", "no")
 
-    directions = prepared["direction"]
+    atr_series = (prepared["high"] - prepared["low"]).rolling(14).mean()
+    directions = prepared["direction"] if "direction" in prepared.columns else pd.Series(index=prepared.index, dtype=object)
     for ts, row in rows.iterrows():
         idx = prepared.index.get_loc(ts)
-        rows.at[ts, "size_cross"] = _classify_size_cross(prepared, idx)
+        rows.at[ts, "size_cross"] = _classify_size_cross(prepared, idx, atr_series)
         rows.at[ts, "wick"] = _classify_wick(prepared, idx, row["cisd_type"])
         opposite = "bearish" if row["cisd_type"] == "bullish" else "bullish"
         rows.at[ts, "consec"] = str(_count_consecutive(idx, directions, opposite, MAX_CONSEC))

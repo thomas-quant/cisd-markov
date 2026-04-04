@@ -109,6 +109,53 @@ def test_build_forward_return_rows_adds_normalized_returns_and_core_tags():
     assert rows.loc[rows.index[1], "forward_return_pct"] < 0
 
 
+def test_build_forward_return_rows_returns_empty_enriched_schema_without_cisd_rows():
+    prepared = pd.DataFrame(
+        {
+            "open": [100.0, 101.0, 102.0],
+            "close": [100.5, 101.5, 102.5],
+            "high": [101.0, 102.0, 103.0],
+            "low": [99.5, 100.5, 101.5],
+            "cisd_type": [None, None, None],
+        },
+        index=pd.date_range("2026-02-01 09:30", periods=3, freq="15min"),
+    )
+
+    rows = fr.build_forward_return_rows(prepared, "ES")
+
+    assert rows.empty
+    assert {
+        "instrument",
+        "smt",
+        "size_cross",
+        "wick",
+        "consec",
+        "fvg_bucket",
+        "fvg_state_close_through_near_edge",
+        "fvg_state_wick_break_far_extreme",
+        "sweep",
+        "prev_swing",
+        "cisd_swing",
+        "forward_return_pct",
+    } <= set(rows.columns)
+
+
+def test_build_forward_return_rows_precomputes_atr_once(monkeypatch):
+    calls = 0
+    original_rolling = pd.Series.rolling
+
+    def spy_rolling(self, *args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original_rolling(self, *args, **kwargs)
+
+    monkeypatch.setattr(pd.Series, "rolling", spy_rolling)
+
+    fr.build_forward_return_rows(_prepared_fixture(), "NQ")
+
+    assert calls == 1
+
+
 def test_apply_fvg_filters_respects_bucket_mode_and_state():
     rows = fr.build_forward_return_rows(_prepared_fixture(), "NQ")
 
