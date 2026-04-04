@@ -316,3 +316,30 @@ def test_render_html_includes_family_config_and_labels():
     assert "fvg_bucket" in html
     assert "structure" in html
     assert "CISD Forward Returns" in html
+
+
+def test_write_html_persists_generated_family_controls(tmp_path):
+    config = fr.build_config()
+    data = {
+        "timeframes": {
+            "Daily": {
+                "x_days": [1, 2, 3, 4, 5, 6, 7],
+                "families": {
+                    "core": {"label": "Core", "charts": {"NQ": {}, "ES": {}}},
+                    "fvg": {"label": "FVG", "charts": {"NQ": {}, "ES": {}}},
+                    "structure": {"label": "Structure", "charts": {"NQ": {}, "ES": {}}},
+                },
+            }
+        }
+    }
+
+    output = tmp_path / "forward_returns.html"
+    fr.write_html(output, data, config)
+
+    html = output.read_text(encoding="utf-8")
+
+    assert output.exists()
+    assert 'data-dim="family"' in html
+    assert "Core" in html
+    assert "FVG" in html
+    assert "Structure" in html

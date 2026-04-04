@@ -155,6 +155,20 @@ SMT confirmation adds the most value at **15min**, where it provides a small but
 
 Ensure data is in `.parquet` format in the `data/` directory (`nq_1m.parquet`, `es_1m.parquet`).
 
+## Forward Returns Explorer
+
+Rebuild the interactive forward-returns report with:
+
+```bash
+python3 scripts/build_forward_returns.py
+```
+
+The page groups research into three families:
+
+- `core`: SMT, size-vs-prev-body, wick position, and consecutive-candle buckets.
+- `fvg`: CISD-linked FVG creation and hold-state buckets.
+- `structure`: sweep confirmation plus the previous-bar and CISD-bar swing-position buckets.
+
 ### Run all analyses (4 per-TF PNGs + CSVs + 9 standalone PNGs):
 ```powershell
 python cisd_analysis.py
