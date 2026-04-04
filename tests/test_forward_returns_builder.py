@@ -1,3 +1,5 @@
+import json
+
 import pytest
 import pandas as pd
 
@@ -226,16 +228,87 @@ def test_aggregate_family_payload_returns_zero_count_for_empty_combos():
     assert payload["data"] is None
 
 
+def test_aggregate_family_payload_returns_percentile_arrays_for_each_horizon():
+    rows = fr.build_forward_return_rows(_prepared_fixture(), "NQ")
+
+    payload = fr.aggregate_family_payload(
+        rows,
+        "core",
+        {"smt": "all", "size_cross": "all", "wick": "all", "consec": "all"},
+    )
+
+    assert payload["n"] > 0
+    assert payload["data"] is not None
+    assert len(payload["data"]["50"]) == fr.FORWARD_RETURNS_LOOKAHEAD
+    assert all(isinstance(value, float) for value in payload["data"]["50"])
+
+
+def test_render_html_embeds_family_payload_contract():
+    config = fr.build_config()
+    data = {
+        "timeframes": {
+            "Daily": {
+                "x_days": [1, 2, 3, 4, 5, 6, 7],
+                "families": {
+                    "core": {
+                        "label": "Core",
+                        "charts": {
+                            "NQ": {
+                                "bullish": {
+                                    "all|all|all|all": {
+                                        "n": 1,
+                                        "data": {
+                                            "5": [1, 2, 3, 4, 5, 6, 7],
+                                            "25": [1, 2, 3, 4, 5, 6, 7],
+                                            "50": [1, 2, 3, 4, 5, 6, 7],
+                                            "75": [1, 2, 3, 4, 5, 6, 7],
+                                            "95": [1, 2, 3, 4, 5, 6, 7],
+                                        },
+                                    }
+                                },
+                                "bearish": {
+                                    "all|all|all|all": {
+                                        "n": 0,
+                                        "data": None,
+                                    }
+                                },
+                            },
+                            "ES": {
+                                "bullish": {
+                                    "all|all|all|all": {
+                                        "n": 0,
+                                        "data": None,
+                                    }
+                                },
+                                "bearish": {
+                                    "all|all|all|all": {
+                                        "n": 0,
+                                        "data": None,
+                                    }
+                                },
+                            },
+                        },
+                    },
+                    "fvg": {"label": "FVG", "charts": {"NQ": {}, "ES": {}}},
+                    "structure": {"label": "Structure", "charts": {"NQ": {}, "ES": {}}},
+                },
+            }
+        }
+    }
+
+    html = fr.render_html(data, config)
+    embedded_data = json.loads(html.split("const DATA = ", 1)[1].split(";\n  const COLORS =", 1)[0])
+
+    assert 'data-dim="family"' in html
+    assert embedded_data["timeframes"]["Daily"]["families"]["core"]["charts"]["NQ"]["bullish"]["all|all|all|all"]["data"]["50"] == [1, 2, 3, 4, 5, 6, 7]
+    assert embedded_data["timeframes"]["Daily"]["x_days"] == [1, 2, 3, 4, 5, 6, 7]
+    assert "CISD Forward Returns" in html
+
+
 def test_render_html_includes_family_config_and_labels():
     html = fr.render_html(
-        data={"Daily": {"family": "placeholder"}},
-        config={
-            "families": {
-                "core": {"label": "Core"},
-                "fvg": {"label": "FVG"},
-                "structure": {"label": "Structure"},
-            }
-        },
+        data={"timeframes": {"Daily": {"x_days": [1, 2, 3, 4, 5, 6, 7], "families": {}}}},
+        config={"families": {"core": {"label": "Core"}, "fvg": {"label": "FVG"}, "structure": {"label": "Structure"}}},
     )
 
     assert 'data-dim="family"' in html

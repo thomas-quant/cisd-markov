@@ -13,6 +13,7 @@ from cisd_analysis import INSTRUMENTS, TIMEFRAMES, load_1m, prepare_pair, MAX_CO
 
 FORWARD_RETURNS_LOOKAHEAD = 7
 PERCENTILE_LEVELS = [5, 25, 50, 75, 95]
+FORWARD_HORIZONS = list(range(1, FORWARD_RETURNS_LOOKAHEAD + 1))
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_PATH = REPO_ROOT / "output" / "forward_returns.html"
 
@@ -45,6 +46,7 @@ COMBO_KEY_BUILDERS = {
 
 
 def percentile_payload(series: pd.Series) -> dict[str, float] | None:
+    series = series.dropna()
     if series.empty:
         return None
     values = series.to_numpy(dtype=float)
@@ -135,10 +137,13 @@ def build_forward_return_rows(prepared: pd.DataFrame, instrument: str) -> pd.Dat
         opposite = "bearish" if row["cisd_type"] == "bullish" else "bullish"
         rows.at[ts, "consec"] = str(_count_consecutive(idx, directions, opposite, MAX_CONSEC))
 
-    future_close = prepared["close"].shift(-FORWARD_RETURNS_LOOKAHEAD).reindex(rows.index)
-    raw_return = (future_close / rows["close"] - 1.0) * 100.0
-    rows["forward_return_pct"] = np.where(rows["cisd_type"] == "bearish", -raw_return, raw_return)
-    return rows[rows["forward_return_pct"].notna()].copy()
+    for horizon in FORWARD_HORIZONS:
+        future_close = prepared["close"].shift(-horizon).reindex(rows.index)
+        raw_return = (future_close / rows["close"] - 1.0) * 100.0
+        rows[f"forward_return_pct_{horizon}"] = np.where(rows["cisd_type"] == "bearish", -raw_return, raw_return)
+
+    rows["forward_return_pct"] = rows[f"forward_return_pct_{FORWARD_RETURNS_LOOKAHEAD}"]
+    return rows.copy()
 
 
 def apply_family_filters(rows: pd.DataFrame, family: str, state: dict[str, str]) -> pd.DataFrame:
@@ -168,7 +173,20 @@ def apply_family_filters(rows: pd.DataFrame, family: str, state: dict[str, str])
 
 def aggregate_family_payload(rows: pd.DataFrame, family: str, state: dict[str, str]) -> dict[str, object]:
     filtered = apply_family_filters(rows, family, state)
-    return {"n": int(len(filtered)), "data": percentile_payload(filtered["forward_return_pct"])}
+    if filtered.empty:
+        return {"n": 0, "data": None}
+
+    horizon_payloads = [
+        percentile_payload(filtered[f"forward_return_pct_{horizon}"])
+        for horizon in FORWARD_HORIZONS
+    ]
+    payload = {}
+    for level in PERCENTILE_LEVELS:
+        payload[str(level)] = [
+            horizon_payload[str(level)] if horizon_payload is not None else None
+            for horizon_payload in horizon_payloads
+        ]
+    return {"n": int(len(filtered)), "data": payload}
 
 
 def build_config() -> dict[str, object]:
