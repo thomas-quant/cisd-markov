@@ -211,3 +211,34 @@ def test_apply_core_filters_respects_core_tags():
     )
 
     assert filtered["smt"].unique().tolist() == ["w/ SMT"]
+
+
+def test_aggregate_family_payload_returns_zero_count_for_empty_combos():
+    rows = fr.build_forward_return_rows(_prepared_fixture(), "NQ")
+
+    payload = fr.aggregate_family_payload(
+        rows,
+        "structure",
+        {"sweep": "w/ sweep", "prev_swing": "no", "cisd_swing": "yes"},
+    )
+
+    assert payload["n"] == 0
+    assert payload["data"] is None
+
+
+def test_render_html_includes_family_config_and_labels():
+    html = fr.render_html(
+        data={"Daily": {"family": "placeholder"}},
+        config={
+            "families": {
+                "core": {"label": "Core"},
+                "fvg": {"label": "FVG"},
+                "structure": {"label": "Structure"},
+            }
+        },
+    )
+
+    assert 'data-dim="family"' in html
+    assert "fvg_bucket" in html
+    assert "structure" in html
+    assert "CISD Forward Returns" in html
