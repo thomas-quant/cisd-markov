@@ -230,6 +230,7 @@ def test_aggregate_family_payload_returns_zero_count_for_empty_combos():
 
 def test_aggregate_family_payload_returns_percentile_arrays_for_each_horizon():
     rows = fr.build_forward_return_rows(_prepared_fixture(), "NQ")
+    complete_rows = rows[rows[[f"forward_return_pct_{horizon}" for horizon in range(1, fr.FORWARD_RETURNS_LOOKAHEAD + 1)]].notna().all(axis=1)]
 
     payload = fr.aggregate_family_payload(
         rows,
@@ -237,7 +238,7 @@ def test_aggregate_family_payload_returns_percentile_arrays_for_each_horizon():
         {"smt": "all", "size_cross": "all", "wick": "all", "consec": "all"},
     )
 
-    assert payload["n"] > 0
+    assert payload["n"] == len(complete_rows)
     assert payload["data"] is not None
     assert len(payload["data"]["50"]) == fr.FORWARD_RETURNS_LOOKAHEAD
     assert all(isinstance(value, float) for value in payload["data"]["50"])
