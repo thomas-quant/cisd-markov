@@ -1,3 +1,4 @@
+import pytest
 import pandas as pd
 
 from scripts import build_forward_returns as fr
@@ -24,8 +25,8 @@ def test_percentile_payload_returns_expected_bands():
 
     payload = fr.percentile_payload(series)
 
-    assert payload["25"] == 1.75
-    assert payload["50"] == 2.5
-    assert payload["75"] == 3.25
-    assert payload["5"] == 1.15
-    assert payload["95"] == 3.8499999999999996
+    assert payload["25"] == pytest.approx(1.75)
+    assert payload["50"] == pytest.approx(2.5)
+    assert payload["75"] == pytest.approx(3.25)
+    assert payload["5"] == pytest.approx(1.15)
+    assert payload["95"] == pytest.approx(3.85)
