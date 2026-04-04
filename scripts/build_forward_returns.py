@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from copy import deepcopy
 from html import escape as html_escape
 from itertools import product
@@ -9,12 +10,16 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from cisd_analysis import INSTRUMENTS, TIMEFRAMES, load_1m, prepare_pair, MAX_CONSEC, _count_consecutive
 
 FORWARD_RETURNS_LOOKAHEAD = 7
 PERCENTILE_LEVELS = [5, 25, 50, 75, 95]
 FORWARD_HORIZONS = list(range(1, FORWARD_RETURNS_LOOKAHEAD + 1))
-REPO_ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_PATH = REPO_ROOT / "output" / "forward_returns.html"
 
 DEFAULT_STATE = {
@@ -331,9 +336,23 @@ def _merge_config(base: dict[str, object], override: dict[str, object] | None) -
     return merged
 
 
+def resolve_data_root() -> Path:
+    local_data_root = REPO_ROOT / "data"
+    if local_data_root.exists():
+        return local_data_root
+
+    if REPO_ROOT.parent.name == ".worktrees":
+        parent_data_root = REPO_ROOT.parent.parent / "data"
+        if parent_data_root.exists():
+            return parent_data_root
+
+    return local_data_root
+
+
 def build_dataset() -> dict[str, object]:
     config = build_config()
-    dfs_1m = {instrument: load_1m(path) for instrument, path in INSTRUMENTS.items()}
+    data_root = resolve_data_root()
+    dfs_1m = {instrument: load_1m(data_root / path.name) for instrument, path in INSTRUMENTS.items()}
     dataset: dict[str, object] = {"timeframes": {}}
 
     for tf_label, tf_rule in TIMEFRAMES.items():
