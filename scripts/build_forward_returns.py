@@ -171,8 +171,14 @@ def apply_family_filters(rows: pd.DataFrame, family: str, state: dict[str, str])
     raise ValueError(f"unknown family: {family}")
 
 
+def _complete_forward_path_mask(rows: pd.DataFrame) -> pd.Series:
+    required_columns = [f"forward_return_pct_{horizon}" for horizon in FORWARD_HORIZONS]
+    return rows[required_columns].notna().all(axis=1)
+
+
 def aggregate_family_payload(rows: pd.DataFrame, family: str, state: dict[str, str]) -> dict[str, object]:
     filtered = apply_family_filters(rows, family, state)
+    filtered = filtered[_complete_forward_path_mask(filtered)]
     if filtered.empty:
         return {"n": 0, "data": None}
 
