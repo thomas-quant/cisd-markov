@@ -318,6 +318,20 @@ def test_render_html_includes_family_config_and_labels():
     assert "CISD Forward Returns" in html
 
 
+def test_render_html_emits_valid_template_braces():
+    html = fr.render_html(
+        data={"timeframes": {"Daily": {"x_days": [1, 2, 3, 4, 5, 6, 7], "families": {}}}},
+        config={"families": {"core": {"label": "Core"}, "fvg": {"label": "FVG"}, "structure": {"label": "Structure"}}},
+    )
+
+    assert "function familyState() {" in html
+    assert "const COLORS = {" in html
+    assert ".family-panel {" in html
+    assert "function familyState() {{" not in html
+    assert "const COLORS = {{" not in html
+    assert ".family-panel {{" not in html
+
+
 def test_write_html_persists_generated_family_controls(tmp_path):
     config = fr.build_config()
     data = {
