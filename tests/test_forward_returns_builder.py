@@ -1,0 +1,367 @@
+import json
+
+import pytest
+import pandas as pd
+
+from scripts import build_forward_returns as fr
+
+
+def test_combo_key_builders_use_family_specific_dimensions():
+    assert fr.core_combo_key(
+        {"smt": "w/ SMT", "size_cross": "Big CISD / Small prev", "wick": "past_wick", "consec": "2"}
+    ) == "w/ SMT|Big CISD / Small prev|past_wick|2"
+    assert fr.fvg_combo_key(
+        {"fvg_bucket": "mid1", "fvg_mode": "close_through_near_edge", "fvg_state": "failed"}
+    ) == "mid1|close_through_near_edge|failed"
+    assert fr.structure_combo_key(
+        {"sweep": "w/ sweep", "prev_swing": "yes", "cisd_swing": "no"}
+    ) == "w/ sweep|yes|no"
+
+
+def test_percentile_payload_returns_none_for_empty_series():
+    assert fr.percentile_payload(pd.Series(dtype=float)) is None
+
+
+def test_percentile_payload_returns_expected_bands():
+    series = pd.Series([1.0, 2.0, 3.0, 4.0])
+
+    payload = fr.percentile_payload(series)
+
+    assert payload["25"] == pytest.approx(1.75)
+    assert payload["50"] == pytest.approx(2.5)
+    assert payload["75"] == pytest.approx(3.25)
+    assert payload["5"] == pytest.approx(1.15)
+    assert payload["95"] == pytest.approx(3.85)
+
+
+def _prepared_fixture() -> pd.DataFrame:
+    index = pd.date_range("2026-02-01 09:30", periods=12, freq="15min")
+    return pd.DataFrame(
+        {
+            "open": [99, 100, 102, 106, 105, 104, 107, 108, 109, 110, 111, 112],
+            "close": [100, 101, 103, 104, 106, 105, 108, 109, 110, 111, 112, 113],
+            "high": [101, 102, 104, 105, 107, 106, 109, 110, 111, 112, 113, 114],
+            "low": [99, 100, 102, 103, 104, 104, 107, 108, 109, 110, 111, 112],
+            "cisd_type": [None, "bullish", None, "bearish", None, "bullish", None, None, None, None, None, None],
+            "swing_smt_tag": [
+                "no SMT",
+                "w/ SMT",
+                "no SMT",
+                "no SMT",
+                "no SMT",
+                "w/ SMT",
+                "no SMT",
+                "no SMT",
+                "no SMT",
+                "no SMT",
+                "no SMT",
+                "no SMT",
+            ],
+            "direction": [
+                None,
+                "bullish",
+                "bullish",
+                "bearish",
+                "bullish",
+                "bearish",
+                "bullish",
+                "bullish",
+                "bullish",
+                "bullish",
+                "bullish",
+                "bullish",
+            ],
+            "prev_direction": [
+                None,
+                "bearish",
+                "bullish",
+                "bullish",
+                "bearish",
+                "bullish",
+                "bearish",
+                "bullish",
+                "bullish",
+                "bullish",
+                "bullish",
+                "bullish",
+            ],
+            "prev_close": [None, 100, 101, 103, 104, 106, 105, 108, 109, 110, 111, 112],
+            "prev_high": [None, 101, 102, 104, 105, 107, 106, 109, 110, 111, 112, 113],
+            "prev_low": [None, 99, 100, 102, 103, 104, 104, 107, 108, 109, 110, 111],
+            "has_dir_fvg_mid0": [False, True, False, False, False, False, False, False, False, False, False, False],
+            "has_dir_fvg_mid1": [False, False, False, True, False, False, False, False, False, False, False, False],
+            "fvg_mid0_hold_close_near": ["none", "held", "none", "none", "none", "none", "none", "none", "none", "none", "none", "none"],
+            "fvg_mid0_hold_wick_far": ["none", "held", "none", "none", "none", "none", "none", "none", "none", "none", "none", "none"],
+            "fvg_mid1_hold_close_near": ["none", "none", "none", "failed", "none", "none", "none", "none", "none", "none", "none", "none"],
+            "fvg_mid1_hold_wick_far": ["none", "none", "none", "failed", "none", "none", "none", "none", "none", "none", "none", "none"],
+            "has_dir_sweep": [False, True, False, False, False, False, False, False, False, False, False, False],
+            "prev_bar_is_dir_swing": [False, True, False, False, False, False, False, False, False, False, False, False],
+            "cisd_bar_is_dir_swing": [False, False, False, True, False, False, False, False, False, False, False, False],
+        },
+        index=index,
+    )
+
+
+def test_build_forward_return_rows_adds_normalized_returns_and_core_tags():
+    rows = fr.build_forward_return_rows(_prepared_fixture(), "NQ")
+
+    assert set(["instrument", "cisd_type", "forward_return_pct", "smt", "size_cross", "wick", "consec"]) <= set(rows.columns)
+    assert rows.loc[rows.index[0], "instrument"] == "NQ"
+    assert rows.loc[rows.index[0], "forward_return_pct"] > 0
+    assert rows.loc[rows.index[1], "forward_return_pct"] < 0
+
+
+def test_build_forward_return_rows_returns_empty_enriched_schema_without_cisd_rows():
+    prepared = pd.DataFrame(
+        {
+            "open": [100.0, 101.0, 102.0],
+            "close": [100.5, 101.5, 102.5],
+            "high": [101.0, 102.0, 103.0],
+            "low": [99.5, 100.5, 101.5],
+            "cisd_type": [None, None, None],
+        },
+        index=pd.date_range("2026-02-01 09:30", periods=3, freq="15min"),
+    )
+
+    rows = fr.build_forward_return_rows(prepared, "ES")
+
+    assert rows.empty
+    assert {
+        "instrument",
+        "smt",
+        "size_cross",
+        "wick",
+        "consec",
+        "fvg_bucket",
+        "fvg_state_close_through_near_edge",
+        "fvg_state_wick_break_far_extreme",
+        "sweep",
+        "prev_swing",
+        "cisd_swing",
+        "forward_return_pct",
+    } <= set(rows.columns)
+
+
+def test_build_forward_return_rows_precomputes_atr_once(monkeypatch):
+    calls = 0
+    original_rolling = pd.Series.rolling
+
+    def spy_rolling(self, *args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original_rolling(self, *args, **kwargs)
+
+    monkeypatch.setattr(pd.Series, "rolling", spy_rolling)
+
+    fr.build_forward_return_rows(_prepared_fixture(), "NQ")
+
+    assert calls == 1
+
+
+def test_apply_fvg_filters_respects_bucket_mode_and_state():
+    rows = fr.build_forward_return_rows(_prepared_fixture(), "NQ")
+
+    filtered = fr.apply_family_filters(
+        rows,
+        "fvg",
+        {
+            "fvg_bucket": "mid0",
+            "fvg_mode": "close_through_near_edge",
+            "fvg_state": "held",
+        },
+    )
+
+    assert filtered["fvg_bucket"].unique().tolist() == ["mid0"]
+    assert filtered["fvg_state_close_through_near_edge"].unique().tolist() == ["held"]
+
+
+def test_apply_fvg_filters_does_not_filter_state_when_mode_is_all():
+    rows = fr.build_forward_return_rows(_prepared_fixture(), "NQ")
+
+    filtered = fr.apply_family_filters(
+        rows,
+        "fvg",
+        {
+            "fvg_bucket": "all",
+            "fvg_mode": "all",
+            "fvg_state": "held",
+        },
+    )
+
+    assert len(filtered) == len(rows)
+
+
+def test_apply_structure_filters_respects_sweep_and_swing_flags():
+    rows = fr.build_forward_return_rows(_prepared_fixture(), "NQ")
+
+    filtered = fr.apply_family_filters(
+        rows,
+        "structure",
+        {"sweep": "w/ sweep", "prev_swing": "yes", "cisd_swing": "no"},
+    )
+
+    assert len(filtered) == 1
+
+
+def test_apply_core_filters_respects_core_tags():
+    rows = fr.build_forward_return_rows(_prepared_fixture(), "NQ")
+
+    filtered = fr.apply_family_filters(
+        rows,
+        "core",
+        {"smt": "w/ SMT", "size_cross": "all", "wick": "all", "consec": "all"},
+    )
+
+    assert filtered["smt"].unique().tolist() == ["w/ SMT"]
+
+
+def test_aggregate_family_payload_returns_zero_count_for_empty_combos():
+    rows = fr.build_forward_return_rows(_prepared_fixture(), "NQ")
+
+    payload = fr.aggregate_family_payload(
+        rows,
+        "structure",
+        {"sweep": "w/ sweep", "prev_swing": "no", "cisd_swing": "yes"},
+    )
+
+    assert payload["n"] == 0
+    assert payload["data"] is None
+
+
+def test_aggregate_family_payload_returns_percentile_arrays_for_each_horizon():
+    rows = fr.build_forward_return_rows(_prepared_fixture(), "NQ")
+    complete_rows = rows[rows[[f"forward_return_pct_{horizon}" for horizon in range(1, fr.FORWARD_RETURNS_LOOKAHEAD + 1)]].notna().all(axis=1)]
+
+    payload = fr.aggregate_family_payload(
+        rows,
+        "core",
+        {"smt": "all", "size_cross": "all", "wick": "all", "consec": "all"},
+    )
+
+    assert payload["n"] == len(complete_rows)
+    assert payload["data"] is not None
+    assert len(payload["data"]["50"]) == fr.FORWARD_RETURNS_LOOKAHEAD
+    assert all(isinstance(value, float) for value in payload["data"]["50"])
+
+
+def test_render_html_embeds_family_payload_contract():
+    config = fr.build_config()
+    data = {
+        "timeframes": {
+            "Daily": {
+                "x_days": [1, 2, 3, 4, 5, 6, 7],
+                "families": {
+                    "core": {
+                        "label": "Core",
+                        "charts": {
+                            "NQ": {
+                                "bullish": {
+                                    "all|all|all|all": {
+                                        "n": 1,
+                                        "data": {
+                                            "5": [1, 2, 3, 4, 5, 6, 7],
+                                            "25": [1, 2, 3, 4, 5, 6, 7],
+                                            "50": [1, 2, 3, 4, 5, 6, 7],
+                                            "75": [1, 2, 3, 4, 5, 6, 7],
+                                            "95": [1, 2, 3, 4, 5, 6, 7],
+                                        },
+                                    }
+                                },
+                                "bearish": {
+                                    "all|all|all|all": {
+                                        "n": 0,
+                                        "data": None,
+                                    }
+                                },
+                            },
+                            "ES": {
+                                "bullish": {
+                                    "all|all|all|all": {
+                                        "n": 0,
+                                        "data": None,
+                                    }
+                                },
+                                "bearish": {
+                                    "all|all|all|all": {
+                                        "n": 0,
+                                        "data": None,
+                                    }
+                                },
+                            },
+                        },
+                    },
+                    "fvg": {"label": "FVG", "charts": {"NQ": {}, "ES": {}}},
+                    "structure": {"label": "Structure", "charts": {"NQ": {}, "ES": {}}},
+                },
+            }
+        }
+    }
+
+    html = fr.render_html(data, config)
+    embedded_data = json.loads(html.split("const DATA = ", 1)[1].split(";\n  const COLORS =", 1)[0])
+
+    assert 'data-dim="family"' in html
+    assert embedded_data["timeframes"]["Daily"]["families"]["core"]["charts"]["NQ"]["bullish"]["all|all|all|all"]["data"]["50"] == [1, 2, 3, 4, 5, 6, 7]
+    assert embedded_data["timeframes"]["Daily"]["x_days"] == [1, 2, 3, 4, 5, 6, 7]
+    assert "CISD Forward Returns" in html
+
+
+def test_render_html_includes_family_config_and_labels():
+    html = fr.render_html(
+        data={"timeframes": {"Daily": {"x_days": [1, 2, 3, 4, 5, 6, 7], "families": {}}}},
+        config={"families": {"core": {"label": "Core"}, "fvg": {"label": "FVG"}, "structure": {"label": "Structure"}}},
+    )
+
+    assert 'data-dim="family"' in html
+    assert "fvg_bucket" in html
+    assert "structure" in html
+    assert "CISD Forward Returns" in html
+
+
+def test_write_html_persists_generated_family_controls(tmp_path):
+    config = fr.build_config()
+    data = {
+        "timeframes": {
+            "Daily": {
+                "x_days": [1, 2, 3, 4, 5, 6, 7],
+                "families": {
+                    "core": {"label": "Core", "charts": {"NQ": {}, "ES": {}}},
+                    "fvg": {"label": "FVG", "charts": {"NQ": {}, "ES": {}}},
+                    "structure": {"label": "Structure", "charts": {"NQ": {}, "ES": {}}},
+                },
+            }
+        }
+    }
+
+    output = tmp_path / "forward_returns.html"
+    fr.write_html(output, data, config)
+
+    html = output.read_text(encoding="utf-8")
+
+    assert output.exists()
+    assert 'data-dim="family"' in html
+    assert "Core" in html
+    assert "FVG" in html
+    assert "Structure" in html
+
+
+def test_resolve_data_root_prefers_local_worktree_data(tmp_path, monkeypatch):
+    worktree_root = tmp_path / ".worktrees" / "forward-returns-research-families"
+    local_data = worktree_root / "data"
+    parent_data = tmp_path / "data"
+    local_data.mkdir(parents=True)
+    parent_data.mkdir(parents=True)
+
+    monkeypatch.setattr(fr, "REPO_ROOT", worktree_root)
+
+    assert fr.resolve_data_root() == local_data
+
+
+def test_resolve_data_root_falls_back_to_parent_checkout_data(tmp_path, monkeypatch):
+    worktree_root = tmp_path / ".worktrees" / "forward-returns-research-families"
+    parent_data = tmp_path / "data"
+    parent_data.mkdir(parents=True)
+
+    monkeypatch.setattr(fr, "REPO_ROOT", worktree_root)
+
+    assert fr.resolve_data_root() == parent_data
