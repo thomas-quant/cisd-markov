@@ -3,8 +3,6 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from cisd_analysis import INSTRUMENTS, TIMEFRAMES, load_1m, prepare_pair
-
 FORWARD_RETURNS_LOOKAHEAD = 7
 PERCENTILE_LEVELS = [5, 25, 50, 75, 95]
 
@@ -26,4 +24,3 @@ def percentile_payload(series: pd.Series) -> dict[str, float] | None:
         return None
     values = series.to_numpy(dtype=float)
     return {str(level): float(np.percentile(values, level)) for level in PERCENTILE_LEVELS}
-
