@@ -62,7 +62,7 @@ Plans:
 
 Plans:
 
-- [ ] 02-01: Sacred date holdout split + discovery-on-train default + single-evaluation OOS path (VALID-01/02)
+- [x] 02-01: Sacred date holdout split + discovery-on-train default + single-evaluation OOS path (VALID-01/02)
 - [ ] 02-02: Binomial confidence intervals, minimum-n gating, and the n/CI/IS-OOS results manifest (VALID-03/04/05)
 
 ### Phase 3: Re-Validate & Republish Existing Findings
@@ -133,7 +133,7 @@ Phases 3 and 4 both depend only on Phases 1-2 and are reorderable/parallelizable
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Reproducibility Foundation & Behavior Lock | 3/3 | Complete    | 2026-06-12 |
-| 2. Validation Harness | 0/2 | Not started | - |
+| 2. Validation Harness | 1/2 | In Progress|  |
 | 3. Re-Validate & Republish Existing Findings | 0/2 | Not started | - |
 | 4. Test-Gated Modular Refactor | 0/3 | Not started | - |
 | 5. New CISD Research on the Validated Engine | 0/2 | Not started | - |
