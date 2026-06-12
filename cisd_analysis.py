@@ -66,6 +66,13 @@ SWEEP_TOLERANCE = 5
 SWEEP_SWING_LOOKBACK = 20
 _SMT_PKG_PATH = Path(os.environ.get("SMT_PKG_PATH", "/mnt/e/backup/code/Finance/Misc/SMT"))
 
+# OOS_START: 70th-percentile date of the shared NQ∩ES daily calendar.
+# Derived: len(shared)=1627, idx=int(0.70*1627)=1138. Frozen 2024-04-30.
+# Do NOT recompute at runtime — appending data must not silently shift the OOS boundary.
+OOS_START  = "2024-04-30"  # IS/OOS split: events before this date are discovery
+MIN_N      = 50             # minimum sample size for a reportable finding (stricter than n≥30)
+CI_LEVEL   = 0.95           # Wilson score CI confidence level
+
 
 # ── Data Loading & Resampling ─────────────────────────────────────────────────
 
