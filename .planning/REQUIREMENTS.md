@@ -18,8 +18,8 @@ Requirements for this milestone. Each maps to a roadmap phase. Sequenced by depe
 
 ### Tests (Behavior Lock)
 
-- [ ] **TEST-01**: Characterization tests lock the current published headline numbers before any refactor or harness change can move them
-- [ ] **TEST-02**: The previously-untested core analyses (`compute_basic`, `compute_mc`, `compute_significance`, `compute_wick`, `compute_combined`) have unit tests
+- [x] **TEST-01**: Characterization tests lock the current published headline numbers before any refactor or harness change can move them
+- [x] **TEST-02**: The previously-untested core analyses (`compute_basic`, `compute_mc`, `compute_significance`, `compute_wick`, `compute_combined`) have unit tests
 
 ### Validation Harness
 
@@ -85,8 +85,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 | INFRA-04 | Phase 1 | Complete |
 | INFRA-05 | Phase 1 | Complete |
 | INFRA-06 | Phase 1 | Complete |
-| TEST-01 | Phase 1 | Pending |
-| TEST-02 | Phase 1 | Pending |
+| TEST-01 | Phase 1 | Complete |
+| TEST-02 | Phase 1 | Complete |
 | VALID-01 | Phase 2 | Pending |
 | VALID-02 | Phase 2 | Pending |
 | VALID-03 | Phase 2 | Pending |

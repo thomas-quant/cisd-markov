@@ -13,7 +13,7 @@ This milestone turns a single-pass, in-sample filter-mining script into a reprod
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Reproducibility Foundation & Behavior Lock** - Pin the environment, run tests in CI deterministically, and lock current published numbers before anything can move them
+- [x] **Phase 1: Reproducibility Foundation & Behavior Lock** - Pin the environment, run tests in CI deterministically, and lock current published numbers before anything can move them (completed 2026-06-12)
 - [ ] **Phase 2: Validation Harness** - Sacred date holdout, binomial confidence intervals, and sample-size gating on every reported rate
 - [ ] **Phase 3: Re-Validate & Republish Existing Findings** - Re-run README headline results through the harness and republish with n + CI + OOS status
 - [ ] **Phase 4: Test-Gated Modular Refactor** - Split the god-file, consolidate the registry, and vectorize the hot loops with all characterization tests still green
@@ -43,7 +43,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 01-03-PLAN.md — Characterization tests on README headline numbers + unit tests for the five core compute functions (TEST-01/02)
+- [x] 01-03-PLAN.md — Characterization tests on README headline numbers + unit tests for the five core compute functions (TEST-01/02)
 
 ### Phase 2: Validation Harness
 
@@ -132,7 +132,7 @@ Phases 3 and 4 both depend only on Phases 1-2 and are reorderable/parallelizable
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Reproducibility Foundation & Behavior Lock | 2/3 | In Progress|  |
+| 1. Reproducibility Foundation & Behavior Lock | 3/3 | Complete   | 2026-06-12 |
 | 2. Validation Harness | 0/2 | Not started | - |
 | 3. Re-Validate & Republish Existing Findings | 0/2 | Not started | - |
 | 4. Test-Gated Modular Refactor | 0/3 | Not started | - |
