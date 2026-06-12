@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+# Anchor pytest rootdir at the repo root so conftest.py is always loaded,
+# and add "." to sys.path so tests can import cisd_analysis and scripts.*
+# regardless of the working directory pytest is invoked from.
+pythonpath = ["."]
