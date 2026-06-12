@@ -14,7 +14,7 @@ This milestone turns a single-pass, in-sample filter-mining script into a reprod
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Reproducibility Foundation & Behavior Lock** - Pin the environment, run tests in CI deterministically, and lock current published numbers before anything can move them (completed 2026-06-12)
-- [ ] **Phase 2: Validation Harness** - Sacred date holdout, binomial confidence intervals, and sample-size gating on every reported rate
+- [x] **Phase 2: Validation Harness** - Sacred date holdout, binomial confidence intervals, and sample-size gating on every reported rate (completed 2026-06-12)
 - [ ] **Phase 3: Re-Validate & Republish Existing Findings** - Re-run README headline results through the harness and republish with n + CI + OOS status
 - [ ] **Phase 4: Test-Gated Modular Refactor** - Split the god-file, consolidate the registry, and vectorize the hot loops with all characterization tests still green
 - [ ] **Phase 5: New CISD Research on the Validated Engine** - Add `candle[1]` follow-through and multi-bar post-CISD context studies, reporting through the harness from the start
@@ -63,7 +63,7 @@ Plans:
 Plans:
 
 - [x] 02-01: Sacred date holdout split + discovery-on-train default + single-evaluation OOS path (VALID-01/02)
-- [ ] 02-02: Binomial confidence intervals, minimum-n gating, and the n/CI/IS-OOS results manifest (VALID-03/04/05)
+- [x] 02-02: Binomial confidence intervals, minimum-n gating, and the n/CI/IS-OOS results manifest (VALID-03/04/05)
 
 ### Phase 3: Re-Validate & Republish Existing Findings
 
@@ -133,7 +133,7 @@ Phases 3 and 4 both depend only on Phases 1-2 and are reorderable/parallelizable
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Reproducibility Foundation & Behavior Lock | 3/3 | Complete    | 2026-06-12 |
-| 2. Validation Harness | 1/2 | In Progress|  |
+| 2. Validation Harness | 2/2 | Complete    | 2026-06-12 |
 | 3. Re-Validate & Republish Existing Findings | 0/2 | Not started | - |
 | 4. Test-Gated Modular Refactor | 0/3 | Not started | - |
 | 5. New CISD Research on the Validated Engine | 0/2 | Not started | - |
