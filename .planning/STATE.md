@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-06-12T07:34:14.964Z"
-last_activity: 2026-06-12 -- Phase 01 execution started
+last_updated: "2026-06-12T07:44:58.318Z"
+last_activity: 2026-06-12
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 3
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -25,11 +25,11 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 ## Current Position
 
 Phase: 01 (reproducibility-foundation-behavior-lock) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 01
-Last activity: 2026-06-12 -- Phase 01 execution started
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-06-12
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [███░░░░░░░] 33%
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 01 P01 | 246 | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -63,6 +64,8 @@ Recent decisions affecting current work:
 - Sacred date holdout (newest ~30% OOS, evaluated once; oldest ~70% discovery); harness defaults to discovery-on-train
 - Foundational validation depth = CIs + n-gating only; MHT correction and walk-forward deferred to v2
 - Phases 3 and 4 both depend only on Phases 1-2 and are reorderable/parallelizable relative to each other
+- [Phase 01]: Pin exactly the installed .venv versions for requirements.txt — no upgrade needed as probing confirmed all 5 packages match the plan exactly
+- [Phase 01]: SMT_PKG_PATH default is the existing WSL path so dev-machine behavior is byte-identical; .gitignore additions for .env deferred to plan 01-02
 
 ### Pending Todos
 
@@ -88,6 +91,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-12
-Stopped at: Roadmap and STATE created; REQUIREMENTS traceability populated
+Last session: 2026-06-12T07:44:58.292Z
+Stopped at: Completed 01-01-PLAN.md (requirements.txt, env-var SMT path, graceful fallbacks)
 Resume file: None
