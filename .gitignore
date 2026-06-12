@@ -7,8 +7,11 @@ venv/
 *.egg-info/
 
 # Data files (large, not for version control)
-Data/*.parquet
-Data/*.csv
+data/*.parquet
+data/*.csv
+
+# Output artifacts (generated on each run — not for version control)
+output/
 
 # Jupyter
 .ipynb_checkpoints/
@@ -25,3 +28,7 @@ Thumbs.db
 .claude/
 # Local worktrees
 .worktrees/
+
+# Environment (real secrets/paths — only .env.example is tracked)
+.env
+.env.local
