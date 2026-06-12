@@ -13,6 +13,7 @@ Usage
     python cisd_analysis.py basic wick          # selected analyses only
 """
 
+import os
 import sys
 import pandas as pd
 import numpy as np
@@ -63,7 +64,7 @@ SMT_LOOKBACK = 20
 FVG_HOLD_LOOKAHEAD = 10
 SWEEP_TOLERANCE = 5
 SWEEP_SWING_LOOKBACK = 20
-_SMT_PKG_PATH = Path("/mnt/e/backup/code/Finance/Misc/SMT")
+_SMT_PKG_PATH = Path(os.environ.get("SMT_PKG_PATH", "/mnt/e/backup/code/Finance/Misc/SMT"))
 
 
 # ── Data Loading & Resampling ─────────────────────────────────────────────────
@@ -1319,6 +1320,12 @@ def main() -> None:
     per_tf_keys  = [k for k in requested if k not in STANDALONE_KEYS]
     standalone   = [k for k in requested if k in STANDALONE_KEYS]
     needs_swing_smt = "smt_cisd" in requested
+
+    if needs_swing_smt and not _SMT_PKG_PATH.exists():
+        print(f"[warn] SMT package not found at {_SMT_PKG_PATH!s}; skipping smt_cisd analysis.")
+        requested       = [k for k in requested if k != "smt_cisd"]
+        standalone      = [k for k in standalone if k != "smt_cisd"]
+        needs_swing_smt = False
 
     out_dir = Path(__file__).parent / "output"
     out_dir.mkdir(exist_ok=True)
