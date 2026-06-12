@@ -132,7 +132,7 @@ Phases 3 and 4 both depend only on Phases 1-2 and are reorderable/parallelizable
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Reproducibility Foundation & Behavior Lock | 3/3 | Complete   | 2026-06-12 |
+| 1. Reproducibility Foundation & Behavior Lock | 3/3 | Complete    | 2026-06-12 |
 | 2. Validation Harness | 0/2 | Not started | - |
 | 3. Re-Validate & Republish Existing Findings | 0/2 | Not started | - |
 | 4. Test-Gated Modular Refactor | 0/3 | Not started | - |
