@@ -1,0 +1,11 @@
+# Core runtime — exact versions installed in the project .venv (Python 3.12.3)
+pandas==3.0.2
+numpy==2.4.4
+matplotlib==3.10.8
+pyarrow==23.0.1
+
+# Test runner
+pytest==9.0.2
+
+# Note: Plotly.js is loaded from CDN inside the generated output/forward_returns.html
+# and is never pip-installed — do not add plotly here.
