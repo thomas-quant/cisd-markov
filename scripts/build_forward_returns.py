@@ -355,8 +355,17 @@ def build_dataset() -> dict[str, object]:
     dfs_1m = {instrument: load_1m(data_root / path.name) for instrument, path in INSTRUMENTS.items()}
     dataset: dict[str, object] = {"timeframes": {}}
 
+    # Try to include SMT tagging; fall back gracefully if the external scanner
+    # is unavailable so the rest of the study still runs.
+    with_smt = True
+    try:
+        prepare_pair(dfs_1m["NQ"], dfs_1m["ES"], next(iter(TIMEFRAMES.values())), with_swing_smt=True)
+    except Exception as exc:  # noqa: BLE001 - optional dependency
+        print(f"[warn] SMT scan unavailable ({exc!r}); SMT cases will be empty.")
+        with_smt = False
+
     for tf_label, tf_rule in TIMEFRAMES.items():
-        df_nq, df_es = prepare_pair(dfs_1m["NQ"], dfs_1m["ES"], tf_rule, with_swing_smt=True)
+        df_nq, df_es = prepare_pair(dfs_1m["NQ"], dfs_1m["ES"], tf_rule, with_swing_smt=with_smt)
         rows_by_instrument = {
             "NQ": build_forward_return_rows(df_nq, "NQ"),
             "ES": build_forward_return_rows(df_es, "ES"),
