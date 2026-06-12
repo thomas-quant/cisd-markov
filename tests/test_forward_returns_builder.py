@@ -379,3 +379,48 @@ def test_resolve_data_root_falls_back_to_parent_checkout_data(tmp_path, monkeypa
     monkeypatch.setattr(fr, "REPO_ROOT", worktree_root)
 
     assert fr.resolve_data_root() == parent_data
+
+
+def test_build_dataset_falls_back_when_smt_unavailable(monkeypatch):
+    """build_dataset() must complete without raising when the SMT probe fails."""
+    call_log: list[bool] = []
+
+    def mock_load_1m(path):
+        idx = pd.date_range("2026-01-01", periods=10, freq="min")
+        return pd.DataFrame(
+            {
+                "open":   [100.0] * 10,
+                "high":   [101.0] * 10,
+                "low":    [ 99.0] * 10,
+                "close":  [100.5] * 10,
+                "volume": [1000 ] * 10,
+            },
+            index=idx,
+        )
+
+    def mock_prepare_pair(nq, es, rule, with_swing_smt=False):
+        call_log.append(with_swing_smt)
+        if with_swing_smt:
+            raise FileNotFoundError("SMT package not found (test stub)")
+        idx = pd.date_range("2026-01-01", periods=5, freq="h")
+        df = pd.DataFrame(
+            {
+                "open":      [100.0] * 5,
+                "close":     [101.0] * 5,
+                "high":      [102.0] * 5,
+                "low":       [ 99.0] * 5,
+                "cisd_type": [None ] * 5,
+            },
+            index=idx,
+        )
+        return df, df.copy()
+
+    monkeypatch.setattr(fr, "load_1m",      mock_load_1m)
+    monkeypatch.setattr(fr, "prepare_pair", mock_prepare_pair)
+
+    result = fr.build_dataset()
+
+    assert isinstance(result, dict)
+    assert "timeframes" in result
+    assert True  in call_log  # probe was attempted with with_swing_smt=True
+    assert False in call_log  # fallback to with_swing_smt=False was exercised
