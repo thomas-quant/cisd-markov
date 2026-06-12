@@ -234,5 +234,7 @@ Edit constants at the top of `cisd_analysis.py`:
 
 ## Requirements
 
-- Python 3.10+
-- `pandas`, `numpy`, `matplotlib`, `pyarrow`
+- Python 3.12 (3.12.3 verified)
+- Install pinned runtime: `pip install -r requirements.txt`
+- Core libraries pinned in `requirements.txt`: `pandas==3.0.2`, `numpy==2.4.4`, `matplotlib==3.10.8`, `pyarrow==23.0.1`, `pytest==9.0.2`
+- Plotly.js is loaded from CDN inside the generated `output/forward_returns.html` and is never pip-installed
