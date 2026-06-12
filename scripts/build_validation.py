@@ -14,11 +14,12 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from cisd_analysis import (
-    INSTRUMENTS, TIMEFRAMES, OOS_START, MIN_N, CI_LEVEL,
+    ANALYSES, INSTRUMENTS, MAX_CONSEC, TIMEFRAMES, OOS_START, MIN_N, CI_LEVEL,
     load_1m, resample_ohlcv, prepare_pair,
 )
 
-SLICES_PATH = REPO_ROOT / "output" / "validation_slices.csv"
+SLICES_PATH   = REPO_ROOT / "output" / "validation_slices.csv"
+MANIFEST_PATH = REPO_ROOT / "output" / "validation_manifest.csv"
 
 # ── Sacred OOS banner ─────────────────────────────────────────────────────────
 
@@ -93,6 +94,109 @@ def n_gate(n: int, min_n: int = MIN_N) -> bool:
     return n >= min_n
 
 
+# ── Manifest ─────────────────────────────────────────────────────────────────
+
+def build_manifest_rows(
+    keys: list[str],
+    df_nq: pd.DataFrame,
+    df_es: pd.DataFrame,
+    tf_label: str,
+    slice_label: str,
+) -> list[dict[str, object]]:
+    """Return tidy long manifest rows for all buckets produced by keys on the given enriched frames.
+
+    Columns: analysis, timeframe, instrument, direction, bucket,
+             rate, n, successes, ci_low, ci_high, ci_method, min_n_pass, slice.
+    rate/ci_low/ci_high are proportions in [0, 1] (NOT percentages).
+    Buckets with n < MIN_N appear with min_n_pass=False — never dropped.
+    """
+    rows: list[dict[str, object]] = []
+
+    def emit(analysis: str, instrument: str, direction: str, bucket: str, n: int, k: int) -> None:
+        lo, hi = wilson_ci(n, k)
+        rows.append({
+            "analysis":   analysis,
+            "timeframe":  tf_label,
+            "instrument": instrument,
+            "direction":  direction,
+            "bucket":     bucket,
+            "rate":       round(k / n, 6) if n > 0 else 0.0,
+            "n":          n,
+            "successes":  k,
+            "ci_low":     round(lo, 6),
+            "ci_high":    round(hi, 6),
+            "ci_method":  "wilson",
+            "min_n_pass": n_gate(n),
+            "slice":      slice_label,
+        })
+
+    for key in keys:
+        if key not in ANALYSES:
+            continue
+        label, compute_fn, _ = ANALYSES[key]
+        for instrument, df in (("NQ", df_nq), ("ES", df_es)):
+            try:
+                data = compute_fn(df)
+            except Exception:  # noqa: BLE001
+                continue  # degrade gracefully on empty/missing slice
+
+            if key in ("basic", "significance"):
+                for ct in ("bullish", "bearish"):
+                    emit(key, instrument, ct, "all",
+                         data["totals"][ct], data["runs"][ct])
+
+            elif key == "mc":
+                for ct in ("bullish", "bearish"):
+                    for n in range(1, MAX_CONSEC + 1):
+                        d = data[ct][n]
+                        emit(key, instrument, ct, f"{n}_consecutive",
+                             d["total"], d["runs"])
+
+            elif key == "wick":
+                for ct in ("bullish", "bearish"):
+                    for grp in ("past_wick", "within_wick"):
+                        d = data[ct][grp]
+                        emit(key, instrument, ct, grp, d["total"], d["runs"])
+
+            elif key == "combined":
+                for ct in ("bullish", "bearish"):
+                    for nc in range(1, MAX_CONSEC + 1):
+                        for grp in ("past_wick", "within_wick"):
+                            d = data[ct][nc][grp]
+                            emit(key, instrument, ct, f"{nc}c_{grp}",
+                                 d["total"], d["runs"])
+
+            elif key in ("volume", "candle_size", "size_cross"):
+                for ct in ("bullish", "bearish"):
+                    for bucket_lbl, d in data[ct].items():
+                        emit(key, instrument, ct, bucket_lbl,
+                             d["total"], d["runs"])
+
+            elif key == "fvg_hold":
+                for ct in ("bullish", "bearish"):
+                    for bucket in ("mid0", "mid1"):
+                        for mode, d in data[ct][bucket].items():
+                            emit(key, instrument, ct, f"{bucket}_{mode}",
+                                 d["total"], d["held"])  # note: "held" not "runs"
+
+            elif key == "cisd_fvg_interaction":
+                for ct in ("bullish", "bearish"):
+                    for bucket in ("mid0", "mid1"):
+                        for mode, state_map in data[ct][bucket].items():
+                            for state, d in state_map.items():
+                                emit(key, instrument, ct, f"{bucket}_{mode}_{state}",
+                                     d["total"], d["runs"])
+
+            else:
+                # Generic: smt_cisd, cisd_fvg, sweep, sssf_swing
+                # shape: {dir: {tag: {"total", "runs"}}}
+                for ct in ("bullish", "bearish"):
+                    for tag, d in data[ct].items():
+                        emit(key, instrument, ct, tag, d["total"], d["runs"])
+
+    return rows
+
+
 # ── Slicing ───────────────────────────────────────────────────────────────────
 
 def slice_df(df: pd.DataFrame, oos: bool = False) -> pd.DataFrame:
@@ -146,13 +250,16 @@ def main() -> None:
         print(f"[warn] SMT unavailable ({exc}); swing SMT columns will be absent")
         with_smt = False
 
-    rows = []
+    all_keys = list(ANALYSES.keys())
+    slice_rows: list[dict[str, object]] = []
+    manifest_rows: list[dict[str, object]] = []
+
     for tf_label, tf_rule in TIMEFRAMES.items():
         df_nq, df_es = prepare_pair(dfs_1m["NQ"], dfs_1m["ES"], tf_rule, with_swing_smt=with_smt)
         nq_sl = slice_df(df_nq, oos=args.oos)
         es_sl = slice_df(df_es, oos=args.oos)
         for inst, sl in (("NQ", nq_sl), ("ES", es_sl)):
-            rows.append({
+            slice_rows.append({
                 "timeframe":  tf_label,
                 "instrument": inst,
                 "slice":      slice_label,
@@ -161,11 +268,16 @@ def main() -> None:
                 "end_date":   str(sl.index.max().date()) if len(sl) else "",
             })
             print(f"  {tf_label} {inst}: {len(sl):,} bars ({slice_label})")
+        manifest_rows.extend(
+            build_manifest_rows(all_keys, nq_sl, es_sl, tf_label, slice_label)
+        )
 
     SLICES_PATH.parent.mkdir(exist_ok=True)
-    pd.DataFrame(rows).to_csv(SLICES_PATH, index=False)
+    pd.DataFrame(slice_rows).to_csv(SLICES_PATH, index=False)
     print(f"Slice report → {SLICES_PATH}")
-    print("Note: plan 02-02 will add the full per-bucket CI/n manifest (validation_manifest.csv).")
+
+    pd.DataFrame(manifest_rows).to_csv(MANIFEST_PATH, index=False)
+    print(f"Manifest     → {MANIFEST_PATH}")
 
 
 if __name__ == "__main__":
