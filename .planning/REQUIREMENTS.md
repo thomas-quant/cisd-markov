@@ -9,9 +9,9 @@ Requirements for this milestone. Each maps to a roadmap phase. Sequenced by depe
 
 ### Infra (Reproducibility)
 
-- [ ] **INFRA-01**: A dependency manifest (`requirements.txt` and/or `pyproject.toml`) pins the runtime packages so the engine reproduces on another machine
-- [ ] **INFRA-02**: The SMT package location is read from an environment variable with a documented default, replacing the hardcoded WSL path
-- [ ] **INFRA-03**: Every entry point degrades gracefully when SMT is unavailable (`build_forward_returns.py` reaches parity with `build_expectancy.py`'s fallback)
+- [x] **INFRA-01**: A dependency manifest (`requirements.txt` and/or `pyproject.toml`) pins the runtime packages so the engine reproduces on another machine
+- [x] **INFRA-02**: The SMT package location is read from an environment variable with a documented default, replacing the hardcoded WSL path
+- [x] **INFRA-03**: Every entry point degrades gracefully when SMT is unavailable (`build_forward_returns.py` reaches parity with `build_expectancy.py`'s fallback)
 - [ ] **INFRA-04**: CI runs the test suite automatically on push
 - [ ] **INFRA-05**: Tests run from any working directory (conftest/pythonpath) and computed results are deterministic (no wall-clock or RNG dependence)
 - [ ] **INFRA-06**: Generated `output/` artifacts are no longer committed, and the `data/` gitignore case mismatch is fixed
@@ -79,9 +79,9 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01 | Phase 1 | Pending |
-| INFRA-02 | Phase 1 | Pending |
-| INFRA-03 | Phase 1 | Pending |
+| INFRA-01 | Phase 1 | Complete |
+| INFRA-02 | Phase 1 | Complete |
+| INFRA-03 | Phase 1 | Complete |
 | INFRA-04 | Phase 1 | Pending |
 | INFRA-05 | Phase 1 | Pending |
 | INFRA-06 | Phase 1 | Pending |

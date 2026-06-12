@@ -38,7 +38,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 Plans:
 **Wave 1**
 
-- [ ] 01-01-PLAN.md — Dependency manifest, env-var SMT path, and graceful SMT fallback across all entry points (INFRA-01/02/03)
+- [x] 01-01-PLAN.md — Dependency manifest, env-var SMT path, and graceful SMT fallback across all entry points (INFRA-01/02/03)
 - [ ] 01-02-PLAN.md — CI workflow, conftest/pythonpath, determinism check, and repo hygiene (output/ untracked, gitignore fix) (INFRA-04/05/06)
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -132,7 +132,7 @@ Phases 3 and 4 both depend only on Phases 1-2 and are reorderable/parallelizable
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Reproducibility Foundation & Behavior Lock | 0/3 | Not started | - |
+| 1. Reproducibility Foundation & Behavior Lock | 1/3 | In Progress|  |
 | 2. Validation Harness | 0/2 | Not started | - |
 | 3. Re-Validate & Republish Existing Findings | 0/2 | Not started | - |
 | 4. Test-Gated Modular Refactor | 0/3 | Not started | - |
