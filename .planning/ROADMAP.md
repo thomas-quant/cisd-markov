@@ -33,9 +33,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: Dependency manifest, env-var SMT path, and graceful SMT fallback across all entry points (INFRA-01/02/03)
-- [ ] 01-02: CI workflow, conftest/pythonpath, determinism check, and repo hygiene (output/ untracked, gitignore fix) (INFRA-04/05/06)
-- [ ] 01-03: Characterization tests on README headline numbers + unit tests for the five core compute functions (TEST-01/02)
+- [ ] 01-01-PLAN.md — Dependency manifest, env-var SMT path, and graceful SMT fallback across all entry points (INFRA-01/02/03)
+- [ ] 01-02-PLAN.md — CI workflow, conftest/pythonpath, determinism check, and repo hygiene (output/ untracked, gitignore fix) (INFRA-04/05/06)
+- [ ] 01-03-PLAN.md — Characterization tests on README headline numbers + unit tests for the five core compute functions (TEST-01/02)
 
 ### Phase 2: Validation Harness
 **Goal**: Every reported rate can be gated by sample size, carries a confidence interval, and lives inside a sacred discovery/OOS holdout that the tooling defaults to keeping sacred.
