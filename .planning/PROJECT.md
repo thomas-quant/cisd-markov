@@ -29,7 +29,7 @@ A reported edge can be trusted: every published rate is gated by sample size, ca
 
 <!-- This milestone. Sequenced by dependency; test-gated throughout. -->
 
-- [ ] **Validation harness (foundational)**: sacred date holdout (newest ~30% OOS evaluated once; oldest ~70% discovery) + binomial confidence intervals + sample-size gating on every reported rate
+- ✓ **Validation harness (foundational)**: sacred date holdout (`OOS_START = "2024-04-30"`, ~30% OOS, evaluated once; ~70% discovery) + Wilson score binomial CIs (pure stdlib, Python 3.12 compatible) + n≥50 gating + tidy `validation_manifest.csv` with n/CI/IS-OOS per bucket — `scripts/build_validation.py` + `tests/test_validation_harness.py` (14 tests) — Phase 2
 - [ ] **Re-validate existing findings**: re-run README headline results through the harness and republish with n + CI + OOS confirmation; treat existing findings as hypotheses, retire any that don't survive
 - [ ] **Modular refactor**: split the god-file into `cisd_data` / `cisd_barriers` / `cisd_charts`, consolidate the 4-edit standalone-analysis registry, vectorize the `iterrows` hot loops (follow `build_expectancy.py`'s `np.flatnonzero` pattern)
 - [ ] **New research — `candle[1]` follow-through**: does the bar after a CISD predict continuation (close in CISD direction, close beyond `candle[1]`'s wick)
@@ -67,13 +67,14 @@ A reported edge can be trusted: every published rate is gated by sample size, ca
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Sacred date holdout (newest ~30% OOS, evaluated once; oldest ~70% discovery) | Chronological split is the only leakage-safe option for time series; "sacred" is hardest to fool yourself with | — Pending |
-| Re-validate existing findings as hypotheses, not facts | They were discovered in-sample on data that includes the now-OOS slice; must be confirmed OOS | — Pending |
-| Test-gated / behavior-preserving refactor (lock numbers first) | The modular split and harness must not move published results underneath us | — Pending |
-| Foundational validation depth: CIs + n-gating, no MHT correction yet | Tractable honest baseline this round; correction is the next milestone | — Pending |
-| Modular split into `cisd_data` / `cisd_barriers` / `cisd_charts` | God-file + 4-edit registry blocks safe extension and invites silent omissions | — Pending |
-| Defer the post-CISD ML model | Keep scope tight; validate discrete tags before modeling on top of them | — Pending |
-| Harness makes single-evaluation the default path | A "sacred" holdout only stays sacred if the tool nudges toward evaluating it once, not relying on discipline | — Pending |
+| Sacred date holdout (newest ~30% OOS, evaluated once; oldest ~70% discovery) | Chronological split is the only leakage-safe option for time series; "sacred" is hardest to fool yourself with | Implemented — `OOS_START = "2024-04-30"` hardcoded with "Do NOT recompute" guard (Phase 2) |
+| Re-validate existing findings as hypotheses, not facts | They were discovered in-sample on data that includes the now-OOS slice; must be confirmed OOS | — Phase 3 |
+| Test-gated / behavior-preserving refactor (lock numbers first) | The modular split and harness must not move published results underneath us | — Phase 4 |
+| Foundational validation depth: CIs + n-gating, no MHT correction yet | Tractable honest baseline this round; correction is the next milestone | Implemented — Wilson score CI + n≥50 gate (Phase 2) |
+| Modular split into `cisd_data` / `cisd_barriers` / `cisd_charts` | God-file + 4-edit registry blocks safe extension and invites silent omissions | — Phase 4 |
+| Defer the post-CISD ML model | Keep scope tight; validate discrete tags before modeling on top of them | — Phase 5+ |
+| Harness makes single-evaluation the default path | A "sacred" holdout only stays sacred if the tool nudges toward evaluating it once, not relying on discipline | Implemented — `--oos` flag required; default is discovery-on-train with loud ASCII banner on OOS path (Phase 2) |
+| `math.erfinv` is Python 3.13+ only | Winitzki+Halley shim needed for project's Python 3.12.3 runtime | Implemented inline in `build_validation.py` `_erfinv()` — no external dependency added (Phase 2) |
 
 ## Evolution
 
@@ -93,4 +94,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-12 after Phase 1 (Reproducibility Foundation & Behavior Lock) completion*
+*Last updated: 2026-06-12 after Phase 2 (Validation Harness) completion*
