@@ -77,12 +77,21 @@ Plans:
   3. The republished README shows n + CI + IS/OOS status per finding
   4. Findings that do not survive OOS are retired or explicitly labeled as not-confirmed, never silently dropped
 
-**Plans**: 2 plans
+**Plans**: 3 plans
 
 Plans:
 
-- [ ] 03-01: Re-run README headline findings on the discovery slice; confirm survivors once on the sacred OOS holdout (REVAL-01/02)
-- [ ] 03-02: Republish README with per-finding n + CI + IS/OOS status; retire or label non-survivors (REVAL-03)
+**Wave 1**
+
+- [ ] 03-01-PLAN.md — WR-04 fix (§8 SMT table + §3 within-wick label), durable per-slice manifest, discovery re-validation + summary report (REVAL-01)
+
+**Wave 2** *(sacred OOS human gate)*
+
+- [ ] 03-02-PLAN.md — OOS go/no-go gate + reconciler → `output/validation_findings.csv` with confirmed/not-confirmed/below-n verdicts (REVAL-02)
+
+**Wave 3**
+
+- [ ] 03-03-PLAN.md — Republish README §1-§8 with discovery rate + n + CI + verdict badges; retire/label non-survivors (REVAL-03)
 
 ### Phase 4: Test-Gated Modular Refactor
 
@@ -134,6 +143,6 @@ Phases 3 and 4 both depend only on Phases 1-2 and are reorderable/parallelizable
 |-------|----------------|--------|-----------|
 | 1. Reproducibility Foundation & Behavior Lock | 3/3 | Complete    | 2026-06-12 |
 | 2. Validation Harness | 2/2 | Complete    | 2026-06-12 |
-| 3. Re-Validate & Republish Existing Findings | 0/2 | Not started | - |
+| 3. Re-Validate & Republish Existing Findings | 0/3 | Not started | - |
 | 4. Test-Gated Modular Refactor | 0/3 | Not started | - |
 | 5. New CISD Research on the Validated Engine | 0/2 | Not started | - |
