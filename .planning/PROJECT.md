@@ -22,18 +22,19 @@ A reported edge can be trusted: every published rate is gated by sample size, ca
 - ✓ Interactive forward-returns HTML report (core / fvg / structure families) — existing
 - ✓ Stop-censored R-multiple expectancy study (`build_expectancy.py`) — existing
 - ✓ Swing SMT confirmation via the external SMT package — existing
+- ✓ **Reproducibility/infra**: pinned `requirements.txt`, env-var `SMT_PKG_PATH` with graceful fallback across all entry points, GitHub Actions CI running pytest, working-directory-independent imports, deterministic runs — Phase 1
+- ✓ **Characterization tests**: README headline barrier/SMT rates locked against the live pipeline (data-skip guarded), plus unit tests on the 5 core compute functions — Phase 1
 
 ### Active
 
 <!-- This milestone. Sequenced by dependency; test-gated throughout. -->
 
-- [ ] **Reproducibility/infra**: dependency manifest (`requirements.txt`/pyproject), env-var SMT path with graceful fallback, CI running the test suite, deterministic runs
-- [ ] **Characterization tests**: lock the current published headline numbers before any refactor or harness work can move them
 - [ ] **Validation harness (foundational)**: sacred date holdout (newest ~30% OOS evaluated once; oldest ~70% discovery) + binomial confidence intervals + sample-size gating on every reported rate
 - [ ] **Re-validate existing findings**: re-run README headline results through the harness and republish with n + CI + OOS confirmation; treat existing findings as hypotheses, retire any that don't survive
 - [ ] **Modular refactor**: split the god-file into `cisd_data` / `cisd_barriers` / `cisd_charts`, consolidate the 4-edit standalone-analysis registry, vectorize the `iterrows` hot loops (follow `build_expectancy.py`'s `np.flatnonzero` pattern)
 - [ ] **New research — `candle[1]` follow-through**: does the bar after a CISD predict continuation (close in CISD direction, close beyond `candle[1]`'s wick)
 - [ ] **New research — multi-bar post-CISD context**: `candle2_gap_context` / `post_cisd_reversal_context` (failed `candle[1]` + gap on `candle[2]` regime)
+- [ ] **Regenerate README headline tables** (follow-up from Phase 1 review WR-04): README §8 SMT table and §3 figures are stale vs the now-locked current pipeline output (current SMT n is ~2–3× larger; one within-wick instrument label is misattributed). Regenerate from live output before republishing findings.
 
 ### Out of Scope
 
@@ -92,4 +93,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-12 after initialization*
+*Last updated: 2026-06-12 after Phase 1 (Reproducibility Foundation & Behavior Lock) completion*
