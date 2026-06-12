@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-last_updated: "2026-06-12T12:10:54.647Z"
-last_activity: 2026-06-12 -- Phase 02 complete (Wilson CI + n-gating + manifest)
+status: in_progress
+last_updated: "2026-06-12"
+last_activity: 2026-06-12 -- Phase 03 planned (3 plans: WR-04 fix + discovery, OOS gate + reconciler, README republish)
 progress:
   total_phases: 5
   completed_phases: 2
-  total_plans: 5
+  total_plans: 8
   completed_plans: 5
   percent: 40
 ---
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 
 ## Current Position
 
-Phase: 02 (validation-harness) — COMPLETE
-Plan: 2 of 2
-Status: Phase 02 complete; Phase 03 next
-Last activity: 2026-06-12 -- Phase 02 complete (Wilson CI + n-gating + manifest)
+Phase: 03 (re-validate-republish-existing-findings) — PLANNED, not yet executed
+Plan: 0 of 3
+Status: Phase 03 plans created and verified; ready for /gsd-execute-phase 03
+Last activity: 2026-06-12 -- Phase 03 planned (3 plans: WR-04 fix + discovery, OOS gate + reconciler, README republish)
 
 Progress: [██████████] 100%
 
@@ -95,5 +95,5 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-06-12T12:10:54.607Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-re-validate-republish-existing-findings/03-CONTEXT.md
+Stopped at: Phase 3 planning complete; plans verified; ready to execute
+Resume file: .planning/phases/03-re-validate-republish-existing-findings/03-01-PLAN.md
