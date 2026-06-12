@@ -65,12 +65,13 @@
     "gsd-code-reviewer": "opus",
     "gsd-pattern-mapper": "haiku",
     "gsd-codebase-mapper": "haiku",
-    "gsd-research-synthesizer": "haiku",
+    "gsd-research-synthesizer": "sonnet",
     "gsd-doc-classifier": "haiku",
     "gsd-doc-verifier": "haiku",
     "gsd-intel-updater": "haiku",
     "gsd-ui-checker": "haiku",
-    "gsd-ui-auditor": "haiku"
+    "gsd-ui-auditor": "haiku",
+    "gsd-roadmapper": "opus"
   },
   "context_window": 1000000,
   "context": "dev",
