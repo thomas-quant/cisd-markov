@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: in_progress
-last_updated: "2026-06-12"
-last_activity: 2026-06-12 -- Phase 03 planned (3 plans: WR-04 fix + discovery, OOS gate + reconciler, README republish)
+status: executing
+last_updated: "2026-06-13T21:32:17.706Z"
+last_activity: 2026-06-13 -- Phase 03 execution started
 progress:
   total_phases: 5
   completed_phases: 2
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-12)
 
 **Core value:** A reported edge can be trusted — every published rate is sample-size gated, carries a confidence interval, and is confirmed out-of-sample.
-**Current focus:** Phase 03 — re-validate and republish existing findings
+**Current focus:** Phase 03 — re-validate-republish-existing-findings
 
 ## Current Position
 
-Phase: 03 (re-validate-republish-existing-findings) — PLANNED, not yet executed
-Plan: 0 of 3
-Status: Phase 03 plans created and verified; ready for /gsd-execute-phase 03
-Last activity: 2026-06-12 -- Phase 03 planned (3 plans: WR-04 fix + discovery, OOS gate + reconciler, README republish)
+Phase: 03 (re-validate-republish-existing-findings) — EXECUTING
+Plan: 1 of 3
+Status: Executing Phase 03
+Last activity: 2026-06-13 -- Phase 03 execution started
 
 Progress: [██████████] 100%
 
