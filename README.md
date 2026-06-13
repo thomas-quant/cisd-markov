@@ -48,12 +48,12 @@ Combining past-wick closure with 2–3 consecutive opposite candles consistently
 | Timeframe | Best bucket | Rate |
 |---|---|---|
 | Daily | NQ Bear 2c past wick | **78.8%** |
-| Daily | ES Bear 2c past wick | **80.7%** |
+| Daily | ES Bear 2c past wick | **80.6%** |
 | 4H | ES Bull 3c past wick | **77.7%** |
 | 1H | ES Bull 3c past wick | **75.8%** |
 | 15min | NQ Bull 3c past wick | **74.7%** |
 
-Within-wick + 2c on Daily (ES bear) drops to **36.7%** — the weakest observed bucket.
+Within-wick + 2c on Daily (NQ bear) drops to 36.7% — the weakest observed bucket.
 
 ---
 
@@ -100,28 +100,28 @@ A co-occurring same-direction **Swing SMT** (divergence between NQ and ES swing 
 
 | Timeframe | Instrument | Direction | w/ SMT | no SMT | Δ |
 |---|---|---|---|---|---|
-| Daily | NQ | Bullish | **70.8%** (n=24) | 59.7% | +11.1pp |
-| Daily | NQ | Bearish | **63.6%** (n=11) | 53.4% | +10.2pp |
-| Daily | ES | Bullish | 61.5% (n=26) | 59.7% | +1.8pp |
-| Daily | ES | Bearish | **27.8%** (n=18) | 51.3% | −23.5pp |
-| 4H | NQ | Bullish | 53.1% (n=81) | 56.0% | −2.9pp |
-| 4H | NQ | Bearish | 51.1% (n=94) | 50.3% | +0.8pp |
-| 4H | ES | Bullish | 61.0% (n=82) | 58.0% | +3.0pp |
-| 4H | ES | Bearish | 51.0% (n=98) | 51.8% | −0.8pp |
-| 1H | NQ | Bullish | 62.8% (n=301) | 61.9% | +0.9pp |
-| 1H | NQ | Bearish | 59.3% (n=388) | 57.4% | +1.9pp |
-| 1H | ES | Bullish | 63.6% (n=272) | 63.0% | +0.6pp |
-| 1H | ES | Bearish | 58.2% (n=364) | 58.4% | −0.2pp |
-| 15min | NQ | Bullish | **64.7%** (n=1,237) | 62.1% | +2.6pp |
-| 15min | NQ | Bearish | **62.5%** (n=1,363) | 58.8% | +3.7pp |
-| 15min | ES | Bullish | **64.3%** (n=1,219) | 62.1% | +2.2pp |
-| 15min | ES | Bearish | **62.2%** (n=1,335) | 59.5% | +2.7pp |
+| Daily | NQ | Bullish | 63.5% (n=63) | 59.8% | +3.7pp |
+| Daily | NQ | Bearish | 60.3% (n=58) | 52.5% | +7.8pp |
+| Daily | ES | Bullish | 57.6% (n=66) | 60.3% | −2.7pp |
+| Daily | ES | Bearish | 52.3% (n=65) | 49.9% | +2.5pp |
+| 4H | NQ | Bullish | 56.2% (n=292) | 55.9% | +0.3pp |
+| 4H | NQ | Bearish | 51.4% (n=315) | 50.1% | +1.3pp |
+| 4H | ES | Bullish | 60.9% (n=281) | 57.6% | +3.2pp |
+| 4H | ES | Bearish | 53.2% (n=312) | 51.5% | +1.7pp |
+| 1H | NQ | Bullish | 64.3% (n=984) | 61.6% | +2.8pp |
+| 1H | NQ | Bearish | 56.0% (n=1,143) | 57.7% | −1.7pp |
+| 1H | ES | Bullish | 64.3% (n=942) | 62.8% | +1.5pp |
+| 1H | ES | Bearish | 56.8% (n=1,086) | 58.7% | −1.9pp |
+| 15min | NQ | Bullish | **64.7%** (n=3,761) | 61.8% | +2.9pp |
+| 15min | NQ | Bearish | **61.9%** (n=4,020) | 58.5% | +3.4pp |
+| 15min | ES | Bullish | **64.0%** (n=3,558) | 61.9% | +2.1pp |
+| 15min | ES | Bearish | **61.3%** (n=3,779) | 59.3% | +1.9pp |
 
 **Key takeaways:**
-- **Daily** SMT sample sizes are very small (n=11–26) making results unreliable. The ES Bearish w/ SMT result (27.8%) is a notable outlier but based on only 18 events.
-- **4H** SMT has negligible impact — differences are within ±3pp and no directional consistency.
-- **1H** SMT is similarly flat — lifts of <2pp across all four instrument/direction combos.
-- **15min** shows the most consistent positive effect: +2–4pp across all combos with large sample sizes (n=1,200–1,400).
+- **Daily** SMT sample sizes are now in the dozens (n=58–66) after the SMT package update, but still too small for reliable inference. ES Bullish w/ SMT (57.6%) is below the no-SMT baseline (60.3%); no clear directional edge at this timeframe.
+- **4H** SMT has negligible impact — differences are within ±3pp and no directional consistency (n=281–315 per cell).
+- **1H** SMT shows mixed results: NQ and ES bullish get a small lift (+1.5–2.8pp), but bearish combos are slightly negative (−1.7–1.9pp). Not a consistent filter at this timeframe.
+- **15min** shows the most consistent positive effect: +2–3pp across all combos with large sample sizes (n=3,558–4,020).
 
 SMT confirmation adds the most value at **15min**, where it provides a small but consistent edge across both instruments and both directions.
 
