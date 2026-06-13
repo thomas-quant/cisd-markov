@@ -87,7 +87,7 @@ Plans:
 
 **Wave 2** *(sacred OOS human gate)*
 
-- [ ] 03-02-PLAN.md — OOS go/no-go gate + reconciler → `output/validation_findings.csv` with confirmed/not-confirmed/below-n verdicts (REVAL-02)
+- [x] 03-02-PLAN.md — OOS go/no-go gate + reconciler → `output/validation_findings.csv` with confirmed/not-confirmed/below-n verdicts (REVAL-02)
 
 **Wave 3**
 
@@ -143,6 +143,6 @@ Phases 3 and 4 both depend only on Phases 1-2 and are reorderable/parallelizable
 |-------|----------------|--------|-----------|
 | 1. Reproducibility Foundation & Behavior Lock | 3/3 | Complete    | 2026-06-12 |
 | 2. Validation Harness | 2/2 | Complete    | 2026-06-12 |
-| 3. Re-Validate & Republish Existing Findings | 1/3 | In Progress|  |
+| 3. Re-Validate & Republish Existing Findings | 2/3 | In Progress|  |
 | 4. Test-Gated Modular Refactor | 0/3 | Not started | - |
 | 5. New CISD Research on the Validated Engine | 0/2 | Not started | - |
