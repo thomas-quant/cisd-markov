@@ -19,7 +19,12 @@ from cisd_analysis import (
 )
 
 SLICES_PATH   = REPO_ROOT / "output" / "validation_slices.csv"
-MANIFEST_PATH = REPO_ROOT / "output" / "validation_manifest.csv"
+MANIFEST_PATH = REPO_ROOT / "output" / "validation_manifest.csv"  # legacy name (kept for import compat)
+
+
+def _manifest_path(slice_label: str) -> Path:
+    """Return the slice-suffixed manifest path (e.g. validation_manifest_discovery.csv)."""
+    return REPO_ROOT / "output" / f"validation_manifest_{slice_label}.csv"
 
 # ── Sacred OOS banner ─────────────────────────────────────────────────────────
 
@@ -276,8 +281,9 @@ def main() -> None:
     pd.DataFrame(slice_rows).to_csv(SLICES_PATH, index=False)
     print(f"Slice report → {SLICES_PATH}")
 
-    pd.DataFrame(manifest_rows).to_csv(MANIFEST_PATH, index=False)
-    print(f"Manifest     → {MANIFEST_PATH}")
+    manifest_out = _manifest_path(slice_label)
+    pd.DataFrame(manifest_rows).to_csv(manifest_out, index=False)
+    print(f"Manifest     → {manifest_out}")
 
 
 if __name__ == "__main__":
