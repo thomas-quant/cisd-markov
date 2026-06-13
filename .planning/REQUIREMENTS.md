@@ -31,9 +31,9 @@ Requirements for this milestone. Each maps to a roadmap phase. Sequenced by depe
 
 ### Re-Validation (Existing Findings)
 
-- [ ] **REVAL-01**: The current README headline findings are re-run through the harness on the discovery (train) slice
-- [ ] **REVAL-02**: Findings that survive discovery are confirmed once on the sacred OOS holdout
-- [ ] **REVAL-03**: The README is republished with n + CI + OOS status per finding, and findings that do not survive are retired or labeled
+- [x] **REVAL-01**: The current README headline findings are re-run through the harness on the discovery (train) slice
+- [x] **REVAL-02**: Findings that survive discovery are confirmed once on the sacred OOS holdout
+- [x] **REVAL-03**: The README is republished with n + CI + OOS status per finding, and findings that do not survive are retired or labeled
 
 ### Refactor (Test-Gated, Behavior-Preserving)
 
@@ -92,9 +92,9 @@ Which phases cover which requirements. Populated during roadmap creation.
 | VALID-03 | Phase 2 | Pending |
 | VALID-04 | Phase 2 | Pending |
 | VALID-05 | Phase 2 | Pending |
-| REVAL-01 | Phase 3 | Pending |
-| REVAL-02 | Phase 3 | Pending |
-| REVAL-03 | Phase 3 | Pending |
+| REVAL-01 | Phase 3 | Complete |
+| REVAL-02 | Phase 3 | Complete |
+| REVAL-03 | Phase 3 | Complete |
 | REFAC-01 | Phase 4 | Pending |
 | REFAC-02 | Phase 4 | Pending |
 | REFAC-03 | Phase 4 | Pending |
