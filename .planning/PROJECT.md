@@ -30,11 +30,11 @@ A reported edge can be trusted: every published rate is gated by sample size, ca
 <!-- This milestone. Sequenced by dependency; test-gated throughout. -->
 
 - ✓ **Validation harness (foundational)**: sacred date holdout (`OOS_START = "2024-04-30"`, ~30% OOS, evaluated once; ~70% discovery) + Wilson score binomial CIs (pure stdlib, Python 3.12 compatible) + n≥50 gating + tidy `validation_manifest.csv` with n/CI/IS-OOS per bucket — `scripts/build_validation.py` + `tests/test_validation_harness.py` (14 tests) — Phase 2
-- [ ] **Re-validate existing findings**: re-run README headline results through the harness and republish with n + CI + OOS confirmation; treat existing findings as hypotheses, retire any that don't survive
+- ✓ **Re-validate existing findings**: re-ran all 14 analyses on the discovery slice, spent the one sacred OOS evaluation (616 confirmed / 48 not-confirmed / 88 below-n across 752 buckets); primary OOS casualties were bearish Daily edges across most analyses; README republished with discovery-slice rates, Wilson CIs, and IS/OOS verdict badges — Phase 3
 - [ ] **Modular refactor**: split the god-file into `cisd_data` / `cisd_barriers` / `cisd_charts`, consolidate the 4-edit standalone-analysis registry, vectorize the `iterrows` hot loops (follow `build_expectancy.py`'s `np.flatnonzero` pattern)
 - [ ] **New research — `candle[1]` follow-through**: does the bar after a CISD predict continuation (close in CISD direction, close beyond `candle[1]`'s wick)
 - [ ] **New research — multi-bar post-CISD context**: `candle2_gap_context` / `post_cisd_reversal_context` (failed `candle[1]` + gap on `candle[2]` regime)
-- [ ] **Regenerate README headline tables** (follow-up from Phase 1 review WR-04): README §8 SMT table and §3 figures are stale vs the now-locked current pipeline output (current SMT n is ~2–3× larger; one within-wick instrument label is misattributed). Regenerate from live output before republishing findings.
+- ✓ **Regenerate README headline tables** (WR-04 closed in Phase 3): §8 SMT table and §3 within-wick label regenerated from live output; ES Daily bearish corrected from 27.8% n=18 → 52.3% n=65; §3 NQ/ES label corrected — Phase 3
 
 ### Out of Scope
 
