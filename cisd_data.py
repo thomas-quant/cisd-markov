@@ -172,28 +172,33 @@ def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
     annotated = df.copy()
     swing_low, swing_high = _compute_three_bar_swings(annotated)
 
-    annotated["has_dir_fvg_mid0"] = pd.Series(False, index=annotated.index, dtype=bool)
-    annotated["has_dir_fvg_mid1"] = pd.Series(False, index=annotated.index, dtype=bool)
-    annotated["fvg_mid0_hold_close_near"] = "none"
-    annotated["fvg_mid0_hold_wick_far"] = "none"
-    annotated["fvg_mid1_hold_close_near"] = "none"
-    annotated["fvg_mid1_hold_wick_far"] = "none"
-    annotated["has_dir_sweep"] = pd.Series(False, index=annotated.index, dtype=bool)
-    annotated["prev_bar_is_dir_swing"] = pd.Series(False, index=annotated.index, dtype=bool)
-    annotated["cisd_bar_is_dir_swing"] = pd.Series(False, index=annotated.index, dtype=bool)
+    n = len(annotated)
+    ct_arr = annotated["cisd_type"].to_numpy(dtype=object)
 
-    for idx, ct in enumerate(annotated["cisd_type"]):
-        if ct not in ("bullish", "bearish"):
-            continue
+    # Pre-initialise result lists with defaults (bool columns → False; hold columns → "none")
+    has_dir_fvg_mid0_lst          = [False] * n
+    has_dir_fvg_mid1_lst          = [False] * n
+    fvg_mid0_hold_close_near_lst  = ["none"] * n
+    fvg_mid0_hold_wick_far_lst    = ["none"] * n
+    fvg_mid1_hold_close_near_lst  = ["none"] * n
+    fvg_mid1_hold_wick_far_lst    = ["none"] * n
+    has_dir_sweep_lst             = [False] * n
+    prev_bar_is_dir_swing_lst     = [False] * n
+    cisd_bar_is_dir_swing_lst     = [False] * n
+
+    event_pos = np.flatnonzero(pd.notna(ct_arr) & np.isin(ct_arr, ["bullish", "bearish"]))
+
+    for idx in event_pos:
+        ct = ct_arr[idx]
 
         if ct == "bullish":
-            annotated.iat[idx, annotated.columns.get_loc("prev_bar_is_dir_swing")] = bool(swing_low.iloc[idx - 1]) if idx > 0 else False
-            annotated.iat[idx, annotated.columns.get_loc("cisd_bar_is_dir_swing")] = bool(swing_low.iloc[idx])
+            prev_bar_is_dir_swing_lst[idx] = bool(swing_low.iloc[idx - 1]) if idx > 0 else False
+            cisd_bar_is_dir_swing_lst[idx] = bool(swing_low.iloc[idx])
         else:
-            annotated.iat[idx, annotated.columns.get_loc("prev_bar_is_dir_swing")] = bool(swing_high.iloc[idx - 1]) if idx > 0 else False
-            annotated.iat[idx, annotated.columns.get_loc("cisd_bar_is_dir_swing")] = bool(swing_high.iloc[idx])
+            prev_bar_is_dir_swing_lst[idx] = bool(swing_high.iloc[idx - 1]) if idx > 0 else False
+            cisd_bar_is_dir_swing_lst[idx] = bool(swing_high.iloc[idx])
 
-        annotated.iat[idx, annotated.columns.get_loc("has_dir_sweep")] = _has_directional_sweep(
+        has_dir_sweep_lst[idx] = _has_directional_sweep(
             annotated,
             idx,
             ct,
@@ -202,23 +207,26 @@ def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
         )
 
         if _has_directional_fvg(annotated, idx, ct):
-            annotated.iat[idx, annotated.columns.get_loc("has_dir_fvg_mid0")] = True
-            annotated.iat[idx, annotated.columns.get_loc("fvg_mid0_hold_close_near")] = _classify_fvg_hold(
-                annotated, idx, ct, "close_near"
-            )
-            annotated.iat[idx, annotated.columns.get_loc("fvg_mid0_hold_wick_far")] = _classify_fvg_hold(
-                annotated, idx, ct, "wick_far"
-            )
+            has_dir_fvg_mid0_lst[idx]         = True
+            fvg_mid0_hold_close_near_lst[idx]  = _classify_fvg_hold(annotated, idx, ct, "close_near")
+            fvg_mid0_hold_wick_far_lst[idx]    = _classify_fvg_hold(annotated, idx, ct, "wick_far")
 
         mid1_idx = idx + 1
         if _has_directional_fvg(annotated, mid1_idx, ct):
-            annotated.iat[idx, annotated.columns.get_loc("has_dir_fvg_mid1")] = True
-            annotated.iat[idx, annotated.columns.get_loc("fvg_mid1_hold_close_near")] = _classify_fvg_hold(
-                annotated, mid1_idx, ct, "close_near"
-            )
-            annotated.iat[idx, annotated.columns.get_loc("fvg_mid1_hold_wick_far")] = _classify_fvg_hold(
-                annotated, mid1_idx, ct, "wick_far"
-            )
+            has_dir_fvg_mid1_lst[idx]         = True
+            fvg_mid1_hold_close_near_lst[idx]  = _classify_fvg_hold(annotated, mid1_idx, ct, "close_near")
+            fvg_mid1_hold_wick_far_lst[idx]    = _classify_fvg_hold(annotated, mid1_idx, ct, "wick_far")
+
+    # Bulk-assign accumulated lists to columns
+    annotated["has_dir_fvg_mid0"]         = has_dir_fvg_mid0_lst
+    annotated["has_dir_fvg_mid1"]         = has_dir_fvg_mid1_lst
+    annotated["fvg_mid0_hold_close_near"] = fvg_mid0_hold_close_near_lst
+    annotated["fvg_mid0_hold_wick_far"]   = fvg_mid0_hold_wick_far_lst
+    annotated["fvg_mid1_hold_close_near"] = fvg_mid1_hold_close_near_lst
+    annotated["fvg_mid1_hold_wick_far"]   = fvg_mid1_hold_wick_far_lst
+    annotated["has_dir_sweep"]            = has_dir_sweep_lst
+    annotated["prev_bar_is_dir_swing"]    = prev_bar_is_dir_swing_lst
+    annotated["cisd_bar_is_dir_swing"]    = cisd_bar_is_dir_swing_lst
 
     return annotated
 
