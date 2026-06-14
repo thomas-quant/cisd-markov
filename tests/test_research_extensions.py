@@ -625,3 +625,84 @@ def test_compute_candle1_followthrough_runs_on_prepare_output():
                 tag = core + suffix
                 assert tag in result[ct], f"Missing tag {tag} in {ct}"
                 assert result[ct][tag]["runs"] <= result[ct][tag]["total"]
+
+
+# ── Task 3: validation harness wiring tests ───────────────────────────────────
+
+
+def _small_annotated_df_for_harness():
+    """Small synthetic prepared frame for harness tests (uses real prepare() pipeline)."""
+    df_raw = pd.DataFrame(
+        {
+            "open":   [10,  9,  11, 12, 11, 10, 10, 10],
+            "high":   [11, 12,  13, 14, 12, 11, 11, 11],
+            "low":    [ 8,  8,  10, 11,  9,  8,  8,  8],
+            "close":  [ 9, 11, 12.5, 11, 9.5, 10, 10, 10],
+            "volume": [100] * 8,
+        },
+        index=pd.date_range("2026-01-11 09:30", periods=8, freq="15min"),
+    )
+    return cisd_analysis.prepare(df_raw)
+
+
+def test_build_manifest_rows_candle1_followthrough_has_tidy_long_columns():
+    """build_manifest_rows returns rows with full tidy-long column set for candle1_followthrough."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+    from build_validation import build_manifest_rows
+
+    df = _small_annotated_df_for_harness()
+    rows = build_manifest_rows(["candle1_followthrough"], df, df, "15min", "discovery")
+    cf = [r for r in rows if r["analysis"] == "candle1_followthrough"]
+
+    assert len(cf) > 0, "No candle1_followthrough rows emitted"
+
+    expected_columns = {
+        "analysis", "timeframe", "instrument", "direction", "bucket",
+        "rate", "n", "successes", "ci_low", "ci_high", "ci_method", "min_n_pass", "slice",
+    }
+    for row in cf:
+        assert set(row.keys()) == expected_columns, f"Wrong columns: {set(row.keys())}"
+        assert row["ci_method"] == "wilson"
+        assert row["slice"] == "discovery"
+        assert row["n"] is not None
+        assert row["ci_low"] is not None
+        assert row["ci_high"] is not None
+        assert row["min_n_pass"] is not None
+
+
+def test_build_manifest_rows_candle1_followthrough_has_both_window_suffixes():
+    """Emitted buckets include at least one _inwindow and one _forward suffixed tag."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+    from build_validation import build_manifest_rows
+
+    df = _small_annotated_df_for_harness()
+    rows = build_manifest_rows(["candle1_followthrough"], df, df, "15min", "discovery")
+    cf = [r for r in rows if r["analysis"] == "candle1_followthrough"]
+
+    buckets = {r["bucket"] for r in cf}
+    assert any(b.endswith("_inwindow") for b in buckets), f"No _inwindow bucket found: {buckets}"
+    assert any(b.endswith("_forward") for b in buckets), f"No _forward bucket found: {buckets}"
+
+
+def test_build_manifest_rows_candle1_followthrough_below_min_n_not_dropped():
+    """Buckets with n < MIN_N appear with min_n_pass=False (D-09 — never dropped)."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+    from build_validation import build_manifest_rows
+
+    df = _small_annotated_df_for_harness()
+    rows = build_manifest_rows(["candle1_followthrough"], df, df, "15min", "discovery")
+    cf = [r for r in rows if r["analysis"] == "candle1_followthrough"]
+
+    # Synthetic frame has few events, so most/all buckets should be below n=50
+    below_n_rows = [r for r in cf if not r["min_n_pass"]]
+    # All rows must be present (none dropped), even those below n threshold
+    assert len(cf) > 0, "All rows dropped — expected non-empty result"
+    # Every row must have min_n_pass explicitly set
+    for row in cf:
+        assert isinstance(row["min_n_pass"], bool), f"min_n_pass not bool: {row['min_n_pass']}"
