@@ -129,6 +129,14 @@ def reconcile() -> None:
     still emitted (D-06 — never drop). Missing counterparts produce NaN values
     in the numeric columns, which ``determine_verdict`` handles correctly.
     """
+    if not DISCOVERY_MANIFEST_PATH.exists():
+        print(f"[error] discovery manifest not found: {DISCOVERY_MANIFEST_PATH}")
+        print("Run `python3 scripts/build_validation.py` (discovery) first.")
+        sys.exit(1)
+    if not OOS_MANIFEST_PATH.exists():
+        print(f"[error] OOS manifest not found: {OOS_MANIFEST_PATH}")
+        print("Run `python3 scripts/build_validation.py --oos` before reconciling.")
+        sys.exit(1)
     disc = pd.read_csv(DISCOVERY_MANIFEST_PATH)
     oos  = pd.read_csv(OOS_MANIFEST_PATH)
 
