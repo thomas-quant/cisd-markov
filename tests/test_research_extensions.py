@@ -706,3 +706,319 @@ def test_build_manifest_rows_candle1_followthrough_below_min_n_not_dropped():
     # Every row must have min_n_pass explicitly set
     for row in cf:
         assert isinstance(row["min_n_pass"], bool), f"min_n_pass not bool: {row['min_n_pass']}"
+
+
+# ── Task 1 (05-02): candle[1]-failed + candle[2]-gap + Reading-B feature columns ──
+
+
+def _candle2_gap_frame():
+    """Synthetic frame to exercise candle[1]-failed, candle[2]-gap, Reading-B columns.
+
+    Bar layout (0-indexed):
+      idx 0: open=10, close=9  (bearish — sets up CISD at idx 1)
+      idx 1: bullish CISD — high=12, low=8, close=11
+             candle[1] = idx 2 (tests failed/gap columns)
+      idx 2: candle[1] — close=11 == cisd close? Let's make it fail (close <= high=12 for bullish)
+             Actually: close=11.5 <= cisd high=12 → candle1_failed_followthrough=True
+             open=11.0
+      idx 3: candle[2] — open=12.5, close=13.5  → gap_with for bullish (12.5 > 11.5)
+             high=14, low=12
+      idx 4: bearish CISD — prev was bullish (close=13.5>open=12.5)
+             open=12, high=13, low=9, close=10  → bearish cisd
+      idx 5: candle[1] for idx4 bearish — close=8.5 < cisd low=9 → NOT failed (past wick)
+             open=10
+      idx 6: candle[2] for idx4 bearish — open=9, close=8 → gap_with for bearish (9 < 8.5)
+      idx 7-8: padding
+    """
+    index = pd.date_range("2026-01-12 09:30", periods=9, freq="15min")
+    return pd.DataFrame(
+        {
+            "open":   [10,   9,  11.0,  12.5, 12,  10,   9,  9,  9],
+            "high":   [11,  12,  12.0,  14.0, 13,  11,  10, 10, 10],
+            "low":    [ 8,   8,  10.0,  12.0,  9,   8,   8,  8,  8],
+            "close":  [ 9,  11,  11.5,  13.5, 10,  8.5,  8,  8,  9],
+            "volume": [100] * 9,
+        },
+        index=index,
+    )
+
+
+def test_prepare_returns_candle2_feature_columns():
+    """All three new columns exist after prepare() for the 05-02 feature set."""
+    df = _candle2_gap_frame()
+    prepared = cisd_analysis.prepare(df)
+    assert "candle1_failed_followthrough" in prepared.columns
+    assert "candle2_gap_dir" in prepared.columns
+    assert "candle2_past_candle1_wick" in prepared.columns
+
+
+def test_candle2_gap_dir_values_are_valid():
+    """candle2_gap_dir must only contain 'gap_with', 'gap_against', or 'flat'."""
+    df = _candle2_gap_frame()
+    prepared = cisd_analysis.prepare(df)
+    assert prepared["candle2_gap_dir"].isin(["gap_with", "gap_against", "flat"]).all()
+
+
+def test_candle1_failed_followthrough_dtype_is_bool():
+    """candle1_failed_followthrough must be boolean dtype."""
+    df = _candle2_gap_frame()
+    prepared = cisd_analysis.prepare(df)
+    assert prepared["candle1_failed_followthrough"].dtype == bool
+
+
+def test_candle2_past_candle1_wick_dtype_is_bool():
+    """candle2_past_candle1_wick must be boolean dtype."""
+    df = _candle2_gap_frame()
+    prepared = cisd_analysis.prepare(df)
+    assert prepared["candle2_past_candle1_wick"].dtype == bool
+
+
+def test_candle1_failed_is_negation_of_past_candle0_wick_for_events():
+    """For all events, candle1_failed_followthrough == ~candle1_past_candle0_wick."""
+    df = _candle2_gap_frame()
+    prepared = cisd_analysis.prepare(df)
+    events = prepared[prepared["cisd_type"].notna()]
+    for _, row in events.iterrows():
+        assert row["candle1_failed_followthrough"] == (not row["candle1_past_candle0_wick"]), (
+            f"Mismatch at {row.name}: "
+            f"failed={row['candle1_failed_followthrough']}, "
+            f"past_wick={row['candle1_past_candle0_wick']}"
+        )
+
+
+def test_candle2_gap_dir_respects_cisd_direction_sign():
+    """Bullish CISD: positive gap (open > prev close) → gap_with; negative → gap_against."""
+    df = _candle2_gap_frame()
+    prepared = cisd_analysis.prepare(df)
+    # Find bullish CISD event (idx 1 in design)
+    bull_events = prepared[prepared["cisd_type"] == "bullish"]
+    assert len(bull_events) >= 1, "No bullish CISD found in test frame"
+    # At bullish CISD idx 1: candle[1].close=11.5, candle[2].open=12.5 → positive gap → gap_with
+    first_bull = bull_events.index[0]
+    assert prepared.loc[first_bull, "candle2_gap_dir"] == "gap_with", (
+        f"Expected gap_with for bullish CISD, got {prepared.loc[first_bull, 'candle2_gap_dir']}"
+    )
+
+
+def test_candle2_gap_dir_flat_for_last_bars():
+    """A CISD at idx n-1 or n-2 (out of range for candle[2]) defaults to 'flat'."""
+    index = pd.date_range("2026-01-13 09:30", periods=3, freq="15min")
+    df = pd.DataFrame(
+        {
+            "open":   [10,  9, 11],
+            "high":   [11, 10, 12],
+            "low":    [ 8,  8, 10],
+            "close":  [ 9, 10, 11],
+            "volume": [100] * 3,
+        },
+        index=index,
+    )
+    prepared = cisd_analysis.prepare(df)
+    # At idx 2 (last bar), no candle[2] → gap_dir must be "flat"
+    assert prepared["candle2_gap_dir"].isin(["gap_with", "gap_against", "flat"]).all()
+    # Any CISD at last bar has flat gap
+    last_bar_cisd = prepared[prepared["cisd_type"].notna()]
+    for _, row in last_bar_cisd.iterrows():
+        pos = prepared.index.get_loc(row.name)
+        if pos + 2 >= len(prepared):
+            assert row["candle2_gap_dir"] == "flat"
+
+
+def test_candle2_new_columns_default_false_flat_for_non_events():
+    """Non-CISD rows have candle1_failed=False, gap_dir='flat', candle2_past=False."""
+    df = _candle2_gap_frame()
+    prepared = cisd_analysis.prepare(df)
+    non_events = prepared[prepared["cisd_type"].isna()]
+    assert (non_events["candle1_failed_followthrough"] == False).all()
+    assert (non_events["candle2_gap_dir"] == "flat").all()
+    assert (non_events["candle2_past_candle1_wick"] == False).all()
+
+
+# ── Task 2 (05-02): compute_post_cisd_context + chart + registry tests ───────
+
+
+def _annotated_post_cisd_df():
+    """Synthetic frame for post_cisd_context tests.
+
+    Design:
+      Provides enough bars for barrier evaluation with candle[1]-failed + candle[2]-gap.
+      Uses prepare() to ensure all columns are correctly computed.
+    """
+    index = pd.date_range("2026-01-14 09:30", periods=10, freq="15min")
+    return pd.DataFrame(
+        {
+            "open":   [10,  9,  11, 12, 13, 12, 11, 10,  9, 10],
+            "high":   [11, 12,  12, 14, 14, 13, 12, 11, 10, 11],
+            "low":    [ 8,  8,  10, 11, 12, 11, 10,  9,  8,  9],
+            "close":  [ 9, 11, 11.5, 13.5, 13, 12, 11, 10,  9, 10],
+            "volume": [100] * 10,
+        },
+        index=index,
+    )
+
+
+def test_compute_post_cisd_context_returns_nested_dict():
+    """Result shape: {bullish/bearish: {tag: {total, runs}}}."""
+    df = cisd_analysis.prepare(_annotated_post_cisd_df())
+    result = cisd_analysis.compute_post_cisd_context(df)
+
+    assert isinstance(result, dict)
+    assert set(result.keys()) == {"bullish", "bearish"}
+    for ct in ("bullish", "bearish"):
+        assert isinstance(result[ct], dict)
+        for tag, d in result[ct].items():
+            assert set(d.keys()) == {"total", "runs"}, f"Wrong keys for {ct}/{tag}"
+            assert d["total"] >= 0
+            assert 0 <= d["runs"] <= d["total"]
+
+
+def test_compute_post_cisd_context_has_failed_gap_tags():
+    """Result must include failed_gap_with, failed_gap_against, failed_gap_flat per direction."""
+    df = cisd_analysis.prepare(_annotated_post_cisd_df())
+    result = cisd_analysis.compute_post_cisd_context(df)
+
+    for ct in ("bullish", "bearish"):
+        tags = set(result[ct].keys())
+        assert "failed_gap_with" in tags, f"Missing failed_gap_with in {ct}"
+        assert "failed_gap_against" in tags, f"Missing failed_gap_against in {ct}"
+        assert "failed_gap_flat" in tags, f"Missing failed_gap_flat in {ct}"
+
+
+def test_compute_post_cisd_context_has_reading_b_tag():
+    """Result must include candle2_past_candle1_wick tag (Reading B) per direction."""
+    df = cisd_analysis.prepare(_annotated_post_cisd_df())
+    result = cisd_analysis.compute_post_cisd_context(df)
+
+    for ct in ("bullish", "bearish"):
+        assert "candle2_past_candle1_wick" in result[ct], (
+            f"Missing Reading-B tag 'candle2_past_candle1_wick' in {ct}"
+        )
+
+
+def test_compute_post_cisd_context_failed_gap_totals_equal_failed_events():
+    """Sum of failed_gap_* totals per direction == count of failed candle[1] events."""
+    df = cisd_analysis.prepare(_annotated_post_cisd_df())
+    result = cisd_analysis.compute_post_cisd_context(df)
+
+    # Count events with candle1_failed_followthrough per direction
+    for ct in ("bullish", "bearish"):
+        failed_mask = (df["cisd_type"] == ct) & (df["candle1_failed_followthrough"] == True)
+        expected_n = int(failed_mask.sum())
+        actual_n = (
+            result[ct]["failed_gap_with"]["total"]
+            + result[ct]["failed_gap_against"]["total"]
+            + result[ct]["failed_gap_flat"]["total"]
+        )
+        assert actual_n == expected_n, (
+            f"{ct}: gap totals {actual_n} != failed events {expected_n}"
+        )
+
+
+def test_compute_post_cisd_context_is_importable_from_cisd_analysis():
+    """compute_post_cisd_context must be importable from cisd_analysis."""
+    assert hasattr(cisd_analysis, "compute_post_cisd_context")
+
+
+def test_chart_post_cisd_context_is_importable_from_cisd_analysis():
+    """chart_post_cisd_context must be importable from cisd_analysis."""
+    assert hasattr(cisd_analysis, "chart_post_cisd_context")
+
+
+def test_post_cisd_context_registered_in_analyses():
+    """'post_cisd_context' key exists in ANALYSES."""
+    assert "post_cisd_context" in cisd_analysis.ANALYSES
+
+
+def test_post_cisd_context_registered_in_analysis_meta_standalone():
+    """'post_cisd_context' in ANALYSIS_META with standalone=True."""
+    assert "post_cisd_context" in cisd_analysis.ANALYSIS_META
+    assert cisd_analysis.ANALYSIS_META["post_cisd_context"].standalone is True
+
+
+def test_reading_b_not_in_compute_candle1_followthrough():
+    """Reading B (candle2_past_candle1_wick) must NOT appear in candle1_followthrough (D-04)."""
+    df = cisd_analysis.prepare(_annotated_post_cisd_df())
+    result = cisd_analysis.compute_candle1_followthrough(df)
+    for ct in ("bullish", "bearish"):
+        for tag in result[ct].keys():
+            assert "candle2_past_candle1_wick" not in tag, (
+                f"Reading B found in candle1_followthrough at {ct}/{tag} (D-04 violation)"
+            )
+
+
+# ── Task 3 (05-02): validation harness wiring tests ──────────────────────────
+
+
+def _small_post_cisd_df_for_harness():
+    """Small frame for post_cisd_context harness tests."""
+    df_raw = pd.DataFrame(
+        {
+            "open":   [10,  9,  11, 12, 13, 12, 11, 10,  9, 10],
+            "high":   [11, 12,  12, 14, 14, 13, 12, 11, 10, 11],
+            "low":    [ 8,  8,  10, 11, 12, 11, 10,  9,  8,  9],
+            "close":  [ 9, 11, 11.5, 13.5, 13, 12, 11, 10,  9, 10],
+            "volume": [100] * 10,
+        },
+        index=pd.date_range("2026-01-15 09:30", periods=10, freq="15min"),
+    )
+    return cisd_analysis.prepare(df_raw)
+
+
+def test_build_manifest_rows_post_cisd_context_has_tidy_long_columns():
+    """build_manifest_rows returns rows with full tidy-long column set for post_cisd_context."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+    from build_validation import build_manifest_rows
+
+    df = _small_post_cisd_df_for_harness()
+    rows = build_manifest_rows(["post_cisd_context"], df, df, "Daily", "discovery")
+    pc = [r for r in rows if r["analysis"] == "post_cisd_context"]
+
+    assert len(pc) > 0, "No post_cisd_context rows emitted"
+
+    expected_columns = {
+        "analysis", "timeframe", "instrument", "direction", "bucket",
+        "rate", "n", "successes", "ci_low", "ci_high", "ci_method", "min_n_pass", "slice",
+    }
+    for row in pc:
+        assert set(row.keys()) == expected_columns, f"Wrong columns: {set(row.keys())}"
+        assert row["ci_method"] == "wilson"
+        assert row["slice"] == "discovery"
+        assert row["n"] is not None
+        assert row["ci_low"] is not None
+        assert row["ci_high"] is not None
+        assert row["min_n_pass"] is not None
+
+
+def test_build_manifest_rows_post_cisd_context_has_failed_gap_buckets():
+    """Emitted buckets include the three failed_gap_* bucket names."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+    from build_validation import build_manifest_rows
+
+    df = _small_post_cisd_df_for_harness()
+    rows = build_manifest_rows(["post_cisd_context"], df, df, "Daily", "discovery")
+    pc = [r for r in rows if r["analysis"] == "post_cisd_context"]
+
+    buckets = {r["bucket"] for r in pc}
+    assert "failed_gap_with" in buckets, f"Missing failed_gap_with bucket: {buckets}"
+    assert "failed_gap_against" in buckets, f"Missing failed_gap_against bucket: {buckets}"
+    assert "failed_gap_flat" in buckets, f"Missing failed_gap_flat bucket: {buckets}"
+
+
+def test_build_manifest_rows_post_cisd_context_below_min_n_not_dropped():
+    """Below-n buckets appear with min_n_pass=False and are NOT dropped (D-09)."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+    from build_validation import build_manifest_rows
+
+    df = _small_post_cisd_df_for_harness()
+    rows = build_manifest_rows(["post_cisd_context"], df, df, "Daily", "discovery")
+    pc = [r for r in rows if r["analysis"] == "post_cisd_context"]
+
+    assert len(pc) > 0, "All rows dropped — expected non-empty result"
+    for row in pc:
+        assert isinstance(row["min_n_pass"], bool), f"min_n_pass not bool: {row['min_n_pass']}"
