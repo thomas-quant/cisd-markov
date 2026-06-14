@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Reproducibility Foundation & Behavior Lock** - Pin the environment, run tests in CI deterministically, and lock current published numbers before anything can move them (completed 2026-06-12)
 - [x] **Phase 2: Validation Harness** - Sacred date holdout, binomial confidence intervals, and sample-size gating on every reported rate (completed 2026-06-12)
 - [x] **Phase 3: Re-Validate & Republish Existing Findings** - Re-run README headline results through the harness and republish with n + CI + OOS status (completed 2026-06-13)
-- [ ] **Phase 4: Test-Gated Modular Refactor** - Split the god-file, consolidate the registry, and vectorize the hot loops with all characterization tests still green
+- [x] **Phase 4: Test-Gated Modular Refactor** - Split the god-file, consolidate the registry, and vectorize the hot loops with all characterization tests still green (completed 2026-06-14)
 - [ ] **Phase 5: New CISD Research on the Validated Engine** - Add `candle[1]` follow-through and multi-bar post-CISD context studies, reporting through the harness from the start
 
 ## Phase Details
@@ -116,11 +116,11 @@ Plans:
 
 **Wave 2** *(blocked on 04-01; pytest must be green first)*
 
-- [ ] 04-02-PLAN.md — Consolidate the 4-edit standalone-analysis registry into a single `ANALYSIS_META`; remove dead `smt_cisd` CSV branch; document `compute_significance` bypass (REFAC-02/04)
+- [x] 04-02-PLAN.md — Consolidate the 4-edit standalone-analysis registry into a single `ANALYSIS_META`; remove dead `smt_cisd` CSV branch; document `compute_significance` bypass (REFAC-02/04)
 
 **Wave 3** *(blocked on 04-01; pytest must be green first)*
 
-- [ ] 04-03-PLAN.md — Vectorize the `_annotate_cisd_research` outer loop + all 14 `compute_*` functions following the `build_expectancy.py` `np.flatnonzero` pattern (REFAC-03)
+- [x] 04-03-PLAN.md — Vectorize the `_annotate_cisd_research` outer loop + all 14 `compute_*` functions following the `build_expectancy.py` `np.flatnonzero` pattern (REFAC-03)
 
 ### Phase 5: New CISD Research on the Validated Engine
 
@@ -152,5 +152,5 @@ Phases 3 and 4 both depend only on Phases 1-2 and are reorderable/parallelizable
 | 1. Reproducibility Foundation & Behavior Lock | 3/3 | Complete    | 2026-06-12 |
 | 2. Validation Harness | 2/2 | Complete    | 2026-06-12 |
 | 3. Re-Validate & Republish Existing Findings | 3/3 | Complete    | 2026-06-14 |
-| 4. Test-Gated Modular Refactor | 1/3 | In Progress|  |
+| 4. Test-Gated Modular Refactor | 3/3 | Complete   | 2026-06-14 |
 | 5. New CISD Research on the Validated Engine | 0/2 | Not started | - |
