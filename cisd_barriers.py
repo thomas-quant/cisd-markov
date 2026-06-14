@@ -2,7 +2,9 @@
 cisd_barriers.py — Barrier Logic and Compute Functions
 =======================================================
 Contains the core barrier hit evaluation, 14 compute_* functions,
-and the ANALYSES registry.
+the ANALYSES registry, and the ANALYSIS_META single-source-of-truth
+registry that drives all per-TF heights, standalone flags, standalone
+heights, and PNG filenames.
 
 Import chain (one-directional, no cycles):
     cisd_barriers -> cisd_charts -> cisd_data
@@ -13,6 +15,7 @@ ANALYSES lazily inside its builder functions to break the cycle.
 """
 
 import pandas as pd
+from typing import NamedTuple
 
 from cisd_data import LOOKAHEAD, MAX_CONSEC, FVG_HOLD_LOOKAHEAD
 from cisd_charts import (
@@ -493,6 +496,43 @@ ANALYSES = {
 }
 
 
+# ── ANALYSIS_META Registry ────────────────────────────────────────────────────
+# Single source of truth for the four previously-synchronized sites:
+#   1. build_figure base_h dict        (per_tf_height)
+#   2. build_standalone_figure base_h  (standalone_height)
+#   3. main() STANDALONE_KEYS set      (standalone == True)
+#   4. main() FILENAMES dict           (filename)
+#
+# Adding a new standalone analysis requires editing only this dict.
+
+class _AnalysisMeta(NamedTuple):
+    """Metadata record for a single analysis key."""
+    per_tf_height:    int         # subplot height hint for build_figure
+    standalone:       bool        # True → gets its own all-TF figure
+    standalone_height: int | None # subplot height hint for build_standalone_figure; None if not standalone
+    filename:         str | None  # output PNG filename for standalone figures; None if not standalone
+
+
+ANALYSIS_META: dict[str, _AnalysisMeta] = {
+    # Non-standalone analyses (per-TF figure only)
+    "basic":                _AnalysisMeta(per_tf_height=3,  standalone=False, standalone_height=None, filename=None),
+    "significance":         _AnalysisMeta(per_tf_height=3,  standalone=False, standalone_height=None, filename=None),
+    "mc":                   _AnalysisMeta(per_tf_height=6,  standalone=False, standalone_height=None, filename=None),
+    "wick":                 _AnalysisMeta(per_tf_height=5,  standalone=False, standalone_height=None, filename=None),
+    "combined":             _AnalysisMeta(per_tf_height=10, standalone=False, standalone_height=None, filename=None),
+    # Standalone analyses (per-TF figure + their own all-TF figure)
+    "volume":               _AnalysisMeta(per_tf_height=6,  standalone=True,  standalone_height=6,  filename="Volume_All_Timeframes.png"),
+    "candle_size":          _AnalysisMeta(per_tf_height=6,  standalone=True,  standalone_height=6,  filename="CandleSize_All_Timeframes.png"),
+    "size_cross":           _AnalysisMeta(per_tf_height=6,  standalone=True,  standalone_height=6,  filename="SizeCross_All_Timeframes.png"),
+    "smt_cisd":             _AnalysisMeta(per_tf_height=4,  standalone=True,  standalone_height=6,  filename="SMT_CISD_All_Timeframes.png"),
+    "cisd_fvg":             _AnalysisMeta(per_tf_height=6,  standalone=True,  standalone_height=6,  filename="CISD_FVG_All_Timeframes.png"),
+    "fvg_hold":             _AnalysisMeta(per_tf_height=8,  standalone=True,  standalone_height=8,  filename="FVG_Hold_All_Timeframes.png"),
+    "cisd_fvg_interaction": _AnalysisMeta(per_tf_height=10, standalone=True,  standalone_height=10, filename="CISD_FVG_Interaction_All_Timeframes.png"),
+    "sweep":                _AnalysisMeta(per_tf_height=4,  standalone=True,  standalone_height=4,  filename="Sweep_CISD_All_Timeframes.png"),
+    "sssf_swing":           _AnalysisMeta(per_tf_height=5,  standalone=True,  standalone_height=5,  filename="SSSF_Swing_All_Timeframes.png"),
+}
+
+
 __all__ = [
     # Barrier logic
     "barrier_hit",
@@ -512,6 +552,7 @@ __all__ = [
     "compute_cisd_fvg_interaction",
     "compute_sweep",
     "compute_sssf_swing",
-    # Registry
+    # Registries
     "ANALYSES",
+    "ANALYSIS_META",
 ]
