@@ -37,10 +37,10 @@ Requirements for this milestone. Each maps to a roadmap phase. Sequenced by depe
 
 ### Refactor (Test-Gated, Behavior-Preserving)
 
-- [ ] **REFAC-01**: `cisd_analysis.py` is split into `cisd_data` / `cisd_barriers` / `cisd_charts` modules with a thin orchestrator
-- [ ] **REFAC-02**: The standalone-analysis registry is consolidated into one source of truth (no more 4 synchronized edits to add an analysis)
-- [ ] **REFAC-03**: The `iterrows`/`get_loc` hot loops (annotation pass + compute functions) are vectorized following the `np.flatnonzero` pattern from `build_expectancy.py`
-- [ ] **REFAC-04**: Audit-surfaced correctness debt is fixed (dead `smt_cisd` branch in `build_csv_rows`; `compute_significance`'s bypass of `cisd_type` is documented or unified)
+- [x] **REFAC-01**: `cisd_analysis.py` is split into `cisd_data` / `cisd_barriers` / `cisd_charts` modules with a thin orchestrator
+- [x] **REFAC-02**: The standalone-analysis registry is consolidated into one source of truth (no more 4 synchronized edits to add an analysis)
+- [x] **REFAC-03**: The `iterrows`/`get_loc` hot loops (annotation pass + compute functions) are vectorized following the `np.flatnonzero` pattern from `build_expectancy.py`
+- [x] **REFAC-04**: Audit-surfaced correctness debt is fixed (dead `smt_cisd` branch in `build_csv_rows`; `compute_significance`'s bypass of `cisd_type` is documented or unified)
 
 ### New Research
 
@@ -95,10 +95,10 @@ Which phases cover which requirements. Populated during roadmap creation.
 | REVAL-01 | Phase 3 | Complete |
 | REVAL-02 | Phase 3 | Complete |
 | REVAL-03 | Phase 3 | Complete |
-| REFAC-01 | Phase 4 | Pending |
-| REFAC-02 | Phase 4 | Pending |
-| REFAC-03 | Phase 4 | Pending |
-| REFAC-04 | Phase 4 | Pending |
+| REFAC-01 | Phase 4 | Complete |
+| REFAC-02 | Phase 4 | Complete |
+| REFAC-03 | Phase 4 | Complete |
+| REFAC-04 | Phase 4 | Complete |
 | RES-01 | Phase 5 | Pending |
 | RES-02 | Phase 5 | Pending |
 | RES-03 | Phase 5 | Pending |
