@@ -138,8 +138,13 @@ Plans:
 
 Plans:
 
-- [ ] 05-01: `candle[1]` follow-through analysis wired through the harness (RES-01, RES-03)
-- [ ] 05-02: Multi-bar post-CISD context analysis wired through the harness (RES-02, RES-03)
+**Wave 1**
+
+- [ ] 05-01-PLAN.md — `candle[1]` follow-through: in-window + forward re-anchored barrier per 3-way close bucket, wired through the validation harness (RES-01, RES-03)
+
+**Wave 2** *(blocked on 05-01; same six modules, layers cleanly to avoid concurrent edits; pytest must be green first)*
+
+- [ ] 05-02-PLAN.md — Multi-bar post-CISD context: failed `candle[1]` + signed `candle[2]` gap buckets (+ Reading-B `candle[2]`-beyond-`candle[1]` cut), forward-anchored, on all 4 TFs, wired through the harness (RES-02, RES-03)
 
 ## Progress
 
