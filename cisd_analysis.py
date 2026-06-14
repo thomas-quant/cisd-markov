@@ -54,6 +54,7 @@ from cisd_data import (
 
 from cisd_barriers import (
     barrier_hit,
+    barrier_hit_forward,
     _count_consecutive,
     ANALYSES,
     ANALYSIS_META,
@@ -71,6 +72,7 @@ from cisd_barriers import (
     compute_cisd_fvg_interaction,
     compute_sweep,
     compute_sssf_swing,
+    compute_candle1_followthrough,
 )
 
 from cisd_charts import (
@@ -93,6 +95,7 @@ from cisd_charts import (
     chart_cisd_fvg_interaction,
     chart_sweep,
     chart_sssf_swing,
+    chart_candle1_followthrough,
     build_csv_rows,
     build_figure,
     build_standalone_figure,
@@ -143,17 +146,19 @@ __all__ = [
     "_annotate_swing_smt_from_events", "_to_smt_ohlc",
     "_load_scan_smts_historical", "_scan_swing_smt_events", "prepare_pair",
     # cisd_barriers exports
-    "barrier_hit", "_count_consecutive", "ANALYSES", "ANALYSIS_META",
+    "barrier_hit", "barrier_hit_forward", "_count_consecutive", "ANALYSES", "ANALYSIS_META",
     "compute_basic", "compute_mc", "compute_significance", "compute_wick",
     "compute_combined", "compute_volume", "compute_candle_size", "compute_size_cross",
     "compute_smt_cisd", "compute_cisd_fvg", "compute_fvg_hold",
     "compute_cisd_fvg_interaction", "compute_sweep", "compute_sssf_swing",
+    "compute_candle1_followthrough",
     # cisd_charts exports
     "COLORS", "pv", "_bar_label", "_style_ax", "_standalone_lookahead_caption",
     "chart_basic", "chart_mc", "chart_significance", "chart_wick", "chart_combined",
     "chart_volume", "chart_candle_size", "chart_size_cross", "chart_smt_cisd",
     "chart_cisd_fvg", "chart_fvg_hold", "chart_cisd_fvg_interaction",
     "chart_sweep", "chart_sssf_swing",
+    "chart_candle1_followthrough",
     "build_csv_rows", "build_figure", "build_standalone_figure",
 ]
 

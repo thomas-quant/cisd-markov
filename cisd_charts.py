@@ -333,6 +333,32 @@ def chart_sssf_swing(ax, data_nq, data_es):
     _style_ax(ax, "SSSF Swing")
 
 
+def chart_candle1_followthrough(ax, data_nq, data_es):
+    # Tag order: in-window first (alpha 1.0/0.7/0.85), forward after (alpha 0.55/0.35/0.65)
+    # Visual layering: in-window is solid, forward is dimmed to make the tautology gap visible
+    _TAGS = [
+        ("against_inwindow",       1.0),
+        ("with_within_wick_inwindow", 0.7),
+        ("with_past_wick_inwindow",   0.85),
+        ("against_forward",           0.5),
+        ("with_within_wick_forward",  0.35),
+        ("with_past_wick_forward",    0.65),
+    ]
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for tag, alpha in _TAGS:
+                d = data[ct][tag]
+                rows.append((f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})",
+                             pv(d["runs"], d["total"]),
+                             COLORS[instr][ct],
+                             alpha))
+    bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55) for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "Candle[1] Follow-Through (In-Window vs Forward Re-Anchored)")
+
+
 # ── Figure Builders ───────────────────────────────────────────────────────────
 
 def build_csv_rows(keys: list, df_nq: pd.DataFrame, df_es: pd.DataFrame) -> pd.DataFrame:
@@ -412,7 +438,7 @@ def build_csv_rows(keys: list, df_nq: pd.DataFrame, df_es: pd.DataFrame) -> pd.D
                             for state, d in state_map.items():
                                 add(label, instr, ct, f"{bucket}_{mode}_{state}", d["total"], d["runs"])
 
-            elif key in ("sweep", "sssf_swing"):
+            elif key in ("sweep", "sssf_swing", "candle1_followthrough"):
                 for ct in ("bullish", "bearish"):
                     for tag, d in data[ct].items():
                         add(label, instr, ct, tag, d["total"], d["runs"])
@@ -553,6 +579,7 @@ __all__ = [
     "chart_cisd_fvg_interaction",
     "chart_sweep",
     "chart_sssf_swing",
+    "chart_candle1_followthrough",
     # Figure builders
     "build_csv_rows",
     "build_figure",
