@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: ready_to_plan
-last_updated: 2026-06-13T23:36:23.887Z
+last_updated: 2026-06-14T00:32:08.191Z
 last_activity: 2026-06-13 -- Phase 03 execution started
 progress:
   total_phases: 5
-  completed_phases: 2
-  total_plans: 8
-  completed_plans: 8
-  percent: 40
+  completed_phases: 3
+  total_plans: 11
+  completed_plans: 11
+  percent: 60
 stopped_at: Phase 03 complete (3/3) — ready to discuss Phase 4
 ---
 
@@ -18,7 +18,7 @@ stopped_at: Phase 03 complete (3/3) — ready to discuss Phase 4
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-12)
+See: .planning/PROJECT.md (updated 2026-06-14)
 
 **Core value:** A reported edge can be trusted — every published rate is sample-size gated, carries a confidence interval, and is confirmed out-of-sample.
 **Current focus:** Phase 4 — test gated modular refactor
@@ -28,15 +28,15 @@ See: .planning/PROJECT.md (updated 2026-06-12)
 Phase: 4
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-06-13
+Last activity: 2026-06-14
 
-Progress: [██████████] 100%
+Progress: [████████░░] 60%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 9
+- Total plans completed: 12
 - Average duration: -
 - Total execution time: 0 hours
 
@@ -71,6 +71,9 @@ Recent decisions affecting current work:
 - Phases 3 and 4 both depend only on Phases 1-2 and are reorderable/parallelizable relative to each other
 - [Phase 01]: Pin exactly the installed .venv versions for requirements.txt — no upgrade needed as probing confirmed all 5 packages match the plan exactly
 - [Phase 01]: SMT_PKG_PATH default is the existing WSL path so dev-machine behavior is byte-identical; .gitignore additions for .env deferred to plan 01-02
+- [Phase 03]: Slice-suffixed manifest filenames (`_discovery.csv` / `_oos.csv`) prevent OOS runs from clobbering the discovery manifest
+- [Phase 03]: Bearish Daily edges failed OOS comprehensively (24 of 48 not-confirmed buckets); bullish intraday (15min, 1H) confirmed robustly across both instruments
+- [Phase 03]: SMT lift at 15min confirmed (+2–4pp); Daily ES bearish and 4H ES bearish w/ SMT not-confirmed
 
 ### Pending Todos
 
@@ -96,6 +99,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-12T12:10:54.607Z
-Stopped at: Phase 3 planning complete; plans verified; ready to execute
-Resume file: .planning/phases/03-re-validate-republish-existing-findings/03-01-PLAN.md
+Last session: 2026-06-14
+Stopped at: Phase 03 complete, all 5 UAT tests passed, code review fixes applied; ready to plan Phase 4
+Resume file: None

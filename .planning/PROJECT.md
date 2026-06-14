@@ -75,6 +75,9 @@ A reported edge can be trusted: every published rate is gated by sample size, ca
 | Defer the post-CISD ML model | Keep scope tight; validate discrete tags before modeling on top of them | — Phase 5+ |
 | Harness makes single-evaluation the default path | A "sacred" holdout only stays sacred if the tool nudges toward evaluating it once, not relying on discipline | Implemented — `--oos` flag required; default is discovery-on-train with loud ASCII banner on OOS path (Phase 2) |
 | `math.erfinv` is Python 3.13+ only | Winitzki+Halley shim needed for project's Python 3.12.3 runtime | Implemented inline in `build_validation.py` `_erfinv()` — no external dependency added (Phase 2) |
+| Slice-suffixed manifest filenames (`_discovery.csv` / `_oos.csv`) | OOS run must never clobber the discovery manifest; suffix makes the invariant structurally impossible to violate | Implemented — `build_validation.py` writes to the suffixed path; `validation_manifest.csv` is a legacy alias only (Phase 3) |
+| Bearish Daily edges are not publishable findings | 24 of 48 not-confirmed buckets were Daily/bearish across 10 of 14 analyses — failed OOS comprehensively; bullish intraday (15min, 1H) confirmed robustly | Applied in README §1–§8 — all not-confirmed buckets labeled ✗ NOT CONFIRMED; none silently dropped (Phase 3) |
+| SMT lift is confirmed at 15min but not established at Daily bearish / 4H ES bearish | OOS run evaluated all 32 smt_cisd buckets; 26/32 confirmed; 4H ES bear and Daily ES bear not-confirmed | Applied in README §8 — those buckets labeled ✗ NOT CONFIRMED; 15min w/ SMT (+2–4pp lift) published as confirmed (Phase 3) |
 
 ## Evolution
 
@@ -94,4 +97,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-12 after Phase 2 (Validation Harness) completion*
+*Last updated: 2026-06-14 after Phase 3 (Re-validate / Republish Existing Findings) completion*
