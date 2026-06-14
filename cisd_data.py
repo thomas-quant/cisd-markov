@@ -185,6 +185,9 @@ def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
     has_dir_sweep_lst             = [False] * n
     prev_bar_is_dir_swing_lst     = [False] * n
     cisd_bar_is_dir_swing_lst     = [False] * n
+    # Candle[1] feature columns — forward-analog of the wick-position split
+    candle1_close_dir_lst         = ["against"] * n   # "with" | "against"
+    candle1_past_candle0_wick_lst = [False] * n        # True only when "with" + clears c[0] wick
 
     event_pos = np.flatnonzero(pd.notna(ct_arr) & np.isin(ct_arr, ["bullish", "bearish"]))
 
@@ -217,6 +220,22 @@ def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
             fvg_mid1_hold_close_near_lst[idx]  = _classify_fvg_hold(annotated, mid1_idx, ct, "close_near")
             fvg_mid1_hold_wick_far_lst[idx]    = _classify_fvg_hold(annotated, mid1_idx, ct, "wick_far")
 
+        # Candle[1] feature columns: compare candle[1]'s close to candle[0]'s close/wick
+        if idx + 1 < n:
+            c0 = annotated.iloc[idx]      # CISD bar
+            c1 = annotated.iloc[idx + 1]  # bar after CISD
+            if ct == "bullish":
+                if c1["close"] > c0["close"]:
+                    candle1_close_dir_lst[idx] = "with"
+                    if c1["close"] > c0["high"]:
+                        candle1_past_candle0_wick_lst[idx] = True
+            else:  # bearish
+                if c1["close"] < c0["close"]:
+                    candle1_close_dir_lst[idx] = "with"
+                    if c1["close"] < c0["low"]:
+                        candle1_past_candle0_wick_lst[idx] = True
+        # else: idx+1 out of range → defaults remain ("against" / False)
+
     # Bulk-assign accumulated lists to columns
     annotated["has_dir_fvg_mid0"]         = has_dir_fvg_mid0_lst
     annotated["has_dir_fvg_mid1"]         = has_dir_fvg_mid1_lst
@@ -227,6 +246,8 @@ def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
     annotated["has_dir_sweep"]            = has_dir_sweep_lst
     annotated["prev_bar_is_dir_swing"]    = prev_bar_is_dir_swing_lst
     annotated["cisd_bar_is_dir_swing"]    = cisd_bar_is_dir_swing_lst
+    annotated["candle1_close_dir"]        = candle1_close_dir_lst
+    annotated["candle1_past_candle0_wick"] = candle1_past_candle0_wick_lst
 
     return annotated
 
