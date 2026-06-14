@@ -333,6 +333,29 @@ def chart_sssf_swing(ax, data_nq, data_es):
     _style_ax(ax, "SSSF Swing")
 
 
+def chart_post_cisd_context(ax, data_nq, data_es):
+    # Tag order: gap_with (most aligned), gap_against (reversal context), gap_flat, Reading B
+    _TAGS = [
+        ("failed_gap_with",          1.0),
+        ("failed_gap_against",       0.7),
+        ("failed_gap_flat",          0.45),
+        ("candle2_past_candle1_wick", 0.85),
+    ]
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for tag, alpha in _TAGS:
+                d = data[ct][tag]
+                rows.append((f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})",
+                             pv(d["runs"], d["total"]),
+                             COLORS[instr][ct],
+                             alpha))
+    bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55) for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "Post-CISD Context (Candle[1] Failed + Candle[2] Gap)")
+
+
 def chart_candle1_followthrough(ax, data_nq, data_es):
     # Tag order: in-window first (alpha 1.0/0.7/0.85), forward after (alpha 0.55/0.35/0.65)
     # Visual layering: in-window is solid, forward is dimmed to make the tautology gap visible
@@ -438,7 +461,7 @@ def build_csv_rows(keys: list, df_nq: pd.DataFrame, df_es: pd.DataFrame) -> pd.D
                             for state, d in state_map.items():
                                 add(label, instr, ct, f"{bucket}_{mode}_{state}", d["total"], d["runs"])
 
-            elif key in ("sweep", "sssf_swing", "candle1_followthrough"):
+            elif key in ("sweep", "sssf_swing", "candle1_followthrough", "post_cisd_context"):
                 for ct in ("bullish", "bearish"):
                     for tag, d in data[ct].items():
                         add(label, instr, ct, tag, d["total"], d["runs"])
@@ -580,6 +603,7 @@ __all__ = [
     "chart_sweep",
     "chart_sssf_swing",
     "chart_candle1_followthrough",
+    "chart_post_cisd_context",
     # Figure builders
     "build_csv_rows",
     "build_figure",
