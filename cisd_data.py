@@ -188,6 +188,10 @@ def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
     # Candle[1] feature columns — forward-analog of the wick-position split
     candle1_close_dir_lst         = ["against"] * n   # "with" | "against"
     candle1_past_candle0_wick_lst = [False] * n        # True only when "with" + clears c[0] wick
+    # Candle[1]-failed + candle[2]-gap + Reading-B columns (RES-02)
+    candle1_failed_followthrough_lst = [False] * n    # True when c[1] fails to close past c[0] extreme
+    candle2_gap_dir_lst              = ["flat"] * n   # "gap_with" | "gap_against" | "flat"
+    candle2_past_candle1_wick_lst    = [False] * n    # Reading B: c[2] closes past c[1] wick
 
     event_pos = np.flatnonzero(pd.notna(ct_arr) & np.isin(ct_arr, ["bullish", "bearish"]))
 
@@ -236,6 +240,43 @@ def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
                         candle1_past_candle0_wick_lst[idx] = True
         # else: idx+1 out of range → defaults remain ("against" / False)
 
+        # Candle[1]-failed + candle[2]-gap + Reading-B (RES-02)
+        if idx + 1 < n:
+            c0 = annotated.iloc[idx]
+            c1 = annotated.iloc[idx + 1]
+            # candle1_failed_followthrough: negation of past_candle0_wick
+            if ct == "bullish":
+                failed = c1["close"] <= c0["high"]
+            else:
+                failed = c1["close"] >= c0["low"]
+            candle1_failed_followthrough_lst[idx] = bool(failed)
+
+            if idx + 2 < n:
+                c2 = annotated.iloc[idx + 2]
+                # candle2_gap_dir: signed gap = c2.open - c1.close, mapped by CISD direction
+                gap = c2["open"] - c1["close"]
+                if ct == "bullish":
+                    if gap > 0:
+                        candle2_gap_dir_lst[idx] = "gap_with"
+                    elif gap < 0:
+                        candle2_gap_dir_lst[idx] = "gap_against"
+                    else:
+                        candle2_gap_dir_lst[idx] = "flat"
+                else:  # bearish
+                    if gap < 0:
+                        candle2_gap_dir_lst[idx] = "gap_with"
+                    elif gap > 0:
+                        candle2_gap_dir_lst[idx] = "gap_against"
+                    else:
+                        candle2_gap_dir_lst[idx] = "flat"
+                # Reading B: candle[2] closes past candle[1]'s wick in the CISD direction
+                if ct == "bullish":
+                    candle2_past_candle1_wick_lst[idx] = bool(c2["close"] > c1["high"])
+                else:
+                    candle2_past_candle1_wick_lst[idx] = bool(c2["close"] < c1["low"])
+            # else: idx+2 out of range → gap_dir stays "flat", past_wick stays False
+        # else: idx+1 out of range → all candle[2] defaults remain
+
     # Bulk-assign accumulated lists to columns
     annotated["has_dir_fvg_mid0"]         = has_dir_fvg_mid0_lst
     annotated["has_dir_fvg_mid1"]         = has_dir_fvg_mid1_lst
@@ -246,8 +287,11 @@ def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
     annotated["has_dir_sweep"]            = has_dir_sweep_lst
     annotated["prev_bar_is_dir_swing"]    = prev_bar_is_dir_swing_lst
     annotated["cisd_bar_is_dir_swing"]    = cisd_bar_is_dir_swing_lst
-    annotated["candle1_close_dir"]        = candle1_close_dir_lst
-    annotated["candle1_past_candle0_wick"] = candle1_past_candle0_wick_lst
+    annotated["candle1_close_dir"]              = candle1_close_dir_lst
+    annotated["candle1_past_candle0_wick"]      = candle1_past_candle0_wick_lst
+    annotated["candle1_failed_followthrough"]   = candle1_failed_followthrough_lst
+    annotated["candle2_gap_dir"]                = candle2_gap_dir_lst
+    annotated["candle2_past_candle1_wick"]      = candle2_past_candle1_wick_lst
 
     return annotated
 
