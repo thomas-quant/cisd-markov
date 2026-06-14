@@ -34,6 +34,7 @@ from cisd_charts import (
     chart_cisd_fvg_interaction,
     chart_sweep,
     chart_sssf_swing,
+    chart_candle1_followthrough,
 )
 
 
@@ -46,6 +47,26 @@ def barrier_hit(df: pd.DataFrame, idx: int, row: pd.Series, ct: str) -> bool:
       Bearish: target = CISD low,  stop = CISD high
     """
     for j in range(1, LOOKAHEAD + 1):
+        if idx + j >= len(df):
+            break
+        bar = df.iloc[idx + j]
+        if ct == "bullish":
+            if bar["low"] <= row["low"]:    return False   # stop
+            if bar["high"] >= row["high"]:  return True    # target
+        else:
+            if bar["high"] >= row["high"]:  return False   # stop
+            if bar["low"] <= row["low"]:    return True    # target
+    return False
+
+
+def barrier_hit_forward(df: pd.DataFrame, idx: int, row: pd.Series, ct: str) -> bool:
+    """Re-anchored forward barrier: same candle[0] target/stop but lookahead starts at idx+2.
+
+    Equivalent to barrier_hit but the window covers candle[2]+candle[3] instead of
+    candle[1]+candle[2].  Returns False when idx+2 is out of range (no hit recorded).
+    Used by compute_candle1_followthrough for the leakage-free forward window.
+    """
+    for j in range(2, LOOKAHEAD + 2):
         if idx + j >= len(df):
             break
         bar = df.iloc[idx + j]
@@ -522,6 +543,55 @@ def compute_sssf_swing(df: pd.DataFrame) -> dict:
     return stats
 
 
+def compute_candle1_followthrough(df: pd.DataFrame) -> dict:
+    """Barrier run rate split by candle[1] close direction and wick position (two windows).
+
+    Returns {direction: {tag: {total, runs}}} with six tags per direction:
+      against_inwindow / with_within_wick_inwindow / with_past_wick_inwindow
+      against_forward  / with_within_wick_forward  / with_past_wick_forward
+
+    The _inwindow variants use the standard barrier_hit (lookahead over candle[1]+[2]).
+    The _forward variants use barrier_hit_forward (same target/stop, window over candle[2]+[3]).
+    Both windows measure the same population: every CISD event, split by candle[1] behaviour.
+    """
+    _TAGS = ("against", "with_within_wick", "with_past_wick")
+    stats = {
+        ct: {f"{tag}_{suffix}": {"total": 0, "runs": 0}
+             for tag in _TAGS for suffix in ("inwindow", "forward")}
+        for ct in ("bullish", "bearish")
+    }
+
+    ct_arr      = df["cisd_type"].to_numpy(dtype=object)
+    c1dir_arr   = df["candle1_close_dir"].to_numpy(dtype=object)
+    c1wick_arr  = df["candle1_past_candle0_wick"].to_numpy(dtype=bool)
+    event_pos   = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+
+    for pos in event_pos:
+        ct = ct_arr[pos]
+        if ct not in stats:
+            continue
+
+        # Classify core bucket from precomputed columns
+        if c1dir_arr[pos] == "with":
+            core = "with_past_wick" if c1wick_arr[pos] else "with_within_wick"
+        else:
+            core = "against"
+
+        row = df.iloc[pos]
+
+        # In-window count (barrier_hit unchanged: lookahead over candle[1]+[2])
+        stats[ct][f"{core}_inwindow"]["total"] += 1
+        if barrier_hit(df, pos, row, ct):
+            stats[ct][f"{core}_inwindow"]["runs"] += 1
+
+        # Forward count (re-anchored: lookahead over candle[2]+[3])
+        stats[ct][f"{core}_forward"]["total"] += 1
+        if barrier_hit_forward(df, pos, row, ct):
+            stats[ct][f"{core}_forward"]["runs"] += 1
+
+    return stats
+
+
 # ── ANALYSES Registry ─────────────────────────────────────────────────────────
 
 ANALYSES = {
@@ -539,6 +609,7 @@ ANALYSES = {
     "cisd_fvg_interaction": ("CISD FVG Interaction",         compute_cisd_fvg_interaction, chart_cisd_fvg_interaction),
     "sweep":        ("Sweep Confirmation",                   compute_sweep,        chart_sweep),
     "sssf_swing":   ("SSSF Swing",                           compute_sssf_swing,   chart_sssf_swing),
+    "candle1_followthrough": ("Candle[1] Follow-Through",    compute_candle1_followthrough, chart_candle1_followthrough),
 }
 
 
@@ -576,6 +647,7 @@ ANALYSIS_META: dict[str, _AnalysisMeta] = {
     "cisd_fvg_interaction": _AnalysisMeta(per_tf_height=10, standalone=True,  standalone_height=10, filename="CISD_FVG_Interaction_All_Timeframes.png"),
     "sweep":                _AnalysisMeta(per_tf_height=4,  standalone=True,  standalone_height=4,  filename="Sweep_CISD_All_Timeframes.png"),
     "sssf_swing":           _AnalysisMeta(per_tf_height=5,  standalone=True,  standalone_height=5,  filename="SSSF_Swing_All_Timeframes.png"),
+    "candle1_followthrough": _AnalysisMeta(per_tf_height=8,  standalone=True,  standalone_height=8,  filename="Candle1_Followthrough_All_Timeframes.png"),
 }
 
 
@@ -601,4 +673,7 @@ __all__ = [
     # Registries
     "ANALYSES",
     "ANALYSIS_META",
+    # New RES-01 symbols
+    "barrier_hit_forward",
+    "compute_candle1_followthrough",
 ]
