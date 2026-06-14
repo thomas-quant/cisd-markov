@@ -110,9 +110,17 @@ Plans:
 
 Plans:
 
-- [ ] 04-01: Split god-file into `cisd_data` / `cisd_barriers` / `cisd_charts` with a thin orchestrator (REFAC-01)
-- [ ] 04-02: Consolidate the standalone-analysis registry into one source of truth and fix audit-surfaced correctness debt (REFAC-02/04)
-- [ ] 04-03: Vectorize the annotation + compute hot loops following the `build_expectancy.py` `np.flatnonzero` pattern (REFAC-03)
+**Wave 1**
+
+- [ ] 04-01-PLAN.md — Split god-file into `cisd_data` / `cisd_barriers` / `cisd_charts` with a thin re-export shim + main() orchestrator (REFAC-01)
+
+**Wave 2** *(blocked on 04-01; pytest must be green first)*
+
+- [ ] 04-02-PLAN.md — Consolidate the 4-edit standalone-analysis registry into a single `ANALYSIS_META`; remove dead `smt_cisd` CSV branch; document `compute_significance` bypass (REFAC-02/04)
+
+**Wave 3** *(blocked on 04-01; pytest must be green first)*
+
+- [ ] 04-03-PLAN.md — Vectorize the `_annotate_cisd_research` outer loop + all 14 `compute_*` functions following the `build_expectancy.py` `np.flatnonzero` pattern (REFAC-03)
 
 ### Phase 5: New CISD Research on the Validated Engine
 
@@ -143,6 +151,6 @@ Phases 3 and 4 both depend only on Phases 1-2 and are reorderable/parallelizable
 |-------|----------------|--------|-----------|
 | 1. Reproducibility Foundation & Behavior Lock | 3/3 | Complete    | 2026-06-12 |
 | 2. Validation Harness | 2/2 | Complete    | 2026-06-12 |
-| 3. Re-Validate & Republish Existing Findings | 3/3 | Complete    | 2026-06-13 |
+| 3. Re-Validate & Republish Existing Findings | 3/3 | Complete    | 2026-06-14 |
 | 4. Test-Gated Modular Refactor | 0/3 | Not started | - |
 | 5. New CISD Research on the Validated Engine | 0/2 | Not started | - |
