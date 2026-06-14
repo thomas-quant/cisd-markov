@@ -14,6 +14,7 @@ load), and compute functions defined in this module.  cisd_charts imports
 ANALYSES lazily inside its builder functions to break the cycle.
 """
 
+import numpy as np
 import pandas as pd
 from typing import NamedTuple
 
@@ -71,14 +72,14 @@ def _count_consecutive(idx: int, directions: pd.Series, target: str, max_n: int)
 
 def compute_basic(df: pd.DataFrame) -> dict:
     """Barrier run rate across all CISDs."""
-    df_cisd = df[df["cisd_type"].notna()]
-    idx_index = df.index
+    ct_arr    = df["cisd_type"].to_numpy(dtype=object)
+    event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
     totals = {"bullish": 0, "bearish": 0}
     runs   = {"bullish": 0, "bearish": 0}
-    for ts, row in df_cisd.iterrows():
-        ct = row["cisd_type"]
+    for pos in event_pos:
+        ct = ct_arr[pos]
         totals[ct] += 1
-        if barrier_hit(df, idx_index.get_loc(ts), row, ct):
+        if barrier_hit(df, pos, df.iloc[pos], ct):
             runs[ct] += 1
     return {"totals": totals, "runs": runs}
 
@@ -150,19 +151,32 @@ def compute_wick(df: pd.DataFrame) -> dict:
         "bullish": {"past_wick": {"total": 0, "runs": 0}, "within_wick": {"total": 0, "runs": 0}},
         "bearish": {"past_wick": {"total": 0, "runs": 0}, "within_wick": {"total": 0, "runs": 0}},
     }
-    idx_index = df.index
-    for ts, row in df[(df["prev_direction"] == "bearish") & (df["close"] > df["prev_close"])].iterrows():
-        idx = idx_index.get_loc(ts)
-        grp = "past_wick" if row["close"] > row["prev_high"] else "within_wick"
+    prev_dir  = df["prev_direction"].to_numpy(dtype=object)
+    close_arr = df["close"].to_numpy(dtype=float)
+    prev_close_arr = df["prev_close"].to_numpy(dtype=float)
+    prev_high_arr  = df["prev_high"].to_numpy(dtype=float)
+    prev_low_arr   = df["prev_low"].to_numpy(dtype=float)
+
+    bull_mask = (
+        np.isin(prev_dir, ["bearish"]) &
+        (close_arr > prev_close_arr)
+    )
+    for pos in np.flatnonzero(bull_mask):
+        grp = "past_wick" if close_arr[pos] > prev_high_arr[pos] else "within_wick"
         stats["bullish"][grp]["total"] += 1
-        if barrier_hit(df, idx, row, "bullish"):
+        if barrier_hit(df, pos, df.iloc[pos], "bullish"):
             stats["bullish"][grp]["runs"] += 1
-    for ts, row in df[(df["prev_direction"] == "bullish") & (df["close"] < df["prev_close"])].iterrows():
-        idx = idx_index.get_loc(ts)
-        grp = "past_wick" if row["close"] < row["prev_low"] else "within_wick"
+
+    bear_mask = (
+        np.isin(prev_dir, ["bullish"]) &
+        (close_arr < prev_close_arr)
+    )
+    for pos in np.flatnonzero(bear_mask):
+        grp = "past_wick" if close_arr[pos] < prev_low_arr[pos] else "within_wick"
         stats["bearish"][grp]["total"] += 1
-        if barrier_hit(df, idx, row, "bearish"):
+        if barrier_hit(df, pos, df.iloc[pos], "bearish"):
             stats["bearish"][grp]["runs"] += 1
+
     return stats
 
 
@@ -306,15 +320,16 @@ def compute_smt_cisd(df: pd.DataFrame) -> dict:
         "bearish": {"w/ SMT": {"total": 0, "runs": 0}, "no SMT": {"total": 0, "runs": 0}},
     }
 
-    df_cisd = df[df["cisd_type"].notna()]
-    idx_index = df.index
-    for ts, row in df_cisd.iterrows():
-        ct = row["cisd_type"]
-        tag = row["swing_smt_tag"]
+    ct_arr  = df["cisd_type"].to_numpy(dtype=object)
+    tag_arr = df["swing_smt_tag"].to_numpy(dtype=object)
+    event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    for pos in event_pos:
+        ct  = ct_arr[pos]
+        tag = tag_arr[pos]
         if ct not in stats or tag not in stats[ct]:
             continue
         stats[ct][tag]["total"] += 1
-        if barrier_hit(df, idx_index.get_loc(ts), row, ct):
+        if barrier_hit(df, pos, df.iloc[pos], ct):
             stats[ct][tag]["runs"] += 1
     return stats
 
@@ -333,20 +348,22 @@ def compute_cisd_fvg(df: pd.DataFrame) -> dict:
             "no_fvg": {"total": 0, "runs": 0},
         },
     }
-    idx_index = df.index
-    for ts, row in df[df["cisd_type"].notna()].iterrows():
-        idx = idx_index.get_loc(ts)
-        ct = row["cisd_type"]
-        hit = barrier_hit(df, idx, row, ct)
-        if row["has_dir_fvg_mid0"]:
+    ct_arr   = df["cisd_type"].to_numpy(dtype=object)
+    mid0_arr = df["has_dir_fvg_mid0"].to_numpy(dtype=bool)
+    mid1_arr = df["has_dir_fvg_mid1"].to_numpy(dtype=bool)
+    event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    for pos in event_pos:
+        ct  = ct_arr[pos]
+        hit = barrier_hit(df, pos, df.iloc[pos], ct)
+        if mid0_arr[pos]:
             stats[ct]["mid0_fvg"]["total"] += 1
             if hit:
                 stats[ct]["mid0_fvg"]["runs"] += 1
-        if row["has_dir_fvg_mid1"]:
+        if mid1_arr[pos]:
             stats[ct]["mid1_fvg"]["total"] += 1
             if hit:
                 stats[ct]["mid1_fvg"]["runs"] += 1
-        if not row["has_dir_fvg_mid0"] and not row["has_dir_fvg_mid1"]:
+        if not mid0_arr[pos] and not mid1_arr[pos]:
             stats[ct]["no_fvg"]["total"] += 1
             if hit:
                 stats[ct]["no_fvg"]["runs"] += 1
@@ -420,21 +437,23 @@ def compute_cisd_fvg_interaction(df: pd.DataFrame) -> dict:
             },
         },
     }
-    idx_index = df.index
-    for ts, row in df[df["cisd_type"].notna()].iterrows():
-        idx = idx_index.get_loc(ts)
-        ct = row["cisd_type"]
-        hit = barrier_hit(df, idx, row, ct)
-        for bucket, close_col, wick_col in (
-            ("mid0", "fvg_mid0_hold_close_near", "fvg_mid0_hold_wick_far"),
-            ("mid1", "fvg_mid1_hold_close_near", "fvg_mid1_hold_wick_far"),
+    ct_arr              = df["cisd_type"].to_numpy(dtype=object)
+    mid0_close_arr      = df["fvg_mid0_hold_close_near"].to_numpy(dtype=object)
+    mid0_wick_arr       = df["fvg_mid0_hold_wick_far"].to_numpy(dtype=object)
+    mid1_close_arr      = df["fvg_mid1_hold_close_near"].to_numpy(dtype=object)
+    mid1_wick_arr       = df["fvg_mid1_hold_wick_far"].to_numpy(dtype=object)
+    event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    for pos in event_pos:
+        ct  = ct_arr[pos]
+        hit = barrier_hit(df, pos, df.iloc[pos], ct)
+        for bucket, close_state, wick_state in (
+            ("mid0", mid0_close_arr[pos], mid0_wick_arr[pos]),
+            ("mid1", mid1_close_arr[pos], mid1_wick_arr[pos]),
         ):
-            close_state = row[close_col]
             if close_state in ("held", "failed"):
                 stats[ct][bucket]["close_through_near_edge"][close_state]["total"] += 1
                 if hit:
                     stats[ct][bucket]["close_through_near_edge"][close_state]["runs"] += 1
-            wick_state = row[wick_col]
             if wick_state in ("held", "failed"):
                 stats[ct][bucket]["wick_break_far_extreme"][wick_state]["total"] += 1
                 if hit:
@@ -448,13 +467,14 @@ def compute_sweep(df: pd.DataFrame) -> dict:
         "bullish": {"w/ sweep": {"total": 0, "runs": 0}, "no sweep": {"total": 0, "runs": 0}},
         "bearish": {"w/ sweep": {"total": 0, "runs": 0}, "no sweep": {"total": 0, "runs": 0}},
     }
-    idx_index = df.index
-    for ts, row in df[df["cisd_type"].notna()].iterrows():
-        idx = idx_index.get_loc(ts)
-        ct = row["cisd_type"]
-        tag = "w/ sweep" if row["has_dir_sweep"] else "no sweep"
+    ct_arr    = df["cisd_type"].to_numpy(dtype=object)
+    sweep_arr = df["has_dir_sweep"].to_numpy(dtype=bool)
+    event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    for pos in event_pos:
+        ct  = ct_arr[pos]
+        tag = "w/ sweep" if sweep_arr[pos] else "no sweep"
         stats[ct][tag]["total"] += 1
-        if barrier_hit(df, idx, row, ct):
+        if barrier_hit(df, pos, df.iloc[pos], ct):
             stats[ct][tag]["runs"] += 1
     return stats
 
@@ -473,18 +493,20 @@ def compute_sssf_swing(df: pd.DataFrame) -> dict:
             "neither": {"total": 0, "runs": 0},
         },
     }
-    idx_index = df.index
-    for ts, row in df[df["cisd_type"].notna()].iterrows():
-        idx = idx_index.get_loc(ts)
-        ct = row["cisd_type"]
-        if row["prev_bar_is_dir_swing"]:
+    ct_arr       = df["cisd_type"].to_numpy(dtype=object)
+    prev_swing   = df["prev_bar_is_dir_swing"].to_numpy(dtype=bool)
+    cisd_swing   = df["cisd_bar_is_dir_swing"].to_numpy(dtype=bool)
+    event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    for pos in event_pos:
+        ct = ct_arr[pos]
+        if prev_swing[pos]:
             tag = "prev_bar_is_swing"
-        elif row["cisd_bar_is_dir_swing"]:
+        elif cisd_swing[pos]:
             tag = "cisd_bar_is_swing"
         else:
             tag = "neither"
         stats[ct][tag]["total"] += 1
-        if barrier_hit(df, idx, row, ct):
+        if barrier_hit(df, pos, df.iloc[pos], ct):
             stats[ct][tag]["runs"] += 1
     return stats
 
