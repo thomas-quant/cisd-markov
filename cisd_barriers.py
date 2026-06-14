@@ -86,20 +86,19 @@ def compute_basic(df: pd.DataFrame) -> dict:
 
 def compute_mc(df: pd.DataFrame) -> dict:
     """Barrier run rate bucketed by consecutive opposite candles before CISD."""
-    df_cisd    = df[df["cisd_type"].notna()]
     directions = df["direction"]
-    idx_index  = df.index
+    ct_arr     = df["cisd_type"].to_numpy(dtype=object)
+    event_pos  = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
     stats = {ct: {n: {"total": 0, "runs": 0} for n in range(1, MAX_CONSEC + 1)}
              for ct in ("bullish", "bearish")}
-    for ts, row in df_cisd.iterrows():
-        idx    = idx_index.get_loc(ts)
-        ct     = row["cisd_type"]
+    for pos in event_pos:
+        ct     = ct_arr[pos]
         tgt    = "bearish" if ct == "bullish" else "bullish"
-        consec = _count_consecutive(idx, directions, tgt, MAX_CONSEC)
+        consec = _count_consecutive(pos, directions, tgt, MAX_CONSEC)
         if consec < 1 or consec > MAX_CONSEC:
             continue
         stats[ct][consec]["total"] += 1
-        if barrier_hit(df, idx, row, ct):
+        if barrier_hit(df, pos, df.iloc[pos], ct):
             stats[ct][consec]["runs"] += 1
     return stats
 
@@ -182,23 +181,25 @@ def compute_wick(df: pd.DataFrame) -> dict:
 
 def compute_combined(df: pd.DataFrame) -> dict:
     """Barrier run rate cross-tabulated: wick position x consecutive candle count."""
-    df_cisd    = df[df["cisd_type"].notna()]
-    directions = df["direction"]
-    idx_index  = df.index
+    directions     = df["direction"]
+    ct_arr         = df["cisd_type"].to_numpy(dtype=object)
+    close_arr      = df["close"].to_numpy(dtype=float)
+    prev_high_arr  = df["prev_high"].to_numpy(dtype=float)
+    prev_low_arr   = df["prev_low"].to_numpy(dtype=float)
+    event_pos      = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
     stats = {ct: {n: {"past_wick": {"total": 0, "runs": 0},
                        "within_wick": {"total": 0, "runs": 0}}
                   for n in range(1, MAX_CONSEC + 1)} for ct in ("bullish", "bearish")}
-    for ts, row in df_cisd.iterrows():
-        idx    = idx_index.get_loc(ts)
-        ct     = row["cisd_type"]
+    for pos in event_pos:
+        ct     = ct_arr[pos]
         tgt    = "bearish" if ct == "bullish" else "bullish"
-        consec = _count_consecutive(idx, directions, tgt, MAX_CONSEC)
+        consec = _count_consecutive(pos, directions, tgt, MAX_CONSEC)
         if consec < 1 or consec > MAX_CONSEC:
             continue
-        above = row["close"] > row["prev_high"] if ct == "bullish" else row["close"] < row["prev_low"]
+        above = close_arr[pos] > prev_high_arr[pos] if ct == "bullish" else close_arr[pos] < prev_low_arr[pos]
         grp = "past_wick" if above else "within_wick"
         stats[ct][consec][grp]["total"] += 1
-        if barrier_hit(df, idx, row, ct):
+        if barrier_hit(df, pos, df.iloc[pos], ct):
             stats[ct][consec][grp]["runs"] += 1
     return stats
 
@@ -215,21 +216,22 @@ def compute_volume(df: pd.DataFrame) -> dict:
         (1.5,  2.5,  "1.5x-2.5x"),
         (2.5,  1e18, ">2.5x (spike)"),
     ]
-    df_cisd    = df[df["cisd_type"].notna()]
-    idx_index  = df.index
+    ct_arr     = df["cisd_type"].to_numpy(dtype=object)
+    vol_arr    = df["volume"].to_numpy(dtype=float)
+    prev_vol_arr = prev_vol.to_numpy(dtype=float)
+    event_pos  = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
     stats = {ct: {lbl: {"total": 0, "runs": 0} for _, _, lbl in BINS}
              for ct in ("bullish", "bearish")}
-    for ts, row in df_cisd.iterrows():
-        idx   = idx_index.get_loc(ts)
-        pv    = prev_vol.iloc[idx]
+    for pos in event_pos:
+        pv = prev_vol_arr[pos]
         if not pv or pd.isna(pv) or pv <= 0:
             continue
-        ratio = row["volume"] / pv
-        ct    = row["cisd_type"]
+        ratio = vol_arr[pos] / pv
+        ct    = ct_arr[pos]
         for lo, hi, lbl in BINS:
             if lo <= ratio < hi:
                 stats[ct][lbl]["total"] += 1
-                if barrier_hit(df, idx, row, ct):
+                if barrier_hit(df, pos, df.iloc[pos], ct):
                     stats[ct][lbl]["runs"] += 1
                 break
     return stats
@@ -247,22 +249,24 @@ def compute_candle_size(df: pd.DataFrame) -> dict:
         (1.0,  1.5,  "1x-1.5x ATR"),
         (1.5,  1e18, ">1.5x ATR"),
     ]
-    df_cisd   = df[df["cisd_type"].notna()]
-    idx_index = df.index
+    ct_arr    = df["cisd_type"].to_numpy(dtype=object)
+    close_arr = df["close"].to_numpy(dtype=float)
+    open_arr  = df["open"].to_numpy(dtype=float)
+    atr_arr   = atr.to_numpy(dtype=float)
+    event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
     stats = {ct: {lbl: {"total": 0, "runs": 0} for _, _, lbl in BINS}
              for ct in ("bullish", "bearish")}
-    for ts, row in df_cisd.iterrows():
-        idx     = idx_index.get_loc(ts)
-        atr_val = atr.iloc[idx]
+    for pos in event_pos:
+        atr_val = atr_arr[pos]
         if pd.isna(atr_val) or atr_val <= 0:
             continue
-        body  = abs(row["close"] - row["open"])
+        body  = abs(close_arr[pos] - open_arr[pos])
         ratio = body / atr_val
-        ct    = row["cisd_type"]
+        ct    = ct_arr[pos]
         for lo, hi, lbl in BINS:
             if lo <= ratio < hi:
                 stats[ct][lbl]["total"] += 1
-                if barrier_hit(df, idx, row, ct):
+                if barrier_hit(df, pos, df.iloc[pos], ct):
                     stats[ct][lbl]["runs"] += 1
                 break
     return stats
@@ -278,7 +282,7 @@ def compute_size_cross(df: pd.DataFrame) -> dict:
       small_cisd + small_prev(both < ATR)
       small_cisd + big_prev  (CISD < ATR, prev >= ATR)
     """
-    atr      = (df["high"] - df["low"]).rolling(14).mean()
+    atr       = (df["high"] - df["low"]).rolling(14).mean()
     prev_body = (df["close"].shift(1) - df["open"].shift(1)).abs()
 
     BUCKETS = [
@@ -287,24 +291,27 @@ def compute_size_cross(df: pd.DataFrame) -> dict:
         (False, False, "Small CISD / Small prev"),
         (False, True,  "Small CISD / Big prev"),
     ]
-    df_cisd   = df[df["cisd_type"].notna()]
-    idx_index = df.index
+    ct_arr        = df["cisd_type"].to_numpy(dtype=object)
+    close_arr     = df["close"].to_numpy(dtype=float)
+    open_arr      = df["open"].to_numpy(dtype=float)
+    atr_arr       = atr.to_numpy(dtype=float)
+    prev_body_arr = prev_body.to_numpy(dtype=float)
+    event_pos     = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
     stats = {ct: {lbl: {"total": 0, "runs": 0}
                   for _, _, lbl in BUCKETS}
              for ct in ("bullish", "bearish")}
 
-    for ts, row in df_cisd.iterrows():
-        idx     = idx_index.get_loc(ts)
-        atr_val = atr.iloc[idx]
+    for pos in event_pos:
+        atr_val = atr_arr[pos]
         if pd.isna(atr_val) or atr_val <= 0:
             continue
-        cisd_big = abs(row["close"] - row["open"]) >= atr_val
-        prev_big = prev_body.iloc[idx] >= atr_val
-        ct = row["cisd_type"]
+        cisd_big = abs(close_arr[pos] - open_arr[pos]) >= atr_val
+        prev_big = prev_body_arr[pos] >= atr_val
+        ct = ct_arr[pos]
         for bc, bp, lbl in BUCKETS:
             if cisd_big == bc and prev_big == bp:
                 stats[ct][lbl]["total"] += 1
-                if barrier_hit(df, idx, row, ct):
+                if barrier_hit(df, pos, df.iloc[pos], ct):
                     stats[ct][lbl]["runs"] += 1
                 break
     return stats
@@ -394,18 +401,22 @@ def compute_fvg_hold(df: pd.DataFrame) -> dict:
             },
         },
     }
-    for _, row in df[df["cisd_type"].notna()].iterrows():
-        ct = row["cisd_type"]
-        for bucket, close_col, wick_col in (
-            ("mid0", "fvg_mid0_hold_close_near", "fvg_mid0_hold_wick_far"),
-            ("mid1", "fvg_mid1_hold_close_near", "fvg_mid1_hold_wick_far"),
+    ct_arr             = df["cisd_type"].to_numpy(dtype=object)
+    mid0_close_arr     = df["fvg_mid0_hold_close_near"].to_numpy(dtype=object)
+    mid0_wick_arr      = df["fvg_mid0_hold_wick_far"].to_numpy(dtype=object)
+    mid1_close_arr     = df["fvg_mid1_hold_close_near"].to_numpy(dtype=object)
+    mid1_wick_arr      = df["fvg_mid1_hold_wick_far"].to_numpy(dtype=object)
+    event_pos          = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    for pos in event_pos:
+        ct = ct_arr[pos]
+        for bucket, close_state, wick_state in (
+            ("mid0", mid0_close_arr[pos], mid0_wick_arr[pos]),
+            ("mid1", mid1_close_arr[pos], mid1_wick_arr[pos]),
         ):
-            close_state = row[close_col]
             if close_state != "none":
                 stats[ct][bucket]["close_through_near_edge"]["total"] += 1
                 if close_state == "held":
                     stats[ct][bucket]["close_through_near_edge"]["held"] += 1
-            wick_state = row[wick_col]
             if wick_state != "none":
                 stats[ct][bucket]["wick_break_far_extreme"]["total"] += 1
                 if wick_state == "held":
