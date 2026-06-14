@@ -56,6 +56,7 @@ from cisd_barriers import (
     barrier_hit,
     _count_consecutive,
     ANALYSES,
+    ANALYSIS_META,
     compute_basic,
     compute_mc,
     compute_significance,
@@ -142,7 +143,7 @@ __all__ = [
     "_annotate_swing_smt_from_events", "_to_smt_ohlc",
     "_load_scan_smts_historical", "_scan_swing_smt_events", "prepare_pair",
     # cisd_barriers exports
-    "barrier_hit", "_count_consecutive", "ANALYSES",
+    "barrier_hit", "_count_consecutive", "ANALYSES", "ANALYSIS_META",
     "compute_basic", "compute_mc", "compute_significance", "compute_wick",
     "compute_combined", "compute_volume", "compute_candle_size", "compute_size_cross",
     "compute_smt_cisd", "compute_cisd_fvg", "compute_fvg_hold",
@@ -160,18 +161,10 @@ __all__ = [
 # ── CLI Orchestrator ──────────────────────────────────────────────────────────
 
 def main() -> None:
-    # Keys that get their own all-TF figure rather than appearing per-TF
-    STANDALONE_KEYS = {
-        "volume",
-        "candle_size",
-        "size_cross",
-        "smt_cisd",
-        "cisd_fvg",
-        "fvg_hold",
-        "cisd_fvg_interaction",
-        "sweep",
-        "sssf_swing",
-    }
+    # Keys that get their own all-TF figure rather than appearing per-TF.
+    # Derived from ANALYSIS_META — adding a new standalone analysis only requires
+    # editing ANALYSIS_META in cisd_barriers.py (REFAC-02).
+    STANDALONE_KEYS = {k for k, m in ANALYSIS_META.items() if m.standalone}
 
     requested = sys.argv[1:] if len(sys.argv) > 1 else list(ANALYSES.keys())
     invalid = [k for k in requested if k not in ANALYSES]
@@ -224,17 +217,8 @@ def main() -> None:
             print("(per-TF analyses skipped)")
 
     # ── Standalone all-TF figures ─────────────────────────────────────────────
-    FILENAMES = {
-        "volume":      "Volume_All_Timeframes.png",
-        "candle_size": "CandleSize_All_Timeframes.png",
-        "size_cross":   "SizeCross_All_Timeframes.png",
-        "smt_cisd":    "SMT_CISD_All_Timeframes.png",
-        "cisd_fvg":    "CISD_FVG_All_Timeframes.png",
-        "fvg_hold":    "FVG_Hold_All_Timeframes.png",
-        "cisd_fvg_interaction": "CISD_FVG_Interaction_All_Timeframes.png",
-        "sweep":       "Sweep_CISD_All_Timeframes.png",
-        "sssf_swing":  "SSSF_Swing_All_Timeframes.png",
-    }
+    # Derived from ANALYSIS_META — single source of truth for filenames (REFAC-02).
+    FILENAMES = {k: m.filename for k, m in ANALYSIS_META.items() if m.standalone}
     for key in standalone:
         print(f"\nBuilding standalone: {key} ...", end=" ", flush=True)
         fig  = build_standalone_figure(key, prepared)

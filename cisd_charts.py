@@ -422,22 +422,22 @@ def build_csv_rows(keys: list, df_nq: pd.DataFrame, df_es: pd.DataFrame) -> pd.D
 
 def build_figure(tf_label: str, df_nq: pd.DataFrame, df_es: pd.DataFrame, keys: list) -> plt.Figure:
     """One figure per timeframe — all analyses as subplots, NQ & ES compared in each."""
-    from cisd_barriers import ANALYSES  # lazy import to avoid circular dependency
+    from cisd_barriers import ANALYSES, ANALYSIS_META  # lazy import to avoid circular dependency
 
     n = len(keys)
     ncols = 2 if n > 1 else 1
     nrows = (n + 1) // 2
 
-    # Per-subplot height hints (rows of bar chart content)
-    base_h = {"basic": 3, "significance": 3, "mc": 6, "wick": 5,
-              "combined": 10, "volume": 6, "candle_size": 6, "size_cross": 6,
-              "smt_cisd": 4, "cisd_fvg": 6, "fvg_hold": 8,
-              "cisd_fvg_interaction": 10, "sweep": 4, "sssf_swing": 5}
+    # Per-subplot height hints derived from ANALYSIS_META (single source of truth).
+    # Fall back to 4 for any key absent from ANALYSIS_META to preserve prior semantics.
     row_heights = []
     for i, key in enumerate(keys):
         if i % 2 == 0:
             pair = keys[i:i+2]
-            row_heights.append(max(base_h.get(k, 4) for k in pair))
+            row_heights.append(max(
+                ANALYSIS_META[k].per_tf_height if k in ANALYSIS_META else 4
+                for k in pair
+            ))
 
     fig, axes = plt.subplots(
         nrows, ncols,
@@ -486,15 +486,16 @@ def build_standalone_figure(key: str, prepared: dict) -> plt.Figure:
     Dedicated figure for a single analysis showing all 4 timeframes in a 2x2 grid.
     `prepared` = {"NQ": {tf_label: df, ...}, "ES": {tf_label: df, ...}}
     """
-    from cisd_barriers import ANALYSES  # lazy import to avoid circular dependency
+    from cisd_barriers import ANALYSES, ANALYSIS_META  # lazy import to avoid circular dependency
     from matplotlib.patches import Patch
 
     _, compute_fn, chart_fn = ANALYSES[key]
     tf_labels = list(TIMEFRAMES.keys())   # Daily, 4H, 1H, 15min
 
-    base_h = {"volume": 6, "candle_size": 6, "cisd_fvg": 6, "fvg_hold": 8,
-              "cisd_fvg_interaction": 10, "sweep": 4, "sssf_swing": 5}
-    subplot_h = base_h.get(key, 6)
+    # Standalone subplot height derived from ANALYSIS_META (single source of truth).
+    # standalone_height is None for non-standalone keys; fall back to 6 in that case.
+    meta = ANALYSIS_META.get(key)
+    subplot_h = (meta.standalone_height if meta is not None and meta.standalone_height is not None else 6)
     fig, axes = plt.subplots(
         2, 2,
         figsize=(20, subplot_h * 2),
