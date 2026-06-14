@@ -104,15 +104,28 @@ def compute_mc(df: pd.DataFrame) -> dict:
 
 
 def compute_significance(df: pd.DataFrame) -> dict:
-    """Barrier run rate using stricter CISD (close vs prev high/low).
+    """Barrier run rate using a stricter CISD definition: close past prev high/low.
 
-    This function intentionally uses a stricter close-past-prev-high/low
-    definition rather than the precomputed ``cisd_type`` column.  The
-    standard ``cisd_type`` fires when ``close > prev_close`` (for bullish),
-    whereas this function requires ``close > prev_high`` — a materially
-    different condition that tests whether the close pushed *past* the
-    prior candle's wick, not merely past its close.  The semantic
-    distinction is preserved intentionally: this is NOT a bug.
+    **Intentional cisd_type bypass** — this is the only compute_* function that
+    does NOT consume the precomputed ``cisd_type`` column.
+
+    (a) Stricter definition: a CISD here requires the close to surpass the
+        *previous bar's high* (bullish: ``close > prev_high``) or fall below
+        the *previous bar's low* (bearish: ``close < prev_low``).  This is
+        materially stricter than the standard ``cisd_type`` column, which fires
+        when ``close > prev_close`` / ``close < prev_close`` with an opposite
+        previous direction — a much weaker condition that does not require the
+        close to clear the prior candle's wick.
+
+    (b) Why ``cisd_type`` is not consumed: the two definitions measure different
+        event populations.  Using ``cisd_type`` here would count bars that close
+        past the prior close but not past the prior high/low, changing the
+        measured population and the resulting rate.
+
+    (c) This divergence is intentional and behavior-locked, not a bug.  It is
+        the sole analysis that defines its own event set; altering the detection
+        logic would shift characterization numbers and invalidate any OOS
+        validation based on this metric.  Do not "fix" it to use ``cisd_type``.
     """
     idx_arr = df.index
     totals = {"bullish": 0, "bearish": 0}
