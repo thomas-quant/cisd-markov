@@ -35,6 +35,7 @@ from cisd_charts import (
     chart_sweep,
     chart_sssf_swing,
     chart_candle1_followthrough,
+    chart_post_cisd_context,
 )
 
 
@@ -592,6 +593,63 @@ def compute_candle1_followthrough(df: pd.DataFrame) -> dict:
     return stats
 
 
+def compute_post_cisd_context(df: pd.DataFrame) -> dict:
+    """Barrier continuation rate after failed candle[1] bucketed by candle[2] gap direction.
+
+    Precondition (D-06): candle[1] fails to close past candle[0]'s extreme.
+    Buckets per direction: failed_gap_with / failed_gap_against / failed_gap_flat
+    (from precomputed candle2_gap_dir).
+
+    Reading-B (D-04) additional cut: candle2_past_candle1_wick — separate bucket,
+    not multiplied into the gap buckets.
+
+    Continuation is measured with barrier_hit_forward (lookahead from idx+2 — no in-window
+    variant, D-06). Returns {dir: {tag: {total, runs}}}.
+    """
+    _GAP_TAGS = {
+        "gap_with":    "failed_gap_with",
+        "gap_against": "failed_gap_against",
+        "flat":        "failed_gap_flat",
+    }
+    stats = {
+        ct: {
+            "failed_gap_with":           {"total": 0, "runs": 0},
+            "failed_gap_against":        {"total": 0, "runs": 0},
+            "failed_gap_flat":           {"total": 0, "runs": 0},
+            "candle2_past_candle1_wick": {"total": 0, "runs": 0},
+        }
+        for ct in ("bullish", "bearish")
+    }
+
+    ct_arr      = df["cisd_type"].to_numpy(dtype=object)
+    failed_arr  = df["candle1_failed_followthrough"].to_numpy(dtype=bool)
+    gap_dir_arr = df["candle2_gap_dir"].to_numpy(dtype=object)
+    c2wick_arr  = df["candle2_past_candle1_wick"].to_numpy(dtype=bool)
+    event_pos   = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+
+    for pos in event_pos:
+        ct = ct_arr[pos]
+        if ct not in stats:
+            continue
+
+        row = df.iloc[pos]
+
+        # Gap buckets — only if candle[1] failed (precondition)
+        if failed_arr[pos]:
+            gap_tag = _GAP_TAGS.get(gap_dir_arr[pos], "failed_gap_flat")
+            stats[ct][gap_tag]["total"] += 1
+            if barrier_hit_forward(df, pos, row, ct):
+                stats[ct][gap_tag]["runs"] += 1
+
+        # Reading B — separate, no precondition on failed
+        if c2wick_arr[pos]:
+            stats[ct]["candle2_past_candle1_wick"]["total"] += 1
+            if barrier_hit_forward(df, pos, row, ct):
+                stats[ct]["candle2_past_candle1_wick"]["runs"] += 1
+
+    return stats
+
+
 # ── ANALYSES Registry ─────────────────────────────────────────────────────────
 
 ANALYSES = {
@@ -610,6 +668,7 @@ ANALYSES = {
     "sweep":        ("Sweep Confirmation",                   compute_sweep,        chart_sweep),
     "sssf_swing":   ("SSSF Swing",                           compute_sssf_swing,   chart_sssf_swing),
     "candle1_followthrough": ("Candle[1] Follow-Through",    compute_candle1_followthrough, chart_candle1_followthrough),
+    "post_cisd_context":    ("Post-CISD Context",            compute_post_cisd_context,     chart_post_cisd_context),
 }
 
 
@@ -648,6 +707,7 @@ ANALYSIS_META: dict[str, _AnalysisMeta] = {
     "sweep":                _AnalysisMeta(per_tf_height=4,  standalone=True,  standalone_height=4,  filename="Sweep_CISD_All_Timeframes.png"),
     "sssf_swing":           _AnalysisMeta(per_tf_height=5,  standalone=True,  standalone_height=5,  filename="SSSF_Swing_All_Timeframes.png"),
     "candle1_followthrough": _AnalysisMeta(per_tf_height=8,  standalone=True,  standalone_height=8,  filename="Candle1_Followthrough_All_Timeframes.png"),
+    "post_cisd_context":    _AnalysisMeta(per_tf_height=6,  standalone=True,  standalone_height=6,  filename="PostCISD_Context_All_Timeframes.png"),
 }
 
 
@@ -676,4 +736,6 @@ __all__ = [
     # New RES-01 symbols
     "barrier_hit_forward",
     "compute_candle1_followthrough",
+    # New RES-02 symbols
+    "compute_post_cisd_context",
 ]

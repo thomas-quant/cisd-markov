@@ -73,6 +73,7 @@ from cisd_barriers import (
     compute_sweep,
     compute_sssf_swing,
     compute_candle1_followthrough,
+    compute_post_cisd_context,
 )
 
 from cisd_charts import (
@@ -96,6 +97,7 @@ from cisd_charts import (
     chart_sweep,
     chart_sssf_swing,
     chart_candle1_followthrough,
+    chart_post_cisd_context,
     build_csv_rows,
     build_figure,
     build_standalone_figure,
