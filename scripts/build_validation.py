@@ -118,6 +118,9 @@ def build_manifest_rows(
     rows: list[dict[str, object]] = []
 
     def emit(analysis: str, instrument: str, direction: str, bucket: str, n: int, k: int) -> None:
+        if k > n:
+            print(f"[warn] {analysis}/{instrument}/{direction}/{bucket}: k={k} > n={n}; skipping")
+            return
         lo, hi = wilson_ci(n, k)
         rows.append({
             "analysis":   analysis,
