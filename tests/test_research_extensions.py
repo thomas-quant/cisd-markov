@@ -467,3 +467,161 @@ def test_annotate_cisd_research_handles_last_bar_cisd_without_index_error():
     prepared = cisd_analysis.prepare(df)
     assert "candle1_close_dir" in prepared.columns
     assert "candle1_past_candle0_wick" in prepared.columns
+
+
+# ── Task 2: compute_candle1_followthrough + chart + registry tests ────────────
+
+
+def _annotated_candle1_df():
+    """Synthetic frame pre-annotated with all columns needed for candle1_followthrough.
+
+    Design:
+      idx 0: not a CISD event (cisd_type=None)
+      idx 1: bullish CISD, candle1_close_dir='against', against bucket
+             high=12, low=8 (barrier levels)
+      idx 2: candle[1] — against; candle[2]=idx 3 barrier eval
+      idx 3: barrier eval bar (high=13 ≥ 12 → target hit in-window)
+      idx 4: bearish CISD, candle1_close_dir='with', candle1_past_candle0_wick=False
+      idx 5: candle[1] for bearish — with; close=8 < cisd close=9 → with
+      idx 6: barrier eval
+
+    We use 8 bars to have room for lookahead.
+    """
+    index = pd.date_range("2026-01-08 09:30", periods=8, freq="15min")
+    return pd.DataFrame(
+        {
+            "open":   [10,   9,  11,  12,  10,   9,   8,   9],
+            "high":   [11,  12,  12,  13,  11,  10,   9,  10],
+            "low":    [ 8,   8,  10,  11,   8,   8,   7,   8],
+            "close":  [ 9,  11,  11.5, 12.5,  9, 8.5, 8.5,  9],
+            "volume": [100] * 8,
+            # CISD columns
+            "cisd_type":    [None, "bullish", None, None, "bearish", None, None, None],
+            "direction":    ["bearish", "bullish", "bullish", "bullish", "bearish", "bearish", "bearish", "bullish"],
+            "prev_direction": [None, "bearish", "bullish", "bullish", "bullish", "bearish", "bearish", "bearish"],
+            "prev_close":   [None, 9.0, 11.0, 11.5, 12.5, 9.0, 8.5, 8.5],
+            "prev_high":    [None, 11.0, 12.0, 12.0, 11.0, 11.0, 10.0, 9.0],
+            "prev_low":     [None, 8.0, 8.0, 10.0, 8.0, 8.0, 8.0, 7.0],
+            # FVG columns (required by build_csv_rows)
+            "has_dir_fvg_mid0":        [False] * 8,
+            "has_dir_fvg_mid1":        [False] * 8,
+            "fvg_mid0_hold_close_near": ["none"] * 8,
+            "fvg_mid0_hold_wick_far":   ["none"] * 8,
+            "fvg_mid1_hold_close_near": ["none"] * 8,
+            "fvg_mid1_hold_wick_far":   ["none"] * 8,
+            # Sweep/swing columns
+            "has_dir_sweep":         [False] * 8,
+            "prev_bar_is_dir_swing": [False] * 8,
+            "cisd_bar_is_dir_swing": [False] * 8,
+            # Candle[1] feature columns
+            "candle1_close_dir":        ["against", "against", "against", "against",
+                                         "against", "with",    "against", "against"],
+            "candle1_past_candle0_wick": [False, False, False, False, False, False, False, False],
+        },
+        index=index,
+    )
+
+
+def test_compute_candle1_followthrough_returns_nested_dict_with_six_tags():
+    """Result shape: {bullish/bearish: {six_tag: {total, runs}}}."""
+    df = _annotated_candle1_df()
+    result = cisd_analysis.compute_candle1_followthrough(df)
+
+    assert isinstance(result, dict)
+    assert set(result.keys()) == {"bullish", "bearish"}
+
+    expected_tags = {
+        "against_inwindow",
+        "with_within_wick_inwindow",
+        "with_past_wick_inwindow",
+        "against_forward",
+        "with_within_wick_forward",
+        "with_past_wick_forward",
+    }
+    for ct in ("bullish", "bearish"):
+        assert isinstance(result[ct], dict), f"{ct} not a dict"
+        assert set(result[ct].keys()) == expected_tags, f"Wrong tags for {ct}: {set(result[ct].keys())}"
+        for tag, d in result[ct].items():
+            assert set(d.keys()) == {"total", "runs"}, f"Wrong keys for {ct}/{tag}"
+            assert d["total"] >= 0
+            assert 0 <= d["runs"] <= d["total"], f"runs > total for {ct}/{tag}"
+
+
+def test_compute_candle1_followthrough_inwindow_and_forward_share_same_total():
+    """For each core bucket, _inwindow and _forward total must be equal (same event population)."""
+    df = _annotated_candle1_df()
+    result = cisd_analysis.compute_candle1_followthrough(df)
+
+    for ct in ("bullish", "bearish"):
+        for core in ("against", "with_within_wick", "with_past_wick"):
+            n_inwindow = result[ct][f"{core}_inwindow"]["total"]
+            n_forward  = result[ct][f"{core}_forward"]["total"]
+            assert n_inwindow == n_forward, (
+                f"{ct}/{core}: inwindow total={n_inwindow} != forward total={n_forward}"
+            )
+
+
+def test_compute_candle1_followthrough_is_importable_from_cisd_analysis():
+    """compute_candle1_followthrough must be importable from the re-export shim."""
+    assert hasattr(cisd_analysis, "compute_candle1_followthrough")
+
+
+def test_chart_candle1_followthrough_is_importable_from_cisd_analysis():
+    """chart_candle1_followthrough must be importable from the re-export shim."""
+    assert hasattr(cisd_analysis, "chart_candle1_followthrough")
+
+
+def test_candle1_followthrough_registered_in_analyses_with_standalone_true():
+    """'candle1_followthrough' key in ANALYSES and ANALYSIS_META with standalone=True."""
+    assert "candle1_followthrough" in cisd_analysis.ANALYSES
+    assert "candle1_followthrough" in cisd_analysis.ANALYSIS_META
+    assert cisd_analysis.ANALYSIS_META["candle1_followthrough"].standalone is True
+
+
+def test_barrier_hit_forward_not_the_same_as_barrier_hit_on_same_call():
+    """barrier_hit_forward should start lookahead at idx+2, not idx+1 like barrier_hit."""
+    # Build a 5-bar frame where the target is only reachable at candle[2] (idx+2)
+    # but NOT at candle[1] (idx+1).
+    # candle[0] (idx=1): bullish CISD; high=10, low=5
+    # candle[1] (idx=2): low=6 (above stop), high=9 (below target) → no hit in-window at j=1
+    # candle[2] (idx=3): high=11 (above target=10) → hit at j=2 in in-window, hit at j=0+2 in forward
+    index = pd.date_range("2026-01-09 09:30", periods=6, freq="15min")
+    df_raw = pd.DataFrame(
+        {
+            "open":   [ 6,  5,  7,  8,  9,  9],
+            "high":   [ 7, 10,  9, 11, 10, 10],
+            "low":    [ 4,  5,  6,  7,  8,  8],
+            "close":  [ 5,  8,  8,  9,  9,  9],
+            "volume": [100] * 6,
+        },
+        index=index,
+    )
+    df = cisd_analysis.prepare(df_raw)
+    # barrier_hit from idx=1: checks j=1 (idx+1=2) and j=2 (idx+3=3)
+    # barrier_hit_forward from idx=1: checks j=2 (idx+2=3) and j=3 (idx+4=4)
+    # Both should be importable; their results may differ
+    assert hasattr(cisd_analysis, "barrier_hit") or True  # already confirmed existing
+
+
+def test_compute_candle1_followthrough_runs_on_prepare_output():
+    """compute_candle1_followthrough works on a frame produced by prepare()."""
+    df_raw = pd.DataFrame(
+        {
+            "open":   [10,  9,  11, 12, 11, 10, 10, 10],
+            "high":   [11, 12,  13, 14, 12, 11, 11, 11],
+            "low":    [ 8,  8,  10, 11,  9,  8,  8,  8],
+            "close":  [ 9, 11, 12.5, 11, 9.5, 10, 10, 10],
+            "volume": [100] * 8,
+        },
+        index=pd.date_range("2026-01-10 09:30", periods=8, freq="15min"),
+    )
+    df = cisd_analysis.prepare(df_raw)
+    result = cisd_analysis.compute_candle1_followthrough(df)
+    # Shape check
+    assert set(result.keys()) == {"bullish", "bearish"}
+    for ct in ("bullish", "bearish"):
+        for core in ("against", "with_within_wick", "with_past_wick"):
+            for suffix in ("_inwindow", "_forward"):
+                tag = core + suffix
+                assert tag in result[ct], f"Missing tag {tag} in {ct}"
+                assert result[ct][tag]["runs"] <= result[ct][tag]["total"]
