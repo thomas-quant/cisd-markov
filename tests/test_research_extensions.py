@@ -774,11 +774,17 @@ def test_candle2_past_candle1_wick_dtype_is_bool():
 
 
 def test_candle1_failed_is_negation_of_past_candle0_wick_for_events():
-    """For all events, candle1_failed_followthrough == ~candle1_past_candle0_wick."""
+    """For events with idx+1 in range, candle1_failed_followthrough == ~candle1_past_candle0_wick."""
     df = _candle2_gap_frame()
     prepared = cisd_analysis.prepare(df)
     events = prepared[prepared["cisd_type"].notna()]
     for _, row in events.iterrows():
+        pos = prepared.index.get_loc(row.name)
+        if pos + 1 >= len(prepared):
+            # Boundary event: both default to False (out-of-range, can't be computed)
+            assert row["candle1_failed_followthrough"] == False
+            assert row["candle1_past_candle0_wick"] == False
+            continue
         assert row["candle1_failed_followthrough"] == (not row["candle1_past_candle0_wick"]), (
             f"Mismatch at {row.name}: "
             f"failed={row['candle1_failed_followthrough']}, "
