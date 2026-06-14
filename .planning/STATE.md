@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-06-14T06:09:07.054Z"
-last_activity: 2026-06-14 -- Phase 05 planning complete
+last_updated: "2026-06-14T07:27:43.092Z"
+last_activity: 2026-06-14
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 13
-  completed_plans: 11
+  completed_plans: 12
   percent: 80
 ---
 
@@ -20,16 +20,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-14)
 
 **Core value:** A reported edge can be trusted — every published rate is sample-size gated, carries a confidence interval, and is confirmed out-of-sample.
-**Current focus:** Phase 5 — new cisd research on the validated engine
+**Current focus:** Phase 05 — new-cisd-research-on-the-validated-engine
 
 ## Current Position
 
-Phase: 5
-Plan: Not started
+Phase: 05 (new-cisd-research-on-the-validated-engine) — EXECUTING
+Plan: 2 of 2
 Status: Ready to execute
-Last activity: 2026-06-14 -- Phase 05 planning complete
+Last activity: 2026-06-14
 
-Progress: [████████░░] 60%
+Progress: [█████████░] 92%
 
 ## Performance Metrics
 
@@ -57,6 +57,7 @@ Progress: [████████░░] 60%
 | Phase 01 P01 | 246 | 3 tasks | 6 files |
 | Phase 01-reproducibility-foundation-behavior-lock P02 | 8m | 3 tasks | 7 files |
 | Phase 01-reproducibility-foundation-behavior-lock P03 | 780 | 2 tasks | 2 files |
+| Phase 05-new-cisd-research-on-the-validated-engine P01 | 92 | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,9 @@ Recent decisions affecting current work:
 - [Phase 03]: Slice-suffixed manifest filenames (`_discovery.csv` / `_oos.csv`) prevent OOS runs from clobbering the discovery manifest
 - [Phase 03]: Bearish Daily edges failed OOS comprehensively (24 of 48 not-confirmed buckets); bullish intraday (15min, 1H) confirmed robustly across both instruments
 - [Phase 03]: SMT lift at 15min confirmed (+2–4pp); Daily ES bearish and 4H ES bearish w/ SMT not-confirmed
+- [Phase 05-01]: candle[0] high/low as barrier target/stop (D-01) — R-unit unchanged, RES-01 comparable to README
+- [Phase 05-01]: In-window + forward re-anchored side by side (D-02) — tautology gap made visible per bucket
+- [Phase 05-01]: Generic else branch in build_manifest_rows handles new key automatically — zero code changes to build_validation.py
 
 ### Pending Todos
 
@@ -99,6 +103,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-14T05:39:45.062Z
+Last session: 2026-06-14T07:27:43.038Z
 Stopped at: Phase 5 context gathered
-Resume file: .planning/phases/05-new-cisd-research-on-the-validated-engine/05-CONTEXT.md
+Resume file: None
