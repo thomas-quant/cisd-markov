@@ -140,7 +140,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 05-01-PLAN.md — `candle[1]` follow-through: in-window + forward re-anchored barrier per 3-way close bucket, wired through the validation harness (RES-01, RES-03)
+- [x] 05-01-PLAN.md — `candle[1]` follow-through: in-window + forward re-anchored barrier per 3-way close bucket, wired through the validation harness (RES-01, RES-03)
 
 **Wave 2** *(blocked on 05-01; same six modules, layers cleanly to avoid concurrent edits; pytest must be green first)*
 
@@ -158,4 +158,4 @@ Phases 3 and 4 both depend only on Phases 1-2 and are reorderable/parallelizable
 | 2. Validation Harness | 2/2 | Complete    | 2026-06-12 |
 | 3. Re-Validate & Republish Existing Findings | 3/3 | Complete    | 2026-06-14 |
 | 4. Test-Gated Modular Refactor | 3/3 | Complete    | 2026-06-14 |
-| 5. New CISD Research on the Validated Engine | 0/2 | Not started | - |
+| 5. New CISD Research on the Validated Engine | 1/2 | In Progress|  |
