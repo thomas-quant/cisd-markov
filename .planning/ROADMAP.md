@@ -112,7 +112,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 04-01-PLAN.md — Split god-file into `cisd_data` / `cisd_barriers` / `cisd_charts` with a thin re-export shim + main() orchestrator (REFAC-01)
+- [x] 04-01-PLAN.md — Split god-file into `cisd_data` / `cisd_barriers` / `cisd_charts` with a thin re-export shim + main() orchestrator (REFAC-01)
 
 **Wave 2** *(blocked on 04-01; pytest must be green first)*
 
@@ -152,5 +152,5 @@ Phases 3 and 4 both depend only on Phases 1-2 and are reorderable/parallelizable
 | 1. Reproducibility Foundation & Behavior Lock | 3/3 | Complete    | 2026-06-12 |
 | 2. Validation Harness | 2/2 | Complete    | 2026-06-12 |
 | 3. Re-Validate & Republish Existing Findings | 3/3 | Complete    | 2026-06-14 |
-| 4. Test-Gated Modular Refactor | 0/3 | Not started | - |
+| 4. Test-Gated Modular Refactor | 1/3 | In Progress|  |
 | 5. New CISD Research on the Validated Engine | 0/2 | Not started | - |
