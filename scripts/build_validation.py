@@ -252,13 +252,15 @@ def main() -> None:
 
     dfs_1m = {inst: load_1m(path) for inst, path in INSTRUMENTS.items()}
 
-    # Try to include SMT tagging; fall back gracefully if the external scanner
-    # is unavailable so the rest of the study still runs.
+    # Try to include SMT tagging; fall back gracefully only if the external
+    # scanner package is absent or unimportable.  Any other exception
+    # (data error, resampling failure) should propagate so the researcher
+    # sees a real traceback rather than a silent SMT disable.
     try:
         _first_rule = next(iter(TIMEFRAMES.values()))
         prepare_pair(dfs_1m["NQ"], dfs_1m["ES"], _first_rule, with_swing_smt=True)
         with_smt = True
-    except Exception as exc:  # noqa: BLE001
+    except (FileNotFoundError, ImportError) as exc:
         print(f"[warn] SMT unavailable ({exc}); swing SMT columns will be absent")
         with_smt = False
 
