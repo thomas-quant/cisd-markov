@@ -145,7 +145,11 @@ def build_manifest_rows(
         for instrument, df in (("NQ", df_nq), ("ES", df_es)):
             try:
                 data = compute_fn(df)
-            except Exception:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
+                print(
+                    f"[warn] {key}/{instrument}/{tf_label}: compute failed"
+                    f" ({type(exc).__name__}: {exc}); skipping"
+                )
                 continue  # degrade gracefully on empty/missing slice
 
             if key in ("basic", "significance"):
