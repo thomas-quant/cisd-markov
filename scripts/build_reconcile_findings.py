@@ -54,6 +54,18 @@ _OUTPUT_COLS = [
 
 # ── Verdict logic (D-01 / D-02 / D-03) ───────────────────────────────────────
 
+def _side(r: float) -> int:
+    """Return 1 if r > 0.50, -1 if r < 0.50, 0 if r == 0.50 exactly.
+
+    Exact 0.50 is treated as neither side — no directional evidence.
+    """
+    if r > 0.50:
+        return 1
+    if r < 0.50:
+        return -1
+    return 0  # exact tie — neither side
+
+
 def determine_verdict(
     discovery_rate: float,
     discovery_n: float | None,
@@ -94,8 +106,9 @@ def determine_verdict(
         # Eligible bucket with no OOS data => not-confirmed, never below-n
         return "not-confirmed"
 
-    # D-02: confirmed iff OOS rate is on the same side of 0.50 as discovery rate
-    if (discovery_rate > 0.50) == (oos_rate > 0.50):
+    # D-02: confirmed iff both rates are on the same non-boundary side of 0.50.
+    # Exact 0.50 (_side == 0) counts as no directional evidence — not-confirmed.
+    if _side(discovery_rate) != 0 and _side(oos_rate) != 0 and _side(discovery_rate) == _side(oos_rate):
         return "confirmed"
     return "not-confirmed"
 
