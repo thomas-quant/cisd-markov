@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Validation Harness** - Sacred date holdout, binomial confidence intervals, and sample-size gating on every reported rate (completed 2026-06-12)
 - [x] **Phase 3: Re-Validate & Republish Existing Findings** - Re-run README headline results through the harness and republish with n + CI + OOS status (completed 2026-06-13)
 - [x] **Phase 4: Test-Gated Modular Refactor** - Split the god-file, consolidate the registry, and vectorize the hot loops with all characterization tests still green (completed 2026-06-14)
-- [ ] **Phase 5: New CISD Research on the Validated Engine** - Add `candle[1]` follow-through and multi-bar post-CISD context studies, reporting through the harness from the start
+- [x] **Phase 5: New CISD Research on the Validated Engine** - Add `candle[1]` follow-through and multi-bar post-CISD context studies, reporting through the harness from the start (completed 2026-07-04)
 
 ## Phase Details
 
@@ -144,7 +144,7 @@ Plans:
 
 **Wave 2** *(blocked on 05-01; same six modules, layers cleanly to avoid concurrent edits; pytest must be green first)*
 
-- [ ] 05-02-PLAN.md — Multi-bar post-CISD context: failed `candle[1]` + signed `candle[2]` gap buckets (+ Reading-B `candle[2]`-beyond-`candle[1]` cut), forward-anchored, on all 4 TFs, wired through the harness (RES-02, RES-03)
+- [x] 05-02-PLAN.md — Multi-bar post-CISD context: failed `candle[1]` + signed `candle[2]` gap buckets (+ Reading-B `candle[2]`-beyond-`candle[1]` cut), forward-anchored, on all 4 TFs, wired through the harness (RES-02, RES-03)
 
 ## Progress
 
@@ -158,4 +158,4 @@ Phases 3 and 4 both depend only on Phases 1-2 and are reorderable/parallelizable
 | 2. Validation Harness | 2/2 | Complete    | 2026-06-12 |
 | 3. Re-Validate & Republish Existing Findings | 3/3 | Complete    | 2026-06-14 |
 | 4. Test-Gated Modular Refactor | 3/3 | Complete    | 2026-06-14 |
-| 5. New CISD Research on the Validated Engine | 1/2 | In Progress|  |
+| 5. New CISD Research on the Validated Engine | 2/2 | Complete   | 2026-07-04 |
