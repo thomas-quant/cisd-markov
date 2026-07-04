@@ -45,7 +45,7 @@ Requirements for this milestone. Each maps to a roadmap phase. Sequenced by depe
 ### New Research
 
 - [x] **RES-01**: A `candle[1]` follow-through analysis measures whether the bar after a CISD predicts continuation (close in CISD direction; close beyond `candle[1]`'s wick)
-- [ ] **RES-02**: A multi-bar post-CISD context analysis measures the `candle2_gap_context` / `post_cisd_reversal_context` regime (failed `candle[1]` + gap on `candle[2]`)
+- [x] **RES-02**: A multi-bar post-CISD context analysis measures the `candle2_gap_context` / `post_cisd_reversal_context` regime (failed `candle[1]` + gap on `candle[2]`)
 - [x] **RES-03**: New studies report through the validation harness (n + CI, IS/OOS) from the start — no new in-sample-only findings are produced
 
 ## v2 Requirements
@@ -100,7 +100,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | REFAC-03 | Phase 4 | Complete |
 | REFAC-04 | Phase 4 | Complete |
 | RES-01 | Phase 5 | Complete |
-| RES-02 | Phase 5 | Pending |
+| RES-02 | Phase 5 | Complete |
 | RES-03 | Phase 5 | Complete |
 
 **Coverage:**
