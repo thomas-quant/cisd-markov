@@ -375,6 +375,26 @@ The current CLI surface is limited to the analysis keys listed below.
   - `prev_bar_is_swing` corresponds to `candle[-1]`
   - `cisd_bar_is_swing` corresponds to `candle[0]`
 
+## Validation Methodology — Harder Evidence Bar (v2.0)
+
+Phase 6 adds two additive validation capabilities to `scripts/build_validation.py`. Neither changes an existing manifest column or a previously published rate — both are new columns / new sibling artifacts layered on top of the v1.0 harness (sacred chronological holdout, Wilson CI, `min_n_pass` gate).
+
+**Multiple-comparisons (FDR) correction:**
+
+- Every bucket in the discovery manifest now carries a `p_value` testing `H0: rate = 0.5` (the fixed coin-flip null, not a bucket's own baseline rate) — a two-sided normal-approximation z-test (`p_value_vs_half`).
+- A single global Benjamini-Hochberg step-up correction (`bh_correct`) is applied across **every bucket, across every analysis × timeframe × instrument × direction, in one pass** — never grouped per-analysis-key — because the point is to account for the full extent of data-snooping across the whole engine, not one chart at a time.
+- The correction fires at the **discovery-manifest stage only** (`validation_manifest_discovery.csv`), before the sacred OOS look; it is a pre-registration-style gate on which buckets earn that look. The OOS manifest is unaffected.
+- Adds `bh_rank`, `bh_q_value`, `bh_significant`, and `corrected_pass` columns to `validation_manifest_discovery.csv`. `corrected_pass = min_n_pass AND bh_significant` — the harder evidence bar requires clearing both the sample-size gate and FDR significance.
+
+**Walk-forward (rolling-window) validation:**
+
+- Run with `python3 scripts/build_validation.py --walk-forward`. Output: a new sibling artifact, `output/validation_manifest_walkforward.csv` — the existing `validation_manifest_discovery.csv` / `validation_manifest_oos.csv` files and the sacred OOS banner are never touched by this path.
+- Windows are **expanding / anchored**: each of the 4 folds trains on all discovery history from the start through its fold boundary, then tests on the following chunk — chosen because the discovery history is finite and every available bar should be used rather than discarded.
+- Fold boundaries are **4 frozen calendar dates** (`WALK_FORWARD_FOLDS` in `cisd_data.py`), derived once as the 20th/40th/60th/80th-percentile dates of the discovery-region calendar (mirroring how `OOS_START` itself was derived and frozen) — not recomputed at runtime, and every boundary is strictly before `OOS_START`, so walk-forward never consumes the one sacred OOS evaluation.
+- Each fold is scored by `evaluate_fold()`: both the anchored train window and the test chunk must independently clear `MIN_N` (a per-fold sample-size gate), and the test rate must confirm the train rate's same non-boundary side of 50% (an exact 50% train rate makes no directional prediction and cannot pass).
+- The per-bucket aggregate `wf_verdict` (`walk_forward_verdict()`) requires a **majority — strictly more than 50% — of folds to pass** (`wf-robust`); exactly 50% is `wf-fragile`, not robust. `below-n` folds still count in the denominator.
+- `validation_manifest_walkforward.csv` columns: `analysis, timeframe, instrument, direction, bucket, fold_index, train_end, test_end, train_rate, train_n, test_rate, test_n, fold_verdict, wf_verdict`.
+
 ## Configuration
 
 Edit constants at the top of `cisd_analysis.py`:

@@ -10,6 +10,7 @@ from scripts.build_validation import (
     slice_df, wilson_ci, n_gate, build_manifest_rows,
     p_value_vs_half, bh_correct, apply_bh_correction,
     slice_fold, evaluate_fold, walk_forward_verdict,
+    build_walkforward_rows,
 )
 from cisd_analysis import WALK_FORWARD_FOLDS
 
@@ -507,3 +508,69 @@ def test_walk_forward_verdict_below_n_folds_can_tip_to_fragile() -> None:
 def test_walk_forward_verdict_no_folds() -> None:
     """An empty fold list must return 'no-folds' (empty guard)."""
     assert walk_forward_verdict([]) == "no-folds"
+
+
+# ── build_walkforward_rows tests (plan 06-02, Task 3) ─────────────────────────
+
+def _synthetic_discovery_frame() -> pd.DataFrame:
+    """A synthetic daily frame spanning well before WALK_FORWARD_FOLDS[0] up
+    through OOS_START - 1 day, so every one of the 4 folds' train and test
+    windows contains bars."""
+    oos_boundary = pd.Timestamp(cisd_analysis.OOS_START)
+    start = oos_boundary - pd.Timedelta(days=1600)
+    idx = pd.date_range(start=start, periods=1600, freq="D")
+    return pd.DataFrame({"close": np.ones(len(idx))}, index=idx)
+
+
+def test_build_walkforward_rows_schema_and_verdicts() -> None:
+    """build_walkforward_rows must emit one row per (bucket x fold) with
+    fold_index/train_end/test_end/fold_verdict columns, plus a per-bucket
+    wf_verdict (D-07) that is identical across every fold row of that bucket."""
+    df_nq = _synthetic_discovery_frame()
+    df_es = df_nq.copy()
+
+    mock_compute = lambda df: _basic_compute_return()  # noqa: E731
+    fake_analyses = {"basic": ("Basic", mock_compute, None)}
+
+    with patch("scripts.build_validation.ANALYSES", fake_analyses):
+        rows = build_walkforward_rows(["basic"], df_nq, df_es, "Daily")
+
+    assert len(rows) > 0, "Expected at least one walk-forward row"
+    REQUIRED_COLS = {
+        "analysis", "timeframe", "instrument", "direction", "bucket",
+        "fold_index", "train_end", "test_end",
+        "train_rate", "train_n", "test_rate", "test_n",
+        "fold_verdict", "wf_verdict",
+    }
+    for row in rows:
+        missing = REQUIRED_COLS - row.keys()
+        assert not missing, f"Row missing columns: {missing}"
+
+    fold_indexes = {row["fold_index"] for row in rows}
+    assert fold_indexes == {1, 2, 3, 4}, f"Expected folds 1-4, got {fold_indexes}"
+
+    # Every bucket's fold rows must share one consistent aggregate wf_verdict.
+    by_bucket: dict[tuple, set] = {}
+    for row in rows:
+        key = (row["analysis"], row["timeframe"], row["instrument"], row["direction"], row["bucket"])
+        by_bucket.setdefault(key, set()).add(row["wf_verdict"])
+    for key, verdicts in by_bucket.items():
+        assert len(verdicts) == 1, f"Bucket {key} has inconsistent wf_verdict across folds: {verdicts}"
+
+
+def test_build_walkforward_rows_never_writes_csv() -> None:
+    """build_walkforward_rows is a pure in-memory aggregation — it must never
+    perform a CSV write itself (only main()'s --walk-forward branch writes
+    output/validation_manifest_walkforward.csv), so the discovery/OOS
+    manifests are never touched by the walk-forward code path (D-04)."""
+    df_nq = _synthetic_discovery_frame()
+    df_es = df_nq.copy()
+
+    mock_compute = lambda df: _basic_compute_return()  # noqa: E731
+    fake_analyses = {"basic": ("Basic", mock_compute, None)}
+
+    with patch("scripts.build_validation.ANALYSES", fake_analyses), \
+         patch.object(pd.DataFrame, "to_csv", side_effect=AssertionError("must not write CSV")):
+        rows = build_walkforward_rows(["basic"], df_nq, df_es, "Daily")
+
+    assert len(rows) > 0
