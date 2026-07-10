@@ -183,3 +183,12 @@ None - no external service configuration required.
 ---
 *Phase: 06-harder-evidence-bar-multiple-comparisons-correction-walk-for*
 *Completed: 2026-07-10*
+
+## Self-Check: PASSED
+
+- FOUND: scripts/build_validation.py
+- FOUND: tests/test_validation_harness.py
+- FOUND: .planning/phases/06-harder-evidence-bar-multiple-comparisons-correction-walk-for/06-01-SUMMARY.md
+- FOUND commit: c06573e
+- FOUND commit: b8099b0
+- FOUND commit: 2a8069e
