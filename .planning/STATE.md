@@ -4,9 +4,9 @@ milestone: v2.0
 milestone_name: Rigorous Validation & Post-CISD Modeling
 current_phase: 6
 current_phase_name: Harder Evidence Bar — Multiple-Comparisons Correction & Walk-Forward Validation
-status: planning
+status: executing
 stopped_at: Phase 6 context gathered
-last_updated: "2026-07-10T17:05:37.156Z"
+last_updated: "2026-07-10T17:28:56.296Z"
 last_activity: 2026-07-10
 last_activity_desc: v2.0 roadmap created (Phases 6–8); all 5 requirements mapped
 progress:
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 Phase: 6 of 8 (Harder Evidence Bar — Multiple-Comparisons Correction & Walk-Forward Validation)
 Plan: — (not yet planned)
-Status: Ready to plan
+Status: Ready to execute
 Last activity: 2026-07-10 — v2.0 roadmap created (Phases 6–8); all 5 requirements mapped
 
 Progress: [░░░░░░░░░░] 0%
