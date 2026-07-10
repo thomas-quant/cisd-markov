@@ -479,6 +479,107 @@ def walk_forward_verdict(fold_verdicts: list[str]) -> str:
     return "wf-robust" if passes > total / 2 else "wf-fragile"
 
 
+BUCKET_KEYS = ("analysis", "timeframe", "instrument", "direction", "bucket")
+
+
+def build_walkforward_rows(
+    keys: list[str],
+    df_nq: pd.DataFrame,
+    df_es: pd.DataFrame,
+    tf_label: str,
+) -> list[dict[str, object]]:
+    """Build long-form walk-forward manifest rows for one timeframe's NQ/ES frames.
+
+    Iterates the 4 anchored folds implied by WALK_FORWARD_FOLDS (D-06): fold
+    i's test chunk is ``[WALK_FORWARD_FOLDS[i], next_boundary)`` where
+    ``next_boundary`` is ``WALK_FORWARD_FOLDS[i+1]`` for the first three folds
+    and ``OOS_START`` for the last fold, and its train window is every
+    discovery bar strictly before the chunk start (anchored/expanding,
+    D-05). Both windows are carved via ``slice_fold()``, which clamps to the
+    discovery region (D-04) — this function never calls
+    ``slice_df(df, oos=True)`` and never touches the sacred OOS slice.
+
+    For each fold: computes bucket rate/n on the train and test halves via
+    ``build_manifest_rows()`` (reusing the existing per-bucket dispatch and
+    its graceful compute-failure warn+skip), joins train<->test on the five
+    bucket keys (``BUCKET_KEYS``: analysis, timeframe, instrument, direction,
+    bucket), and evaluates the fold via ``evaluate_fold()``. A bucket missing
+    from either half of a fold (e.g. a compute failure or an empty slice) is
+    silently absent from that fold's output rows — it simply contributes one
+    fewer fold to that bucket's aggregate, matching the project's graceful-
+    degradation convention.
+
+    After all folds, groups rows by ``BUCKET_KEYS`` and computes each
+    bucket's aggregate ``wf_verdict`` via ``walk_forward_verdict()`` (D-07)
+    over that bucket's ``fold_verdict`` sequence, writing the same
+    ``wf_verdict`` onto every fold row of that bucket — so a bucket present
+    in fewer than 4 folds still gets a ``wf_verdict`` computed over the folds
+    it has.
+
+    This function performs no I/O — it is a pure in-memory aggregation.
+    Only the ``--walk-forward`` branch of ``main()`` writes
+    ``output/validation_manifest_walkforward.csv``; the discovery/OOS
+    manifests are never written or read here.
+
+    Returns
+    -------
+    list[dict[str, object]]
+        One row per (bucket x fold) with columns: analysis, timeframe,
+        instrument, direction, bucket, fold_index (1-based), train_end,
+        test_end, train_rate, train_n, test_rate, test_n, fold_verdict,
+        wf_verdict.
+    """
+    fold_boundaries = list(WALK_FORWARD_FOLDS) + [OOS_START]
+    fold_specs = list(zip(fold_boundaries[:-1], fold_boundaries[1:]))
+
+    fold_rows: list[dict[str, object]] = []
+    for fold_index, (train_end, test_end) in enumerate(fold_specs, start=1):
+        train_nq, test_nq = slice_fold(df_nq, train_end, test_end)
+        train_es, test_es = slice_fold(df_es, train_end, test_end)
+
+        train_by_key = {
+            tuple(row[k] for k in BUCKET_KEYS): row
+            for row in build_manifest_rows(keys, train_nq, train_es, tf_label, "wf_train")
+        }
+        test_by_key = {
+            tuple(row[k] for k in BUCKET_KEYS): row
+            for row in build_manifest_rows(keys, test_nq, test_es, tf_label, "wf_test")
+        }
+
+        for bucket_key in sorted(set(train_by_key) & set(test_by_key)):
+            tr = train_by_key[bucket_key]
+            te = test_by_key[bucket_key]
+            verdict = evaluate_fold(tr["rate"], tr["n"], te["rate"], te["n"])
+            analysis, timeframe, instrument, direction, bucket = bucket_key
+            fold_rows.append({
+                "analysis":     analysis,
+                "timeframe":    timeframe,
+                "instrument":   instrument,
+                "direction":    direction,
+                "bucket":       bucket,
+                "fold_index":   fold_index,
+                "train_end":    train_end,
+                "test_end":     test_end,
+                "train_rate":   tr["rate"],
+                "train_n":      tr["n"],
+                "test_rate":    te["rate"],
+                "test_n":       te["n"],
+                "fold_verdict": verdict,
+            })
+
+    by_bucket: dict[tuple, list[int]] = {}
+    for i, row in enumerate(fold_rows):
+        key = tuple(row[k] for k in BUCKET_KEYS)
+        by_bucket.setdefault(key, []).append(i)
+
+    for idxs in by_bucket.values():
+        wf = walk_forward_verdict([fold_rows[i]["fold_verdict"] for i in idxs])
+        for i in idxs:
+            fold_rows[i]["wf_verdict"] = wf
+
+    return fold_rows
+
+
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def parse_args() -> argparse.Namespace:
@@ -488,7 +589,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--oos",
         action="store_true",
-        help="Evaluate on the OOS (out-of-sample) slice. Default: discovery (train) slice.",
+        help=(
+            "Evaluate on the OOS (out-of-sample) slice. Default: discovery"
+            " (train) slice. Ignored if --walk-forward is also passed."
+        ),
+    )
+    parser.add_argument(
+        "--walk-forward",
+        action="store_true",
+        help=(
+            "Evaluate across the 4 sequential walk-forward folds carved from"
+            " the discovery slice (D-04/D-05/D-06); writes"
+            " output/validation_manifest_walkforward.csv and never touches"
+            " the discovery/OOS manifests or the sacred OOS banner. Takes"
+            " precedence over --oos if both are passed."
+        ),
     )
     return parser.parse_args()
 
@@ -497,6 +612,45 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+
+    # D-04: walk-forward is entirely additive and never consumes the sacred
+    # OOS slice, so it branches out before the _OOS_BANNER / discovery-oos
+    # slice logic below and never writes the discovery/oos manifest paths.
+    if args.walk_forward:
+        print(
+            f"Walk-forward: {len(WALK_FORWARD_FOLDS)} folds over the discovery"
+            f" slice (WALK_FORWARD_FOLDS={WALK_FORWARD_FOLDS},"
+            f" OOS_START={OOS_START}, MIN_N={MIN_N})"
+        )
+
+        dfs_1m = {inst: load_1m(path) for inst, path in INSTRUMENTS.items()}
+
+        try:
+            _first_rule = next(iter(TIMEFRAMES.values()))
+            prepare_pair(dfs_1m["NQ"], dfs_1m["ES"], _first_rule, with_swing_smt=True)
+            with_smt = True
+        except (FileNotFoundError, ImportError) as exc:
+            print(f"[warn] SMT unavailable ({exc}); swing SMT columns will be absent")
+            with_smt = False
+
+        all_keys = list(ANALYSES.keys())
+        wf_rows: list[dict[str, object]] = []
+        for tf_label, tf_rule in TIMEFRAMES.items():
+            df_nq, df_es = prepare_pair(dfs_1m["NQ"], dfs_1m["ES"], tf_rule, with_swing_smt=with_smt)
+            wf_rows.extend(build_walkforward_rows(all_keys, df_nq, df_es, tf_label))
+
+        wf_out = _manifest_path("walkforward")
+        wf_out.parent.mkdir(exist_ok=True)
+        pd.DataFrame(wf_rows).to_csv(wf_out, index=False)
+
+        verdict_counts: dict[str, int] = {}
+        for row in wf_rows:
+            verdict_counts[row["wf_verdict"]] = verdict_counts.get(row["wf_verdict"], 0) + 1
+        print(
+            f"Walk-forward manifest → {wf_out} ({len(wf_rows)} rows;"
+            f" wf_verdict counts: {verdict_counts})"
+        )
+        return
 
     if args.oos:
         print(_OOS_BANNER)
