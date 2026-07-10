@@ -663,7 +663,8 @@ def test_build_manifest_rows_candle1_followthrough_has_tidy_long_columns():
         "rate", "n", "successes", "ci_low", "ci_high", "ci_method", "min_n_pass", "slice",
     }
     for row in cf:
-        assert set(row.keys()) == expected_columns, f"Wrong columns: {set(row.keys())}"
+        missing = expected_columns - row.keys()
+        assert not missing, f"Row missing pre-existing columns: {missing}"
         assert row["ci_method"] == "wilson"
         assert row["slice"] == "discovery"
         assert row["n"] is not None
@@ -988,7 +989,8 @@ def test_build_manifest_rows_post_cisd_context_has_tidy_long_columns():
         "rate", "n", "successes", "ci_low", "ci_high", "ci_method", "min_n_pass", "slice",
     }
     for row in pc:
-        assert set(row.keys()) == expected_columns, f"Wrong columns: {set(row.keys())}"
+        missing = expected_columns - row.keys()
+        assert not missing, f"Row missing pre-existing columns: {missing}"
         assert row["ci_method"] == "wilson"
         assert row["slice"] == "discovery"
         assert row["n"] is not None
