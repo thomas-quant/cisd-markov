@@ -2,9 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Rigorous Validation & Post-CISD Modeling
+current_phase: 6
+current_phase_name: Harder Evidence Bar — Multiple-Comparisons Correction & Walk-Forward Validation
 status: planning
-last_updated: "2026-07-10T17:10:00.000Z"
+stopped_at: Phase 6 context gathered
+last_updated: "2026-07-10T17:05:37.156Z"
 last_activity: 2026-07-10
+last_activity_desc: v2.0 roadmap created (Phases 6–8); all 5 requirements mapped
 progress:
   total_phases: 3
   completed_phases: 0
@@ -95,9 +99,9 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-10 17:10
-Stopped at: v2.0 roadmap created (Phases 6–8); REQUIREMENTS traceability filled
-Resume file: None
+Last session: 2026-07-10T17:05:37.082Z
+Stopped at: Phase 6 context gathered
+Resume file: .planning/phases/06-harder-evidence-bar-multiple-comparisons-correction-walk-for/06-CONTEXT.md
 
 ## Operator Next Steps
 
