@@ -18,6 +18,16 @@ A reported edge can be trusted: every published rate is sample-size gated, carri
 - Existing findings were republished with discovery/OOS verdicts; two new post-CISD studies were added to the same harness.
 - Closeout is an override: Phase 3 still has five human QA checks, and Phase 5 lacks a formal verification report. See `.planning/MILESTONES.md` and `.planning/STATE.md`.
 
+## Current Milestone: v2.0 Rigorous Validation & Post-CISD Modeling
+
+**Goal:** Upgrade the validation harness with multiple-comparisons correction and walk-forward validation, then use that harder evidence bar to decide whether the post-CISD context tags justify a small ML model.
+
+**Target features:**
+- MHT-01 — multiple-comparisons / data-snooping correction across the full bucket grid
+- WF-01 — walk-forward / rolling-window validation, supplementing the single sacred discovery/OOS split
+- Explicit reversal barrier for RES-02 — whether `candle[0]`'s opposite extreme is hit first, not just a depressed continuation rate
+- ML-01 — `post_cisd_ml`, gated on the discrete post-CISD tags first showing a real, corrected, OOS-confirmed effect
+
 ## Requirements
 
 ### Validated
@@ -31,14 +41,16 @@ A reported edge can be trusted: every published rate is sample-size gated, carri
 
 ### Active
 
-- [ ] Complete the recorded Phase 3 human QA checks and produce a formal Phase 5 verification report.
-- [ ] Define the next research milestone and its acceptance criteria.
+- [ ] Multiple-comparisons / data-snooping correction applied across the validation harness's full bucket grid (MHT-01).
+- [ ] Walk-forward / rolling-window validation supplementing the single sacred discovery/OOS split (WF-01).
+- [ ] Explicit reversal barrier for RES-02 — measure whether `candle[0]`'s opposite extreme is hit first, not just a depressed continuation rate.
+- [ ] Validation manifest re-run under the corrected methodology so `post_cisd_context` and `candle1_followthrough` carry real, corrected, OOS-confirmed rates.
+- [ ] `post_cisd_ml` — a small model over the post-CISD context features, built only once the discrete tags clear the corrected evidence bar (ML-01).
 
 ### Out of Scope
 
-- Multiple-comparisons correction and walk-forward validation remain the next rigor tier.
-- `post_cisd_ml` remains deferred until the discrete post-CISD tags demonstrate durable value.
 - Live signaling, trading productization, and instruments beyond NQ/ES remain outside the research-engine scope.
+- Phase 3's human QA checks and Phase 5's formal verification report remain open from v1.0 closeout — process debt, not v2.0 research scope. Tracked in `.planning/STATE.md` Deferred Items.
 
 ## Context
 
@@ -54,12 +66,25 @@ The codebase contains approximately 7,900 lines of Python and retains its offlin
 | Single analysis registry | Avoid synchronized edits and omitted output wiring | `ANALYSIS_META` is the source of truth |
 | Per-slice manifest filenames | Make discovery/OOS clobbering structurally difficult | Separate discovery and OOS manifests implemented |
 | Publish failures explicitly | Avoid silently retaining only attractive findings | README distinguishes confirmed, not-confirmed, and below-n results |
+| v2.0 scope = MHT-01 + WF-01 + reversal barrier + ML-01 | Matches the "v2" tags already used in STATE.md's Deferred Items; ML-01 requires the harness upgrade to run first | — Pending |
+| Phase 3/5 verification debt left out of v2.0 | User chose to prioritize the research/methodology backlog over closing prior-milestone paperwork gaps | — Pending |
 
-## Next Milestone Goals
+## Evolution
 
-1. Close the v1.0 verification exceptions before relying on its evidence for further conclusions.
-2. Decide whether to add multiple-comparisons control, walk-forward validation, or another bounded research hypothesis.
-3. Define fresh requirements with `$gsd-new-milestone`.
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd-transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd-complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
 
 ---
-*Last updated: 2026-07-10 after v1.0 milestone completion*
+*Last updated: 2026-07-10 after starting v2.0 milestone definition*
