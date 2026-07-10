@@ -201,9 +201,14 @@ def build_manifest_rows(
     """Return tidy long manifest rows for all buckets produced by keys on the given enriched frames.
 
     Columns: analysis, timeframe, instrument, direction, bucket,
-             rate, n, successes, ci_low, ci_high, ci_method, min_n_pass, slice.
+             rate, n, successes, ci_low, ci_high, ci_method, min_n_pass, slice,
+             p_value.
     rate/ci_low/ci_high are proportions in [0, 1] (NOT percentages).
     Buckets with n < MIN_N appear with min_n_pass=False — never dropped.
+    p_value tests H0: rate = 0.5 (D-01) and is emitted for every bucket
+    regardless of slice; the BH correction columns (bh_rank, bh_q_value,
+    bh_significant, corrected_pass) are added separately by
+    apply_bh_correction(), discovery-slice only (D-03).
     """
     rows: list[dict[str, object]] = []
 
@@ -226,6 +231,7 @@ def build_manifest_rows(
             "ci_method":  "wilson",
             "min_n_pass": n_gate(n),
             "slice":      slice_label,
+            "p_value":    round(p_value_vs_half(n, k), 6),
         })
 
     for key in keys:
@@ -297,6 +303,48 @@ def build_manifest_rows(
                         emit(key, instrument, ct, tag, d["total"], d["runs"])
 
     return rows
+
+
+def apply_bh_correction(rows: list[dict[str, object]]) -> None:
+    """Apply one global BH correction (D-02) to *rows* in place, discovery-stage
+    only (D-03 — the caller is responsible for gating this call to the
+    discovery slice; this function itself does not check `slice`).
+
+    The BH family is every row with n >= 1 (a computable p-value) — one
+    global family spanning all analyses/timeframes/instruments/directions in
+    a single pass, never grouped per-analysis-key (D-02).
+
+    Adds four keys to family rows:
+        bh_rank         — 1-based rank in the sorted family (int)
+        bh_q_value      — BH-adjusted q-value (float, rounded to 6dp)
+        bh_significant  — whether the bucket clears the BH cutoff (bool)
+        corrected_pass  — bool(min_n_pass) and bh_significant (the harder
+                           evidence bar: a bucket must clear BOTH the
+                           sample-size gate AND FDR significance)
+
+    Rows outside the family (n < 1) get bh_rank="", bh_q_value="",
+    bh_significant=False, corrected_pass=False.
+
+    Mutates *rows* in place; only ADDS keys — never renames, reorders, or
+    removes any pre-existing key (additive-only, per D-03 / roadmap success
+    criterion 3).
+    """
+    family_indices = [i for i, row in enumerate(rows) if row.get("n", 0) >= 1]
+    family_pvalues = [rows[i]["p_value"] for i in family_indices]
+    corrected = bh_correct(family_pvalues)
+
+    for row in rows:
+        row["bh_rank"] = ""
+        row["bh_q_value"] = ""
+        row["bh_significant"] = False
+        row["corrected_pass"] = False
+
+    for idx, result in zip(family_indices, corrected):
+        row = rows[idx]
+        row["bh_rank"] = result["bh_rank"]
+        row["bh_q_value"] = result["bh_q_value"]
+        row["bh_significant"] = result["bh_significant"]
+        row["corrected_pass"] = bool(row["min_n_pass"]) and result["bh_significant"]
 
 
 # ── Slicing ───────────────────────────────────────────────────────────────────
@@ -379,6 +427,11 @@ def main() -> None:
     SLICES_PATH.parent.mkdir(exist_ok=True)
     pd.DataFrame(slice_rows).to_csv(SLICES_PATH, index=False)
     print(f"Slice report → {SLICES_PATH}")
+
+    # D-03: the BH correction fires at the discovery-manifest stage only —
+    # OOS rows carry p_value but never bh_*/corrected_pass columns.
+    if slice_label == "discovery":
+        apply_bh_correction(manifest_rows)
 
     manifest_out = _manifest_path(slice_label)
     pd.DataFrame(manifest_rows).to_csv(manifest_out, index=False)
