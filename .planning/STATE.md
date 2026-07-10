@@ -2,35 +2,35 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: milestone_complete
-last_updated: 2026-07-04T09:20:24.256Z
-last_activity: 2026-06-14
+current_phase: 0
+status: Awaiting next milestone
+stopped_at: Phase 5 context gathered
+last_updated: "2026-07-10T16:11:26.581Z"
+last_activity: 2026-07-10
+last_activity_desc: Milestone v1.0 completed and archived
 progress:
   total_phases: 5
   completed_phases: 5
   total_plans: 13
   completed_plans: 13
   percent: 100
-stopped_at: Milestone complete (Phase 05 was final phase)
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-14)
+See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** A reported edge can be trusted — every published rate is sample-size gated, carries a confidence interval, and is confirmed out-of-sample.
-**Current focus:** Milestone complete
+**Current focus:** Planning next milestone; resolve v1.0 verification overrides
 
 ## Current Position
 
-Phase: 05
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-07-04
-
-Progress: [██████████] 100%
+Phase: Milestone v1.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-07-10 — Milestone v1.0 completed and archived
 
 ## Performance Metrics
 
@@ -102,9 +102,16 @@ Items acknowledged and carried forward from previous milestone close:
 | Advanced validation | Multiple-comparisons correction (MHT-01) | v2 | 2026-06-12 |
 | Advanced validation | Walk-forward / rolling-window validation (WF-01) | v2 | 2026-06-12 |
 | Modeling | `post_cisd_ml` post-CISD ML model (ML-01) | v2 | 2026-06-12 |
+| Verification gap | Phase 03 — `03-VERIFICATION.md` | human_needed | 2026-07-10 |
+| Verification gap | Phase 05 — formal verification report missing | missing | 2026-07-10 |
+| Traceability | VALID-01 through VALID-05 source checklist and trace rows stale at closeout | normalized in archive | 2026-07-10 |
 
 ## Session Continuity
 
 Last session: 2026-06-14T07:27:43.038Z
 Stopped at: Phase 5 context gathered
 Resume file: None
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
