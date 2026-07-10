@@ -9,7 +9,7 @@ import cisd_analysis
 from scripts.build_validation import (
     slice_df, wilson_ci, n_gate, build_manifest_rows,
     p_value_vs_half, bh_correct, apply_bh_correction,
-    slice_fold,
+    slice_fold, evaluate_fold, walk_forward_verdict,
 )
 from cisd_analysis import WALK_FORWARD_FOLDS
 
@@ -448,3 +448,62 @@ def test_slice_fold_returns_copies() -> None:
 
     assert train["close"].values is not df["close"].values
     assert test["close"].values is not df["close"].values
+
+
+# ── evaluate_fold + walk_forward_verdict tests (plan 06-02) ───────────────────
+
+def test_evaluate_fold_pass_same_side() -> None:
+    """evaluate_fold must be 'pass' when both n's clear MIN_N and train/test
+    rates land on the same non-boundary side of 0.5."""
+    assert evaluate_fold(0.62, 120, 0.58, 80) == "pass"
+
+
+def test_evaluate_fold_fail_opposite_side() -> None:
+    """evaluate_fold must be 'fail' when the test rate is on the opposite
+    side of 0.5 from the train rate."""
+    assert evaluate_fold(0.62, 120, 0.45, 80) == "fail"
+
+
+def test_evaluate_fold_below_n_test() -> None:
+    """evaluate_fold must be 'below-n' when test_n < MIN_N, even with a
+    same-side train/test rate."""
+    assert evaluate_fold(0.62, 120, 0.58, 40) == "below-n"
+
+
+def test_evaluate_fold_below_n_train() -> None:
+    """evaluate_fold must be 'below-n' when train_n < MIN_N (insufficient
+    train evidence to make a directional prediction)."""
+    assert evaluate_fold(0.62, 40, 0.58, 80) == "below-n"
+
+
+def test_evaluate_fold_train_rate_exact_half_fails() -> None:
+    """A train rate of exactly 0.5 makes no directional prediction, so the
+    fold cannot pass even if both n's clear MIN_N."""
+    assert evaluate_fold(0.50, 120, 0.58, 80) == "fail"
+
+
+def test_walk_forward_verdict_majority_pass() -> None:
+    """3/4 (75%) passing folds is a majority -> wf-robust."""
+    assert walk_forward_verdict(["pass", "pass", "pass", "fail"]) == "wf-robust"
+
+
+def test_walk_forward_verdict_exact_half_is_fragile() -> None:
+    """2/4 (exactly 50%) is NOT a majority -> wf-fragile (D-07 boundary)."""
+    assert walk_forward_verdict(["pass", "pass", "fail", "fail"]) == "wf-fragile"
+
+
+def test_walk_forward_verdict_below_n_counts_in_denominator() -> None:
+    """3/5 (60%) passing, with below-n folds counted in the denominator, is
+    still a majority -> wf-robust."""
+    assert walk_forward_verdict(["pass", "pass", "pass", "below-n", "fail"]) == "wf-robust"
+
+
+def test_walk_forward_verdict_below_n_folds_can_tip_to_fragile() -> None:
+    """2/4 (exactly 50%) with below-n folds counted in the denominator is
+    NOT a majority -> wf-fragile."""
+    assert walk_forward_verdict(["pass", "pass", "below-n", "below-n"]) == "wf-fragile"
+
+
+def test_walk_forward_verdict_no_folds() -> None:
+    """An empty fold list must return 'no-folds' (empty guard)."""
+    assert walk_forward_verdict([]) == "no-folds"
