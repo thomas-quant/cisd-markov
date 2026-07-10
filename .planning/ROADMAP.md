@@ -47,12 +47,19 @@ Full phase details in [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
 **Depends on**: Phase 5 (the validated, refactored engine and its existing `scripts/build_validation.py` harness)
 **Requirements**: MHT-01, WF-01
 **Success Criteria** (what must be TRUE):
+
   1. The validation manifest CSV carries a multiple-comparisons-corrected column (e.g. a Benjamini-Hochberg adjusted q-value plus a corrected pass/fail flag) computed across the full bucket grid, so a bucket's "confirmed" status reflects the number of buckets tested — not just its own single-bucket Wilson CI.
   2. Running the harness produces walk-forward output: each edge is evaluated across multiple sequential train→test windows, and the manifest/summary records per-window pass/fail plus an aggregate walk-forward robustness verdict.
   3. The single sacred discovery/OOS path still runs unchanged, and its existing manifest columns (`rate`, `n`, `successes`, `ci_low`, `ci_high`, `min_n_pass`) are identical to the pre-change output — the correction and walk-forward results are additive columns/artifacts, never a rewrite of the prior numbers.
   4. Characterization/unit tests cover the new math (a known bucket grid yields known adjusted q-values; a known window schedule yields known per-window splits), and the full pre-existing test suite still passes green.
+
 **Plans**: 2 plans
+**Wave 1**
+
 - [ ] 06-01-PLAN.md — Per-bucket significance test + Benjamini-Hochberg FDR correction across the full bucket grid, discovery-stage only (MHT-01)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 06-02-PLAN.md — Walk-forward validation: frozen anchored folds within the discovery slice + aggregate robustness verdict as an additive artifact (WF-01)
 
 ### Phase 7: Corrected Re-Validation of the Post-CISD Studies
@@ -61,10 +68,12 @@ Full phase details in [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
 **Depends on**: Phase 6 (requires the corrected + walk-forward harness)
 **Requirements**: RES-04, RES-05
 **Success Criteria** (what must be TRUE):
+
   1. `post_cisd_context` grows an explicit reversal-barrier measurement for `failed_gap_against`: the manifest reports, per direction/instrument/timeframe, the rate at which `candle[0]`'s opposite extreme is hit first (a true reversal), reported distinctly from the existing depressed continuation rate.
   2. The validation manifest is regenerated end-to-end (discovery, sacred OOS, and walk-forward) so every `post_cisd_context` and `candle1_followthrough` bucket carries n, Wilson CI, the FDR-corrected verdict, and a walk-forward robustness verdict.
   3. A written verdict states, per post-CISD tag, whether it clears the corrected evidence bar (a real, durable, corrected, walk-forward-confirmed effect) — serving as the explicit go/no-go input to Phase 8.
   4. Any change in how these two studies' rates read versus their Phase 5 numbers is documented as a deliberate, visible methodology change in the summary/README — never a silent drift — and the behavior-lock tests on unchanged code paths still pass.
+
 **Plans**: TBD
 
 ### Phase 8: Conditional Post-CISD Model
@@ -73,10 +82,12 @@ Full phase details in [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
 **Depends on**: Phase 7 (strictly gated on its corrected go/no-go verdict)
 **Requirements**: ML-01
 **Success Criteria** (what must be TRUE):
+
   1. The phase opens by reading Phase 7's per-tag verdict and records an explicit gate decision (build vs. no-model-warranted), citing the corrected/walk-forward evidence behind it.
   2. If the gate passes: `post_cisd_ml` is built over the post-CISD context features and its performance is reported on the sacred OOS holdout (and/or walk-forward windows) through the same n + CI + corrected discipline — no in-sample-only model metric is ever published.
   3. If the gate fails: the phase ships a documented "no model warranted" conclusion naming which tags failed the corrected/walk-forward bar, and no speculative model is built.
   4. Either way the milestone's honesty invariant holds: no ML claim is made that is not gated by the corrected, out-of-sample-confirmed evidence from Phase 7.
+
 **Plans**: TBD
 
 ## Progress
