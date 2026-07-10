@@ -53,10 +53,10 @@ Full phase details in [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
   3. The single sacred discovery/OOS path still runs unchanged, and its existing manifest columns (`rate`, `n`, `successes`, `ci_low`, `ci_high`, `min_n_pass`) are identical to the pre-change output — the correction and walk-forward results are additive columns/artifacts, never a rewrite of the prior numbers.
   4. Characterization/unit tests cover the new math (a known bucket grid yields known adjusted q-values; a known window schedule yields known per-window splits), and the full pre-existing test suite still passes green.
 
-**Plans**: 2 plans
+**Plans**: 1/2 plans executed
 **Wave 1**
 
-- [ ] 06-01-PLAN.md — Per-bucket significance test + Benjamini-Hochberg FDR correction across the full bucket grid, discovery-stage only (MHT-01)
+- [x] 06-01-PLAN.md — Per-bucket significance test + Benjamini-Hochberg FDR correction across the full bucket grid, discovery-stage only (MHT-01)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -97,6 +97,6 @@ Phases execute in numeric order: 6 → 7 → 8. Phase 7 requires the corrected h
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 6. Harder Evidence Bar (MHT + Walk-Forward) | v2.0 | 0/2 | Not started | - |
+| 6. Harder Evidence Bar (MHT + Walk-Forward) | v2.0 | 1/2 | In Progress|  |
 | 7. Corrected Re-Validation of Post-CISD Studies | v2.0 | 0/TBD | Not started | - |
 | 8. Conditional Post-CISD Model | v2.0 | 0/TBD | Not started | - |

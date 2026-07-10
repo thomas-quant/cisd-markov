@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Rigorous Validation & Post-CISD Modeling
-current_phase: 6
-current_phase_name: Harder Evidence Bar — Multiple-Comparisons Correction & Walk-Forward Validation
+current_phase: 06
+current_phase_name: harder-evidence-bar-multiple-comparisons-correction-walk-for
 status: executing
 stopped_at: Phase 6 context gathered
-last_updated: "2026-07-10T17:28:56.296Z"
+last_updated: "2026-07-10T17:31:44.211Z"
 last_activity: 2026-07-10
-last_activity_desc: v2.0 roadmap created (Phases 6–8); all 5 requirements mapped
+last_activity_desc: Phase 06 execution started
 progress:
   total_phases: 3
   completed_phases: 0
-  total_plans: 0
+  total_plans: 2
   completed_plans: 0
   percent: 0
 ---
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** A reported edge can be trusted — every published rate is sample-size gated, carries a confidence interval, and is confirmed out-of-sample.
-**Current focus:** Phase 6 — harden the validation harness with multiple-comparisons correction and walk-forward validation (MHT-01 + WF-01)
+**Current focus:** Phase 06 — harder-evidence-bar-multiple-comparisons-correction-walk-for
 
 ## Current Position
 
-Phase: 6 of 8 (Harder Evidence Bar — Multiple-Comparisons Correction & Walk-Forward Validation)
-Plan: — (not yet planned)
-Status: Ready to execute
-Last activity: 2026-07-10 — v2.0 roadmap created (Phases 6–8); all 5 requirements mapped
+Phase: 06 (harder-evidence-bar-multiple-comparisons-correction-walk-for) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 06
+Last activity: 2026-07-10 — Phase 06 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
