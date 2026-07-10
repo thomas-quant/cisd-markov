@@ -5,16 +5,16 @@ milestone_name: Rigorous Validation & Post-CISD Modeling
 current_phase: 06
 current_phase_name: harder-evidence-bar-multiple-comparisons-correction-walk-for
 status: executing
-stopped_at: Phase 6 context gathered
-last_updated: "2026-07-10T17:31:44.211Z"
+stopped_at: Completed 06-02-PLAN.md (walk-forward validation, WF-01)
+last_updated: "2026-07-10T18:01:31.803Z"
 last_activity: 2026-07-10
 last_activity_desc: Phase 06 execution started
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 0
-  percent: 0
+  completed_plans: 2
+  percent: 33
 ---
 
 # Project State
@@ -29,8 +29,8 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 ## Current Position
 
 Phase: 06 (harder-evidence-bar-multiple-comparisons-correction-walk-for) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 06
+Plan: 2 of 2
+Status: Ready to execute
 Last activity: 2026-07-10 — Phase 06 execution started
 
 Progress: [░░░░░░░░░░] 0%
@@ -57,6 +57,7 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 06 P02 | 13min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -70,6 +71,8 @@ Recent decisions affecting current work:
 - RES-04 (reversal barrier) folded into Phase 7 with RES-05 because both operate on the same `post_cisd_context` study; it does not block or get blocked by the Phase 6 harness upgrade
 - ML-01's phase may validly conclude "no model warranted" — the roadmap does not presuppose the post-CISD tags clear the corrected bar
 - [Phase 05-02]: post_cisd_context uses barrier_hit_forward (continuation target = candle[0] extreme in CISD direction); RES-04 adds the opposite-extreme reversal measurement
+- [Phase 06]: WF-01: WALK_FORWARD_FOLDS frozen at 4 discovery-percentile calendar dates (20th/40th/60th/80th); slice_fold anchors folds to the discovery region only; evaluate_fold uses a per-fold MIN_N gate; walk_forward_verdict requires a strict majority (>50%) of folds to pass
+- [Phase 06]: walk-forward CLI branch takes precedence over --oos if both are passed, and writes output/validation_manifest_walkforward.csv as a purely additive sibling artifact without touching the discovery/OOS manifests or the sacred OOS banner
 
 ### Pending Todos
 
@@ -99,9 +102,9 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-10T17:05:37.082Z
-Stopped at: Phase 6 context gathered
-Resume file: .planning/phases/06-harder-evidence-bar-multiple-comparisons-correction-walk-for/06-CONTEXT.md
+Last session: 2026-07-10T18:01:31.759Z
+Stopped at: Completed 06-02-PLAN.md (walk-forward validation, WF-01)
+Resume file: None
 
 ## Operator Next Steps
 

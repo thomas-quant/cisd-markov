@@ -10,7 +10,7 @@ Requirements for milestone v2.0. Each maps to a roadmap phase.
 ### Advanced Validation
 
 - [ ] **MHT-01**: Multiple-comparisons / data-snooping correction (FDR control, e.g. Benjamini-Hochberg) is applied across the full bucket grid reported by the validation harness — a "confirmed" edge accounts for how many buckets were tested, not just its own single-bucket confidence interval.
-- [ ] **WF-01**: Walk-forward / rolling-window validation supplements the single sacred discovery/OOS holdout — edges must be re-confirmed as robust across multiple sequential train→test windows, not just one fixed split.
+- [x] **WF-01**: Walk-forward / rolling-window validation supplements the single sacred discovery/OOS holdout — edges must be re-confirmed as robust across multiple sequential train→test windows, not just one fixed split.
 
 ### Research Extensions
 
@@ -43,12 +43,13 @@ Which phases cover which requirements. Populated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | MHT-01 | Phase 6 | Pending |
-| WF-01 | Phase 6 | Pending |
+| WF-01 | Phase 6 | Complete |
 | RES-04 | Phase 7 | Pending |
 | RES-05 | Phase 7 | Pending |
 | ML-01 | Phase 8 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 5 total
 - Mapped to phases: 5
 - Unmapped: 0 ✓
