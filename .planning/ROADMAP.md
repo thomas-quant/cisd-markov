@@ -35,7 +35,7 @@ Full phase details in [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
 
 **Milestone Goal:** Upgrade the validation harness with multiple-comparisons correction and walk-forward validation, re-validate the post-CISD studies under that harder bar, then use the corrected evidence to decide whether the post-CISD context tags justify a small ML model.
 
-- [ ] **Phase 6: Harder Evidence Bar — Multiple-Comparisons Correction & Walk-Forward Validation** - Extend the harness with FDR correction across the bucket grid and rolling walk-forward windows, as additive output that leaves existing numbers untouched
+- [x] **Phase 6: Harder Evidence Bar — Multiple-Comparisons Correction & Walk-Forward Validation** - Extend the harness with FDR correction across the bucket grid and rolling walk-forward windows, as additive output that leaves existing numbers untouched (completed 2026-07-10)
 - [ ] **Phase 7: Corrected Re-Validation of the Post-CISD Studies** - Regenerate the manifest end-to-end under the corrected methodology for `post_cisd_context` / `candle1_followthrough`, add the `failed_gap_against` reversal barrier, and issue the go/no-go verdict for modeling
 - [ ] **Phase 8: Conditional Post-CISD Model** - Gated strictly on Phase 7's verdict, either build and validate `post_cisd_ml` or ship a documented "no model warranted" conclusion
 
@@ -53,14 +53,14 @@ Full phase details in [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
   3. The single sacred discovery/OOS path still runs unchanged, and its existing manifest columns (`rate`, `n`, `successes`, `ci_low`, `ci_high`, `min_n_pass`) are identical to the pre-change output — the correction and walk-forward results are additive columns/artifacts, never a rewrite of the prior numbers.
   4. Characterization/unit tests cover the new math (a known bucket grid yields known adjusted q-values; a known window schedule yields known per-window splits), and the full pre-existing test suite still passes green.
 
-**Plans**: 1/2 plans executed
+**Plans**: 2/2 plans complete
 **Wave 1**
 
 - [x] 06-01-PLAN.md — Per-bucket significance test + Benjamini-Hochberg FDR correction across the full bucket grid, discovery-stage only (MHT-01)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 06-02-PLAN.md — Walk-forward validation: frozen anchored folds within the discovery slice + aggregate robustness verdict as an additive artifact (WF-01)
+- [x] 06-02-PLAN.md — Walk-forward validation: frozen anchored folds within the discovery slice + aggregate robustness verdict as an additive artifact (WF-01)
 
 ### Phase 7: Corrected Re-Validation of the Post-CISD Studies
 
@@ -97,6 +97,6 @@ Phases execute in numeric order: 6 → 7 → 8. Phase 7 requires the corrected h
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 6. Harder Evidence Bar (MHT + Walk-Forward) | v2.0 | 1/2 | In Progress|  |
+| 6. Harder Evidence Bar (MHT + Walk-Forward) | v2.0 | 2/2 | Complete   | 2026-07-10 |
 | 7. Corrected Re-Validation of Post-CISD Studies | v2.0 | 0/TBD | Not started | - |
 | 8. Conditional Post-CISD Model | v2.0 | 0/TBD | Not started | - |
