@@ -6,7 +6,10 @@ import numpy as np
 import pytest
 from unittest.mock import patch
 import cisd_analysis
-from scripts.build_validation import slice_df, wilson_ci, n_gate, build_manifest_rows
+from scripts.build_validation import (
+    slice_df, wilson_ci, n_gate, build_manifest_rows,
+    p_value_vs_half, bh_correct,
+)
 
 
 def test_slice_df_partition() -> None:
@@ -132,6 +135,80 @@ def test_n_gate_boundary() -> None:
     assert n_gate(min_n) is True, f"n={min_n} should pass gate"
     assert n_gate(min_n + 1) is True, f"n={min_n+1} should pass gate"
     assert n_gate(0) is False
+
+
+# ── significance + BH correction tests (plan 06-01) ───────────────────────────
+
+def test_p_value_vs_half_at_boundary() -> None:
+    """p_value_vs_half(100, 50) must be exactly 1.0 (rate exactly 0.5 -> z=0 -> erfc(0)=1.0)."""
+    assert p_value_vs_half(100, 50) == 1.0
+
+
+def test_p_value_vs_half_known_value() -> None:
+    """p_value_vs_half(100, 60) ~= 0.0455 within +/-0.002.
+
+    z = (2*60-100)/sqrt(100) = 2.0; two-sided p = erfc(2/sqrt(2)).
+    """
+    p = p_value_vs_half(100, 60)
+    assert abs(p - 0.0455) <= 0.002, f"p={p:.4f} outside expected band around 0.0455"
+
+
+def test_p_value_vs_half_zero_n() -> None:
+    """p_value_vs_half(0, 0) must be 1.0 (n==0 guard: no evidence against the null)."""
+    assert p_value_vs_half(0, 0) == 1.0
+
+
+def test_p_value_vs_half_in_unit_interval() -> None:
+    """p_value_vs_half must return a float in [0.0, 1.0] for a range of (n, k) cases."""
+    cases = [(1, 1), (50, 25), (200, 140), (500, 250)]
+    for n, k in cases:
+        p = p_value_vs_half(n, k)
+        assert 0.0 <= p <= 1.0, f"p={p} out of [0,1] for n={n}, k={k}"
+
+
+def test_bh_correct_known_value() -> None:
+    """bh_correct at m=5, fdr=0.05 must flag exactly the two smallest p-values.
+
+    Largest rank i with p_(i) <= (i/5)*0.05 is i=2 (0.008 <= 0.02), so exactly
+    the two smallest p-values (0.001, 0.008) are significant.
+    """
+    pvalues = [0.001, 0.008, 0.039, 0.041, 0.9]
+    results = bh_correct(pvalues, fdr=0.05)
+    significant = [r["bh_significant"] for r in results]
+    assert significant == [True, True, False, False, False], (
+        f"expected only the two smallest p-values significant, got {significant}"
+    )
+    assert sum(1 for r in results if r["bh_significant"]) == 2
+
+
+def test_bh_correct_preserves_input_order() -> None:
+    """bh_correct must return records in original input order, not sorted order."""
+    pvalues = [0.9, 0.001, 0.041, 0.008, 0.039]  # deliberately unsorted
+    results = bh_correct(pvalues, fdr=0.05)
+    assert len(results) == len(pvalues)
+    # The smallest p-value (0.001, index 1) must have bh_rank 1.
+    assert results[1]["bh_rank"] == 1
+    # The largest p-value (0.9, index 0) must have bh_rank 5.
+    assert results[0]["bh_rank"] == 5
+
+
+def test_bh_correct_q_values_monotone() -> None:
+    """bh_correct q-values must be monotone non-decreasing along ascending p_value,
+    and every bh_q_value must be clamped to <= 1.0.
+    """
+    pvalues = [0.001, 0.008, 0.039, 0.041, 0.9]
+    results = bh_correct(pvalues, fdr=0.05)
+    ordered = sorted(zip(pvalues, results), key=lambda pair: pair[0])
+    q_values = [r["bh_q_value"] for _, r in ordered]
+    for prev_q, next_q in zip(q_values, q_values[1:]):
+        assert prev_q <= next_q, f"q-values not monotone: {q_values}"
+    for r in results:
+        assert r["bh_q_value"] <= 1.0, f"bh_q_value {r['bh_q_value']} exceeds 1.0"
+
+
+def test_bh_correct_empty_input() -> None:
+    """bh_correct([]) must return [] (empty family guard)."""
+    assert bh_correct([]) == []
 
 
 # ── build_manifest_rows tests (plan 02-02) ────────────────────────────────────
