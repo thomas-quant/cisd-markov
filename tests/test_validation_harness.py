@@ -8,7 +8,7 @@ from unittest.mock import patch
 import cisd_analysis
 from scripts.build_validation import (
     slice_df, wilson_ci, n_gate, build_manifest_rows,
-    p_value_vs_half, bh_correct,
+    p_value_vs_half, bh_correct, apply_bh_correction,
 )
 
 
@@ -277,3 +277,95 @@ def test_build_manifest_below_min_n_flagged_not_dropped() -> None:
         assert row["min_n_pass"] is False, (
             f"Row with n={small_n} should have min_n_pass=False, got {row['min_n_pass']}"
         )
+
+
+# ── p_value wiring + apply_bh_correction tests (plan 06-01) ───────────────────
+
+def test_build_manifest_rows_emits_p_value() -> None:
+    """Every row emitted by build_manifest_rows must carry a p_value key (D-01)."""
+    dummy = pd.DataFrame()
+    mock_compute = lambda df: _basic_compute_return()  # noqa: E731
+    fake_analyses = {"basic": ("Basic", mock_compute, None)}
+
+    with patch("scripts.build_validation.ANALYSES", fake_analyses):
+        rows = build_manifest_rows(["basic"], dummy, dummy, "1H", "discovery")
+
+    assert len(rows) >= 1, "Expected at least one manifest row"
+    for row in rows:
+        assert "p_value" in row, f"Row missing p_value key: {row}"
+        assert 0.0 <= row["p_value"] <= 1.0
+
+
+def test_build_manifest_rows_schema_still_subset_after_p_value() -> None:
+    """The pre-existing REQUIRED_COLS schema must remain a subset of every row
+    even after the additive p_value column is introduced (additive-only lock).
+    """
+    REQUIRED_COLS = {
+        "analysis", "timeframe", "instrument", "direction", "bucket",
+        "rate", "n", "successes", "ci_low", "ci_high",
+        "ci_method", "min_n_pass", "slice",
+    }
+    dummy = pd.DataFrame()
+    mock_compute = lambda df: _basic_compute_return()  # noqa: E731
+    fake_analyses = {"basic": ("Basic", mock_compute, None)}
+
+    with patch("scripts.build_validation.ANALYSES", fake_analyses):
+        rows = build_manifest_rows(["basic"], dummy, dummy, "1H", "discovery")
+
+    assert len(rows) >= 1
+    for row in rows:
+        missing = REQUIRED_COLS - row.keys()
+        assert not missing, f"Row missing pre-existing columns: {missing}"
+
+
+def _manifest_row(n: int, k: int, p_value: float, min_n_pass: bool) -> dict:
+    """Build a minimal manifest-shaped dict for apply_bh_correction tests."""
+    return {
+        "analysis": "basic", "timeframe": "1H", "instrument": "NQ",
+        "direction": "bullish", "bucket": "all",
+        "rate": (k / n) if n else 0.0, "n": n, "successes": k,
+        "ci_low": 0.0, "ci_high": 1.0, "ci_method": "wilson",
+        "min_n_pass": min_n_pass, "slice": "discovery",
+        "p_value": p_value,
+    }
+
+
+def test_apply_bh_correction_corrected_pass_requires_both_gates() -> None:
+    """apply_bh_correction must set corrected_pass True only when a row is
+    BOTH min_n_pass AND bh_significant; a below-n row must be corrected_pass
+    False even with a tiny raw p_value. Pre-existing keys must be preserved.
+    """
+    rows = [
+        _manifest_row(n=200, k=140, p_value=0.001, min_n_pass=True),   # eligible, high-signal
+        _manifest_row(n=200, k=105, p_value=0.617, min_n_pass=True),   # eligible, weak signal
+        _manifest_row(n=10,  k=9,   p_value=0.0002, min_n_pass=False), # below-n despite tiny p
+    ]
+    original_keys = [set(row.keys()) for row in rows]
+
+    apply_bh_correction(rows)
+
+    assert rows[0]["bh_significant"] is True
+    assert rows[0]["corrected_pass"] is True
+
+    assert rows[2]["corrected_pass"] is False, (
+        "below-n row must not pass correction even with a tiny raw p_value"
+    )
+
+    for row, keys_before in zip(rows, original_keys):
+        missing = keys_before - row.keys()
+        assert not missing, f"apply_bh_correction removed pre-existing keys: {missing}"
+
+
+def test_apply_bh_correction_excludes_zero_n_rows_from_family() -> None:
+    """Rows with n < 1 are outside the BH family and get default non-significant flags."""
+    rows = [
+        _manifest_row(n=200, k=140, p_value=0.001, min_n_pass=True),
+        _manifest_row(n=0,   k=0,   p_value=1.0,   min_n_pass=False),
+    ]
+
+    apply_bh_correction(rows)
+
+    assert rows[1]["bh_rank"] == ""
+    assert rows[1]["bh_q_value"] == ""
+    assert rows[1]["bh_significant"] is False
+    assert rows[1]["corrected_pass"] is False
