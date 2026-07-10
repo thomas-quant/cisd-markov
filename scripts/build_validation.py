@@ -99,6 +99,96 @@ def n_gate(n: int, min_n: int = MIN_N) -> bool:
     return n >= min_n
 
 
+def p_value_vs_half(n: int, k: int) -> float:
+    """Two-sided significance test of H0: rate = 0.5 (D-01: the fixed coin-flip
+    null, NOT a bucket's own parent/baseline rate — matches the same-side-of-0.5
+    framing already used in README.md and determine_verdict()).
+
+    Uses a normal approximation to the binomial: under H0, k successes in n
+    trials is approximately Normal(n/2, n/4), so the z-statistic is
+        z = (k - n/2) / sqrt(n/4) = (2*k - n) / sqrt(n).
+    The two-sided p-value is P(|Z| >= |z|) for a standard normal Z, which by
+    the erfc/normal-tail identity equals erfc(|z| / sqrt(2)):
+        P(|Z| >= x) = erfc(x / sqrt(2)).
+
+    Returns 1.0 when n == 0 (no evidence against the null — guard clause,
+    mirrors wilson_ci's n==0 handling: no observations, no significance).
+
+    Examples
+    --------
+    p_value_vs_half(100, 50) == 1.0     (rate exactly 0.5 -> z=0 -> erfc(0)=1.0)
+    p_value_vs_half(100, 60) ~= 0.0455  (z=(120-100)/10=2.0 -> erfc(2/sqrt(2)))
+    """
+    if n == 0:
+        return 1.0
+    z = (2 * k - n) / math.sqrt(n)
+    return math.erfc(abs(z) / math.sqrt(2))
+
+
+def bh_correct(pvalues: list[float], fdr: float = 1 - CI_LEVEL) -> list[dict]:
+    """Benjamini-Hochberg step-up FDR correction over ONE global family (D-02:
+    every bucket across every analysis x timeframe x instrument x direction is
+    corrected together in a single pass — never grouped per-analysis-key).
+
+    Default fdr = 1 - CI_LEVEL = 0.05.
+
+    Algorithm
+    ---------
+    Sort (p_value, original_index) ascending. For m = len(pvalues), rank i is
+    1-based (i = 1..m). The BH critical value at rank i is (i/m)*fdr. The BH
+    cutoff rank is the LARGEST i such that p_(i) <= (i/m)*fdr; every sorted
+    rank <= that cutoff rank is significant (step-up procedure).
+
+    BH-adjusted q-values are computed by the standard monotone step-up,
+    walking from the largest rank down to the smallest:
+        q_(m) = p_(m)
+        q_(i) = min(q_(i+1), (m/i) * p_(i))   for i = m-1 .. 1
+    each q is clamped to <= 1.0. This guarantees q-values are non-decreasing
+    along ascending p_value order.
+
+    Returns
+    -------
+    list[dict]
+        One dict per input p-value, in ORIGINAL input order, with keys:
+        ``bh_rank`` (int, 1-based rank in the sorted family),
+        ``bh_q_value`` (float, rounded to 6dp),
+        ``bh_significant`` (bool).
+        Returns [] for an empty input list (guard clause — no family, no
+        correction to apply).
+    """
+    m = len(pvalues)
+    if m == 0:
+        return []
+
+    # Indices sorted by ascending p-value (ties broken by original index —
+    # stable sort keeps input order for equal p-values).
+    order = sorted(range(m), key=lambda i: pvalues[i])
+
+    # Largest rank i (1-based) with p_(i) <= (i/m)*fdr.
+    cutoff_rank = 0
+    for rank, idx in enumerate(order, start=1):
+        if pvalues[idx] <= (rank / m) * fdr:
+            cutoff_rank = rank
+
+    # Monotone q-values via the step-up formula, walking from largest rank down.
+    q_sorted: list[float] = [0.0] * m
+    prev_q = 1.0
+    for rank in range(m, 0, -1):
+        idx = order[rank - 1]
+        raw_q = (m / rank) * pvalues[idx]
+        prev_q = min(prev_q, raw_q)
+        q_sorted[rank - 1] = min(prev_q, 1.0)
+
+    results: list[dict] = [None] * m  # type: ignore[list-item]
+    for rank, idx in enumerate(order, start=1):
+        results[idx] = {
+            "bh_rank": rank,
+            "bh_q_value": round(q_sorted[rank - 1], 6),
+            "bh_significant": rank <= cutoff_rank,
+        }
+    return results
+
+
 # ── Manifest ─────────────────────────────────────────────────────────────────
 
 def build_manifest_rows(
