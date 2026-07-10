@@ -97,6 +97,6 @@ Phases execute in numeric order: 6 → 7 → 8. Phase 7 requires the corrected h
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 6. Harder Evidence Bar (MHT + Walk-Forward) | v2.0 | 2/2 | Complete   | 2026-07-10 |
+| 6. Harder Evidence Bar (MHT + Walk-Forward) | v2.0 | 2/2 | Complete    | 2026-07-10 |
 | 7. Corrected Re-Validation of Post-CISD Studies | v2.0 | 0/TBD | Not started | - |
 | 8. Conditional Post-CISD Model | v2.0 | 0/TBD | Not started | - |

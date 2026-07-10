@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Rigorous Validation & Post-CISD Modeling
-current_phase: 06
-current_phase_name: harder-evidence-bar-multiple-comparisons-correction-walk-for
+current_phase: 7
+current_phase_name: Corrected Re-Validation of the Post-CISD Studies
 status: executing
 stopped_at: Completed 06-02-PLAN.md (walk-forward validation, WF-01)
-last_updated: "2026-07-10T18:01:31.803Z"
+last_updated: "2026-07-10T19:36:42.208Z"
 last_activity: 2026-07-10
-last_activity_desc: Phase 06 execution started
+last_activity_desc: Phase 06 complete, transitioned to Phase 7
 progress:
   total_phases: 3
   completed_phases: 1
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 ## Current Position
 
-Phase: 06 (harder-evidence-bar-multiple-comparisons-correction-walk-for) — EXECUTING
-Plan: 2 of 2
+Phase: 7 — Corrected Re-Validation of the Post-CISD Studies
+Plan: Not started
 Status: Ready to execute
-Last activity: 2026-07-10 — Phase 06 execution started
+Last activity: 2026-07-10 — Phase 06 complete, transitioned to Phase 7
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -39,7 +39,7 @@ Progress: [░░░░░░░░░░] 0%
 
 **Velocity:**
 
-- Total plans completed: 13 (v1.0)
+- Total plans completed: 2 (v1.0)
 - Average duration: -
 - Total execution time: 0 hours (v2.0)
 
@@ -47,7 +47,7 @@ Progress: [░░░░░░░░░░] 0%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 6 | TBD | - | - |
+| 06 | 2 | - | - |
 | 7 | TBD | - | - |
 | 8 | TBD | - | - |
 
