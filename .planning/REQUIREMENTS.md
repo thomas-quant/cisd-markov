@@ -42,17 +42,17 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MHT-01 | TBD | Pending |
-| WF-01 | TBD | Pending |
-| RES-04 | TBD | Pending |
-| RES-05 | TBD | Pending |
-| ML-01 | TBD | Pending |
+| MHT-01 | Phase 6 | Pending |
+| WF-01 | Phase 6 | Pending |
+| RES-04 | Phase 7 | Pending |
+| RES-05 | Phase 7 | Pending |
+| ML-01 | Phase 8 | Pending |
 
 **Coverage:**
 - v1 requirements: 5 total
-- Mapped to phases: 0
-- Unmapped: 5 ⚠️ (filled in during roadmap creation)
+- Mapped to phases: 5
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-10*
-*Last updated: 2026-07-10 after initial definition*
+*Last updated: 2026-07-10 after roadmap creation (Phases 6–8 mapped)*

@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Rigorous Validation & Post-CISD Modeling
 status: planning
-last_updated: "2026-07-10T16:33:58.296Z"
+last_updated: "2026-07-10T17:10:00.000Z"
 last_activity: 2026-07-10
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,32 +20,32 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** A reported edge can be trusted — every published rate is sample-size gated, carries a confidence interval, and is confirmed out-of-sample.
-**Current focus:** Planning next milestone; resolve v1.0 verification overrides
+**Current focus:** Phase 6 — harden the validation harness with multiple-comparisons correction and walk-forward validation (MHT-01 + WF-01)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-07-10 — Milestone v2.0 started
+Phase: 6 of 8 (Harder Evidence Bar — Multiple-Comparisons Correction & Walk-Forward Validation)
+Plan: — (not yet planned)
+Status: Ready to plan
+Last activity: 2026-07-10 — v2.0 roadmap created (Phases 6–8); all 5 requirements mapped
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 17
+- Total plans completed: 13 (v1.0)
 - Average duration: -
-- Total execution time: 0 hours
+- Total execution time: 0 hours (v2.0)
 
-**By Phase:**
+**By Phase (v2.0):**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 3 | - | - |
-| 02 | 2 | - | - |
-| 03 | 3 | - | - |
-| 04 | 3 | - | - |
-| 05 | 2 | - | - |
+| 6 | TBD | - | - |
+| 7 | TBD | - | - |
+| 8 | TBD | - | - |
 
 **Recent Trend:**
 
@@ -53,10 +53,6 @@ Last activity: 2026-07-10 — Milestone v2.0 started
 - Trend: -
 
 *Updated after each plan completion*
-| Phase 01 P01 | 246 | 3 tasks | 6 files |
-| Phase 01-reproducibility-foundation-behavior-lock P02 | 8m | 3 tasks | 7 files |
-| Phase 01-reproducibility-foundation-behavior-lock P03 | 780 | 2 tasks | 2 files |
-| Phase 05-new-cisd-research-on-the-validated-engine P01 | 92 | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -65,18 +61,11 @@ Last activity: 2026-07-10 — Milestone v2.0 started
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- Milestone is test-gated: characterization tests (Phase 1) lock current numbers before the harness (Phase 2) or refactor (Phase 4) can move them
-- Sacred date holdout (newest ~30% OOS, evaluated once; oldest ~70% discovery); harness defaults to discovery-on-train
-- Foundational validation depth = CIs + n-gating only; MHT correction and walk-forward deferred to v2
-- Phases 3 and 4 both depend only on Phases 1-2 and are reorderable/parallelizable relative to each other
-- [Phase 01]: Pin exactly the installed .venv versions for requirements.txt — no upgrade needed as probing confirmed all 5 packages match the plan exactly
-- [Phase 01]: SMT_PKG_PATH default is the existing WSL path so dev-machine behavior is byte-identical; .gitignore additions for .env deferred to plan 01-02
-- [Phase 03]: Slice-suffixed manifest filenames (`_discovery.csv` / `_oos.csv`) prevent OOS runs from clobbering the discovery manifest
-- [Phase 03]: Bearish Daily edges failed OOS comprehensively (24 of 48 not-confirmed buckets); bullish intraday (15min, 1H) confirmed robustly across both instruments
-- [Phase 03]: SMT lift at 15min confirmed (+2–4pp); Daily ES bearish and 4H ES bearish w/ SMT not-confirmed
-- [Phase 05-01]: candle[0] high/low as barrier target/stop (D-01) — R-unit unchanged, RES-01 comparable to README
-- [Phase 05-01]: In-window + forward re-anchored side by side (D-02) — tautology gap made visible per bucket
-- [Phase 05-01]: Generic else branch in build_manifest_rows handles new key automatically — zero code changes to build_validation.py
+- v2.0 scope = MHT-01 + WF-01 (harness upgrade) → RES-04 + RES-05 (corrected re-validation of post-CISD studies) → ML-01 (conditional model); ML-01 is strictly gated on RES-05's corrected evidence
+- New methodology is additive/parallel output — existing published numbers must not silently move; any change in how a prior finding reads must be deliberate and visible (carried from v1.0 behavior-lock)
+- RES-04 (reversal barrier) folded into Phase 7 with RES-05 because both operate on the same `post_cisd_context` study; it does not block or get blocked by the Phase 6 harness upgrade
+- ML-01's phase may validly conclude "no model warranted" — the roadmap does not presuppose the post-CISD tags clear the corrected bar
+- [Phase 05-02]: post_cisd_context uses barrier_hit_forward (continuation target = candle[0] extreme in CISD direction); RES-04 adds the opposite-extreme reversal measurement
 
 ### Pending Todos
 
@@ -88,7 +77,8 @@ None yet.
 
 [Issues that affect future work]
 
-- SMT integration test is skipped when the hardcoded WSL path is unavailable, so SMT remains untested in CI (INFRA-02/03 in Phase 1 address the path; CI coverage of SMT stays a known gap)
+- SMT integration path remains untested in CI (hardcoded WSL path); known limitation carried from v1.0
+- Phase 6 correction/walk-forward math is net-new (no prior MHT/walk-forward code in `scripts/build_validation.py`); needs its own characterization tests
 
 ## Deferred Items
 
@@ -96,19 +86,19 @@ Items acknowledged and carried forward from previous milestone close:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| Advanced validation | Multiple-comparisons correction (MHT-01) | v2 | 2026-06-12 |
-| Advanced validation | Walk-forward / rolling-window validation (WF-01) | v2 | 2026-06-12 |
-| Modeling | `post_cisd_ml` post-CISD ML model (ML-01) | v2 | 2026-06-12 |
-| Verification gap | Phase 03 — `03-VERIFICATION.md` | human_needed | 2026-07-10 |
-| Verification gap | Phase 05 — formal verification report missing | missing | 2026-07-10 |
-| Traceability | VALID-01 through VALID-05 source checklist and trace rows stale at closeout | normalized in archive | 2026-07-10 |
+| Advanced validation | Multiple-comparisons correction (MHT-01) | promoted to Phase 6 | 2026-07-10 |
+| Advanced validation | Walk-forward / rolling-window validation (WF-01) | promoted to Phase 6 | 2026-07-10 |
+| Modeling | `post_cisd_ml` post-CISD ML model (ML-01) | promoted to Phase 8 (conditional) | 2026-07-10 |
+| Verification gap | Phase 03 — `03-VERIFICATION.md` human QA checks | human_needed (out of v2.0 scope) | 2026-07-10 |
+| Verification gap | Phase 05 — formal verification report missing | missing (out of v2.0 scope) | 2026-07-10 |
+| Traceability | VALID-01 through VALID-05 source checklist stale at closeout | normalized in archive | 2026-07-10 |
 
 ## Session Continuity
 
-Last session: 2026-06-14T07:27:43.038Z
-Stopped at: Phase 5 context gathered
+Last session: 2026-07-10 17:10
+Stopped at: v2.0 roadmap created (Phases 6–8); REQUIREMENTS traceability filled
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan Phase 6 with /gsd-plan-phase 6
