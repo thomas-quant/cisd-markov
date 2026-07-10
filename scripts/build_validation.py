@@ -388,6 +388,97 @@ def slice_fold(
     return train, test
 
 
+# ── Walk-forward ───────────────────────────────────────────────────────────────
+
+def _side(r: float) -> int:
+    """Return 1 if r > 0.50, -1 if r < 0.50, 0 if r == 0.50 exactly.
+
+    Mirrors build_reconcile_findings.py's _side() helper: exact 0.50 is
+    treated as neither side — no directional evidence.
+    """
+    if r > 0.50:
+        return 1
+    if r < 0.50:
+        return -1
+    return 0  # exact tie — neither side
+
+
+def evaluate_fold(
+    train_rate: float, train_n: float, test_rate: float, test_n: float
+) -> str:
+    """Return a lowercase verdict token for one walk-forward fold.
+
+    Parameters
+    ----------
+    train_rate, train_n:
+        Barrier-hit rate and sample size on the fold's anchored train window.
+    test_rate, test_n:
+        Barrier-hit rate and sample size on the fold's test chunk.
+
+    Returns
+    -------
+    str
+        One of ``"pass"``, ``"fail"``, or ``"below-n"``.
+
+    Notes
+    -----
+    D-07 / per-fold MIN_N gate: the Claude's-discretion question of whether
+    MIN_N applies per fold is resolved in favor of per-fold gating — both the
+    anchored train window and the test chunk must independently carry enough
+    evidence (n >= MIN_N) for the fold to count at all; otherwise the fold
+    is ``"below-n"`` and contributes neither a pass nor a fail signal (though
+    it still counts in walk_forward_verdict's denominator, per D-07).
+
+    Given both n's clear MIN_N, the fold is ``"pass"`` iff train_rate and
+    test_rate are on the SAME non-boundary side of 0.50 (train predicts a
+    directional side, test must confirm it) — mirroring determine_verdict's
+    same-side-of-0.5 semantics in build_reconcile_findings.py. An exact 0.50
+    on either side is treated as no directional evidence, so the fold
+    ``"fail"``s (a train rate of exactly 0.50 makes no prediction to confirm).
+    """
+    if train_n < MIN_N or test_n < MIN_N:
+        return "below-n"
+    train_side = _side(train_rate)
+    test_side = _side(test_rate)
+    if train_side != 0 and test_side != 0 and train_side == test_side:
+        return "pass"
+    return "fail"
+
+
+def walk_forward_verdict(fold_verdicts: list[str]) -> str:
+    """Return the aggregate robustness verdict for one bucket's walk-forward folds.
+
+    Parameters
+    ----------
+    fold_verdicts:
+        The per-fold ``evaluate_fold`` results ("pass"/"fail"/"below-n") for
+        every fold evaluated for one bucket.
+
+    Returns
+    -------
+    str
+        One of ``"wf-robust"``, ``"wf-fragile"``, or ``"no-folds"``.
+
+    Notes
+    -----
+    D-07: the aggregate walk-forward robustness verdict requires a MAJORITY
+    (strictly greater than 50%) of test folds to pass, not unanimity — one
+    noisy fold should not kill an otherwise-robust edge, but exactly 50% is
+    NOT a majority (``"wf-fragile"``). The denominator is the total number of
+    folds evaluated; ``"below-n"`` folds count against the majority (they are
+    not excluded from the denominator) since they represent folds where the
+    edge could not even be tested for robustness.
+
+    Returns ``"no-folds"`` for an empty list (guard clause — no folds, no
+    verdict to report).
+    """
+    total = len(fold_verdicts)
+    if total == 0:
+        return "no-folds"
+    passes = sum(1 for v in fold_verdicts if v == "pass")
+    return "wf-robust" if passes > total / 2 else "wf-fragile"
+
+
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def parse_args() -> argparse.Namespace:
