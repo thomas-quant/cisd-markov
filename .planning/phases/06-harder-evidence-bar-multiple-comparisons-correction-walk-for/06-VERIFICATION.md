@@ -1,47 +1,45 @@
 ---
 phase: 06-harder-evidence-bar-multiple-comparisons-correction-walk-for
 verified: 2026-07-10T19:50:00Z
-status: gaps_found
-score: 6/7 must-haves verified
+status: passed
+score: 7/7 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
 gaps:
   - truth: "Characterization/unit tests cover the new math and the full pre-existing test suite still passes green (ROADMAP success criterion 4)"
-    status: failed
+    status: resolved
     reason: >
       The new significance/FDR/walk-forward math IS covered by characterization
       tests (51 tests in tests/test_validation_harness.py + tests/test_reconcile_findings.py,
-      all passing). However, the full pre-existing suite (`.venv/bin/python -m pytest tests/ -q`)
-      is NOT green: 2 failed, 160 passed in 1605.34s. Phase 6 added a `p_value`
-      column to every emitted manifest row (all slices, all analyses) via
-      build_manifest_rows()'s emit() closure. Two pre-existing Phase-5 tests in
-      tests/test_research_extensions.py assert an EXACT column-set equality
-      (`set(row.keys()) == expected_columns`) that does not include `p_value`,
-      so both now fail against the new additive column. This is exactly the
-      class of regression the phase's own roadmap-mandated full-suite gate
-      exists to catch, and 06-02-SUMMARY.md explicitly documented that this
-      full-suite run had NOT yet been performed ("Recommend running the full
-      suite once at phase-completion / milestone-closeout").
+      all passing). The full pre-existing suite initially failed (2 failed, 160
+      passed in 1605.34s): two pre-existing Phase-5 tests in
+      tests/test_research_extensions.py asserted an EXACT column-set equality
+      (`set(row.keys()) == expected_columns`) that did not include the new
+      additive `p_value` column emitted by build_manifest_rows() on every row.
+      RESOLVED (commit 8d43e68, applied via Codex rescue at the user's request,
+      bypassing the formal gap-closure plan cycle): both assertions were
+      updated from exact-set equality to a missing-columns subset check
+      (`missing = expected_columns - row.keys(); assert not missing`), mirroring
+      the already-correct pattern in
+      tests/test_validation_harness.py::test_build_manifest_rows_schema_still_subset_after_p_value.
+      No production code was touched. Full suite re-run after the fix:
+      162 passed in 2041.80s (0:34:01) — 0 failures.
     artifacts:
       - path: "tests/test_research_extensions.py"
         issue: >
-          test_build_manifest_rows_candle1_followthrough_has_tidy_long_columns
+          RESOLVED — test_build_manifest_rows_candle1_followthrough_has_tidy_long_columns
           (line 648) and test_build_manifest_rows_post_cisd_context_has_tidy_long_columns
-          (line 973) both assert `set(row.keys()) == expected_columns` where
-          expected_columns omits `p_value`. Both fail with
-          "Extra items in the left set: 'p_value'" since build_manifest_rows
-          now emits p_value on every row regardless of analysis or slice.
-    missing:
-      - "Update the two failing assertions in tests/test_research_extensions.py to tolerate the additive p_value column — e.g. change from strict set equality to a subset/superset check, mirroring the pattern already used by tests/test_validation_harness.py::test_build_manifest_rows_schema_still_subset_after_p_value (which was correctly updated in this same phase)."
-      - "Re-run the full suite (`.venv/bin/python -m pytest tests/ -q`) after the fix to confirm 0 failures before considering roadmap success criterion 4 met."
+          (line 973) now assert a subset check tolerant of the additive
+          `p_value` column instead of exact set equality (commit 8d43e68).
+    missing: []
 ---
 
 # Phase 6: Harder Evidence Bar — Multiple-Comparisons Correction & Walk-Forward Validation Verification Report
 
 **Phase Goal:** The validation harness measures every edge against a harder, honest bar — a bucket's "confirmed" status accounts for how many buckets were tested (FDR control across the full grid), and its robustness is re-confirmed across multiple sequential walk-forward windows rather than a single fixed split. The new methodology is additive/parallel; existing published numbers do not move.
 **Verified:** 2026-07-10T19:50:00Z
-**Status:** gaps_found
-**Re-verification:** No — initial verification
+**Status:** passed
+**Re-verification:** No — initial verification; gap resolved directly post-verification (see Truth #7 and Gaps Summary)
 
 ## Goal Achievement
 
@@ -55,9 +53,9 @@ gaps:
 | 4 | Existing discovery/OOS manifest columns (rate, n, successes, ci_low, ci_high, ci_method, min_n_pass, slice) are unchanged in name, order, and value; new results are additive columns/artifacts (ROADMAP SC3) | ✓ VERIFIED | Diffed the freshly-generated `validation_manifest_discovery.csv` against a pre-phase-6 backup (Jun 13 snapshot). All 8 pre-existing columns are byte-identical for all 752 pre-existing (analysis, timeframe, instrument, direction, bucket) rows — 0 mismatches. The 160 additional rows in the new file belong to `candle1_followthrough`/`post_cisd_context` — analyses added in Phase 5 (commits 1186417, 5b8b2b4, both before Phase 6), not new output from this phase. File mtimes confirm the `--walk-forward` run did not rewrite `validation_manifest_discovery.csv` or `validation_manifest_oos.csv` (their timestamps predate the walk-forward run). |
 | 5 | Every walk-forward fold is carved entirely from the discovery slice; the sacred OOS slice is never touched by walk-forward (D-04) | ✓ VERIFIED | `slice_fold()` always calls `slice_df(df, oos=False)` before sub-slicing (scripts/build_validation.py:383), clamping every fold to `df.index < OOS_START` even when `test_end` is the literal `OOS_START` value (last fold). Unit test `test_slice_fold_clamps_to_discovery_even_if_test_end_after_oos` passes. Code review (06-REVIEW.md) independently traced this by hand across all 4 fold boundaries. Real walk-forward manifest's max `test_end` value is `OOS_START` ("2024-04-30"), never beyond it. |
 | 6 | Fold boundaries are frozen calendar-date constants (D-06) and windows are expanding/anchored (D-05) | ✓ VERIFIED | `WALK_FORWARD_FOLDS = ("2021-05-25", "2022-02-16", "2022-11-09", "2023-08-04")` declared in cisd_data.py with a "do not recompute at runtime" comment, re-exported through cisd_analysis.py's explicit import list + `__all__` (grep-confirmed both files). `cisd_analysis.WALK_FORWARD_FOLDS` resolves. Anchored-superset property confirmed by `test_slice_fold_anchored_superset`. |
-| 7 | Characterization/unit tests cover the new math (known bucket grid → known adjusted q-values; known window schedule → known per-window splits) and the full pre-existing test suite still passes green (ROADMAP SC4) | ✗ FAILED | New-math tests exist and pass: `tests/test_validation_harness.py` (51 tests covering p_value_vs_half, bh_correct, apply_bh_correction, slice_fold, evaluate_fold, walk_forward_verdict, build_walkforward_rows — all pass, including known-value/boundary cases). BUT the full pre-existing suite is NOT green: `.venv/bin/python -m pytest tests/ -q` → **2 failed, 160 passed in 1605.34s**. See Gaps Summary below. |
+| 7 | Characterization/unit tests cover the new math (known bucket grid → known adjusted q-values; known window schedule → known per-window splits) and the full pre-existing test suite still passes green (ROADMAP SC4) | ✓ VERIFIED (post-fix) | New-math tests exist and pass: `tests/test_validation_harness.py` (51 tests covering p_value_vs_half, bh_correct, apply_bh_correction, slice_fold, evaluate_fold, walk_forward_verdict, build_walkforward_rows — all pass, including known-value/boundary cases). The full suite initially failed (2 failed, 160 passed in 1605.34s) due to two Phase-5 tests in tests/test_research_extensions.py asserting exact column-set equality against the new additive p_value column. Fixed in commit 8d43e68 (subset-check pattern, no production code touched); full suite re-run: **162 passed in 2041.80s, 0 failures**. See Gaps Summary below. |
 
-**Score:** 6/7 truths verified (0 present, behavior-unverified)
+**Score:** 7/7 truths verified (0 present, behavior-unverified)
 
 ### Required Artifacts
 
@@ -83,7 +81,7 @@ gaps:
 
 | Requirement | Source Plan | Description | Status | Evidence |
 |-------------|-------------|-------------|--------|----------|
-| MHT-01 | 06-01-PLAN.md | FDR correction across full bucket grid | ✓ SATISFIED (code) | `bh_correct`/`apply_bh_correction` implemented, tested, and verified against real data (Truth #1, #3). **Note:** `.planning/REQUIREMENTS.md` still shows MHT-01 as `[ ]` unchecked and "Pending" in its Traceability table (WF-01 was updated to `[x]`/"Complete" but MHT-01 was not) — a documentation-tracking gap, not a functional one. Recommend updating REQUIREMENTS.md before this milestone's requirements are considered closed. |
+| MHT-01 | 06-01-PLAN.md | FDR correction across full bucket grid | ✓ SATISFIED | `bh_correct`/`apply_bh_correction` implemented, tested, and verified against real data (Truth #1, #3). REQUIREMENTS.md updated to `[x]`/"Complete" (was previously left unchecked — a documentation-tracking gap, now closed). |
 | WF-01 | 06-02-PLAN.md | Walk-forward validation across sequential windows | ✓ SATISFIED | REQUIREMENTS.md already reflects `[x]` Complete. Fully implemented and verified against real data (Truth #2, #5, #6). |
 
 No orphaned requirements — REQUIREMENTS.md maps only MHT-01 and WF-01 to Phase 6, and both are declared in the two plans' `requirements:` frontmatter.
@@ -111,7 +109,7 @@ Carried forward from `06-REVIEW.md` (code review, 0 critical / 1 warning / 3 inf
 | Walk-forward run does not touch discovery/oos manifests | File mtime comparison | discovery.csv/oos.csv mtimes predate the walk-forward run's writes | ✓ PASS |
 | Reconciler unaffected by additive columns (real run, not just unit test) | `python3 scripts/build_reconcile_findings.py` | 912 rows written (611 confirmed / 201 not-confirmed / 100 below-n), no errors | ✓ PASS |
 | `--help` lists `--walk-forward` | `python3 scripts/build_validation.py --help` | Flag listed with correct help text and `--oos` precedence note | ✓ PASS |
-| Full pre-existing test suite green (ROADMAP SC4) | `.venv/bin/python -m pytest tests/ -q` (26m45s) | **2 failed, 160 passed** | ✗ FAIL |
+| Full pre-existing test suite green (ROADMAP SC4) | `.venv/bin/python -m pytest tests/ -q` (26m45s, then re-run after fix in 34m01s) | Initial: **2 failed, 160 passed**. Post-fix (commit 8d43e68): **162 passed, 0 failed** | ✓ PASS |
 
 ### Probe Execution
 
@@ -123,18 +121,20 @@ None. All must-haves are objectively verifiable via code inspection, unit tests,
 
 ### Gaps Summary
 
-**One blocking regression found:** the full pre-existing test suite (`tests/`) is not green. Running `.venv/bin/python -m pytest tests/ -q` produces **2 failed, 160 passed** (1605.34s):
+**One regression found, since resolved.** The full pre-existing test suite (`tests/`) was initially not green: `.venv/bin/python -m pytest tests/ -q` produced **2 failed, 160 passed** (1605.34s):
 
 - `tests/test_research_extensions.py::test_build_manifest_rows_candle1_followthrough_has_tidy_long_columns`
 - `tests/test_research_extensions.py::test_build_manifest_rows_post_cisd_context_has_tidy_long_columns`
 
-Both are pre-existing Phase-5 tests (authored 2026-06-14, before Phase 6 began) that assert `set(row.keys()) == expected_columns` — an exact column-set equality that does not include `p_value`. Phase 6 intentionally (and correctly, per its own must-haves) added `p_value` to every emitted row regardless of analysis or slice, so these two strict-equality assertions now fail with "Extra items in the left set: 'p_value'".
+Both are pre-existing Phase-5 tests (authored 2026-06-14, before Phase 6 began) that asserted `set(row.keys()) == expected_columns` — an exact column-set equality that did not include `p_value`. Phase 6 intentionally (and correctly, per its own must-haves) added `p_value` to every emitted row regardless of analysis or slice, so these two strict-equality assertions failed with "Extra items in the left set: 'p_value'".
 
-This is not a design flaw in the Phase 6 implementation — the additive-`p_value`-on-every-row behavior is exactly what the plan specifies (D-01, and `test_build_manifest_rows_emits_p_value` correctly asserts it). The gap is that the phase's own plan updated `tests/test_validation_harness.py`'s schema-lock test to a subset check (`test_build_manifest_rows_schema_still_subset_after_p_value`) but did not search for and update the two equivalent strict-equality tests living in `tests/test_research_extensions.py` (a Phase-5 file, outside this phase's `files_modified` list). 06-02-SUMMARY.md explicitly flagged that the full suite had not yet been run at phase-completion time — this verification's mandated full-suite run is what surfaced the regression.
+This was not a design flaw in the Phase 6 implementation — the additive-`p_value`-on-every-row behavior is exactly what the plan specifies (D-01, and `test_build_manifest_rows_emits_p_value` correctly asserts it). The gap was that the phase's own plan updated `tests/test_validation_harness.py`'s schema-lock test to a subset check (`test_build_manifest_rows_schema_still_subset_after_p_value`) but did not search for and update the two equivalent strict-equality tests living in `tests/test_research_extensions.py` (a Phase-5 file, outside this phase's `files_modified` list). 06-02-SUMMARY.md explicitly flagged that the full suite had not yet been run at phase-completion time — this verification's mandated full-suite run is what surfaced the regression.
 
-**Fix is small and mechanical:** update the two assertions in `tests/test_research_extensions.py` (lines 666, 991) from exact-set equality to a subset/superset check mirroring the already-correct pattern in `tests/test_validation_harness.py`, then re-run the full suite to confirm 0 failures.
+**Resolution:** at the user's direction, the fix was applied directly via Codex rescue (bypassing the formal `/gsd-plan-phase --gaps` gap-closure plan cycle, since the fix was small, mechanical, and fully scoped by this report). Commit `8d43e68` updated both assertions in `tests/test_research_extensions.py` (lines 666, 991) from exact-set equality to a subset check (`missing = expected_columns - row.keys(); assert not missing`), mirroring the already-correct pattern in `tests/test_validation_harness.py`. No production code was touched. Full suite re-run to confirm: **162 passed in 2041.80s, 0 failures**.
 
-Because ROADMAP success criterion 4 explicitly requires "the full pre-existing test suite still passes green," and it currently does not, overall status is `gaps_found`. All other truths (FDR correction, walk-forward validation, additive-only column/artifact behavior, sacred-OOS non-consumption) are fully verified against real data, not just SUMMARY.md claims.
+`.planning/REQUIREMENTS.md` was also updated: MHT-01 changed from `[ ]`/"Pending" to `[x]`/"Complete" (a documentation-tracking gap noted above, now closed).
+
+Overall status: `passed` (7/7 truths verified). All truths — FDR correction, walk-forward validation, additive-only column/artifact behavior, sacred-OOS non-consumption, and the full-suite regression — are verified against real data and a real full-suite run, not just SUMMARY.md claims.
 
 ---
 
