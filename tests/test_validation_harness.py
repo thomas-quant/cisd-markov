@@ -9,7 +9,9 @@ import cisd_analysis
 from scripts.build_validation import (
     slice_df, wilson_ci, n_gate, build_manifest_rows,
     p_value_vs_half, bh_correct, apply_bh_correction,
+    slice_fold,
 )
+from cisd_analysis import WALK_FORWARD_FOLDS
 
 
 def test_slice_df_partition() -> None:
@@ -369,3 +371,80 @@ def test_apply_bh_correction_excludes_zero_n_rows_from_family() -> None:
     assert rows[1]["bh_q_value"] == ""
     assert rows[1]["bh_significant"] is False
     assert rows[1]["corrected_pass"] is False
+
+
+# ── walk-forward fold slicing tests (plan 06-02) ──────────────────────────────
+
+def test_walk_forward_folds_frozen_and_before_oos() -> None:
+    """WALK_FORWARD_FOLDS must be a strictly-increasing 4-tuple, every entry
+    strictly earlier than OOS_START (D-06)."""
+    assert len(WALK_FORWARD_FOLDS) == 4
+    assert list(WALK_FORWARD_FOLDS) == sorted(WALK_FORWARD_FOLDS), (
+        f"WALK_FORWARD_FOLDS not strictly increasing: {WALK_FORWARD_FOLDS}"
+    )
+    oos_boundary = pd.Timestamp(cisd_analysis.OOS_START)
+    for d in WALK_FORWARD_FOLDS:
+        assert pd.Timestamp(d) < oos_boundary, f"fold boundary {d} is not before OOS_START"
+
+
+def test_slice_fold_partition_no_overlap() -> None:
+    """train and test slices from slice_fold must not share any bar."""
+    oos_boundary = pd.Timestamp(cisd_analysis.OOS_START)
+    start = oos_boundary - pd.Timedelta(days=1200)
+    idx = pd.date_range(start=start, periods=1100, freq="D")
+    df = pd.DataFrame({"close": np.ones(len(idx))}, index=idx)
+
+    b1, b2 = WALK_FORWARD_FOLDS[0], WALK_FORWARD_FOLDS[1]
+    train, test = slice_fold(df, train_end=b1, test_end=b2)
+
+    assert train.index.intersection(test.index).empty
+    assert (train.index < pd.Timestamp(b1)).all()
+    assert (test.index >= pd.Timestamp(b1)).all()
+    assert (test.index < pd.Timestamp(b2)).all()
+
+
+def test_slice_fold_clamps_to_discovery_even_if_test_end_after_oos() -> None:
+    """slice_fold must never return a bar >= OOS_START, even when test_end is
+    passed as a date after OOS_START (D-04 clamp via slice_df(df, oos=False))."""
+    oos_boundary = pd.Timestamp(cisd_analysis.OOS_START)
+    start = oos_boundary - pd.Timedelta(days=1500)
+    idx = pd.date_range(start=start, periods=2000, freq="D")  # spans well past OOS_START
+    df = pd.DataFrame({"close": np.ones(len(idx))}, index=idx)
+
+    b4 = WALK_FORWARD_FOLDS[-1]
+    after_oos = (oos_boundary + pd.Timedelta(days=100)).strftime("%Y-%m-%d")
+    train, test = slice_fold(df, train_end=b4, test_end=after_oos)
+
+    assert (train.index < oos_boundary).all()
+    assert (test.index < oos_boundary).all(), "test slice leaked bars from the sacred OOS region"
+
+
+def test_slice_fold_anchored_superset() -> None:
+    """Expanding/anchored property (D-05): for boundaries b1 < b2, the train
+    slice for train_end=b2 must be a superset of the train slice for
+    train_end=b1."""
+    oos_boundary = pd.Timestamp(cisd_analysis.OOS_START)
+    start = oos_boundary - pd.Timedelta(days=1200)
+    idx = pd.date_range(start=start, periods=1100, freq="D")
+    df = pd.DataFrame({"close": np.ones(len(idx))}, index=idx)
+
+    b1, b2 = WALK_FORWARD_FOLDS[0], WALK_FORWARD_FOLDS[1]
+    train_b1, _ = slice_fold(df, train_end=b1, test_end=b2)
+    train_b2, _ = slice_fold(df, train_end=b2, test_end=WALK_FORWARD_FOLDS[2])
+
+    assert set(train_b1.index).issubset(set(train_b2.index))
+    assert len(train_b2) >= len(train_b1)
+
+
+def test_slice_fold_returns_copies() -> None:
+    """Both returned frames must be copies — mutating one must not alter df."""
+    oos_boundary = pd.Timestamp(cisd_analysis.OOS_START)
+    start = oos_boundary - pd.Timedelta(days=1200)
+    idx = pd.date_range(start=start, periods=1100, freq="D")
+    df = pd.DataFrame({"close": np.ones(len(idx))}, index=idx)
+
+    b1, b2 = WALK_FORWARD_FOLDS[0], WALK_FORWARD_FOLDS[1]
+    train, test = slice_fold(df, train_end=b1, test_end=b2)
+
+    assert train["close"].values is not df["close"].values
+    assert test["close"].values is not df["close"].values

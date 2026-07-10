@@ -37,6 +37,7 @@ from cisd_data import (
     OOS_START,
     MIN_N,
     CI_LEVEL,
+    WALK_FORWARD_FOLDS,
     load_1m,
     _normalize_resample_rule,
     resample_ohlcv,
@@ -141,7 +142,7 @@ __all__ = [
     # cisd_data exports
     "DATA_DIR", "INSTRUMENTS", "TIMEFRAMES", "LOOKAHEAD", "MAX_CONSEC",
     "SMT_LOOKBACK", "FVG_HOLD_LOOKAHEAD", "SWEEP_TOLERANCE", "SWEEP_SWING_LOOKBACK",
-    "_SMT_PKG_PATH", "OOS_START", "MIN_N", "CI_LEVEL",
+    "_SMT_PKG_PATH", "OOS_START", "MIN_N", "CI_LEVEL", "WALK_FORWARD_FOLDS",
     "load_1m", "_normalize_resample_rule", "resample_ohlcv", "prepare",
     "_compute_three_bar_swings", "_has_directional_fvg", "_classify_fvg_hold",
     "_has_directional_sweep", "_annotate_cisd_research",

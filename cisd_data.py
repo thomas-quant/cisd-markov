@@ -42,6 +42,20 @@ OOS_START  = "2024-04-30"  # IS/OOS split: events before this date are discovery
 MIN_N      = 50             # minimum sample size for a reportable finding (stricter than n≥30)
 CI_LEVEL   = 0.95           # Wilson score CI confidence level
 
+# WALK_FORWARD_FOLDS: 20th/40th/60th/80th-percentile dates of the discovery
+# portion (index < OOS_START) of the shared NQ∩ES daily calendar.
+# Derived: discovery len=1138 (shared len=1627, boundary idx=1138 per OOS_START
+# derivation above). idx=int(pct*1138) for pct in (0.20, 0.40, 0.60, 0.80) ->
+# 227, 455, 682, 910 -> 2021-05-25, 2022-02-16, 2022-11-09, 2023-08-04.
+# These 4 frozen interior boundaries define 4 anchored (expanding) walk-forward
+# folds within the discovery slice (D-05/D-06): fold k trains on all discovery
+# history from the start up to the fold's chunk start, then tests on the next
+# chunk, e.g. [start,b1) is training-only seed, test chunks are
+# [b1,b2), [b2,b3), [b3,b4), [b4,OOS_START).
+# Do NOT recompute at runtime — appending data must not silently shift these
+# fold boundaries, mirroring the OOS_START convention above.
+WALK_FORWARD_FOLDS = ("2021-05-25", "2022-02-16", "2022-11-09", "2023-08-04")
+
 
 # ── Data Loading & Resampling ─────────────────────────────────────────────────
 
@@ -446,6 +460,7 @@ __all__ = [
     "OOS_START",
     "MIN_N",
     "CI_LEVEL",
+    "WALK_FORWARD_FOLDS",
     # Data loading & resampling
     "load_1m",
     "_normalize_resample_rule",

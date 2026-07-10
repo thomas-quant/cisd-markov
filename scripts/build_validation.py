@@ -15,6 +15,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from cisd_analysis import (
     ANALYSES, INSTRUMENTS, MAX_CONSEC, TIMEFRAMES, OOS_START, MIN_N, CI_LEVEL,
+    WALK_FORWARD_FOLDS,
     load_1m, resample_ohlcv, prepare_pair,
 )
 
@@ -361,6 +362,30 @@ def slice_df(df: pd.DataFrame, oos: bool = False) -> pd.DataFrame:
     if oos:
         return df[df.index >= boundary].copy()
     return df[df.index < boundary].copy()
+
+
+def slice_fold(
+    df: pd.DataFrame, train_end: str, test_end: str
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Return (train, test) slices for one walk-forward fold, confined to the
+    discovery region (D-04: walk-forward never touches the sacred OOS slice —
+    even if *test_end* is a date at or after OOS_START, the result is clamped
+    to df.index < OOS_START via slice_df(df, oos=False) below).
+
+    train: discovery bars with df.index < train_end (anchored/expanding — D-05:
+           every fold trains on all discovery history up to its boundary, so
+           the train slice grows monotonically as train_end advances).
+    test:  discovery bars with train_end <= df.index < test_end.
+
+    Both returned frames are copies (mirrors slice_df's copy-on-return
+    convention to prevent SettingWithCopyWarning on downstream writes).
+    """
+    disc = slice_df(df, oos=False)
+    train_boundary = pd.Timestamp(train_end)
+    test_boundary = pd.Timestamp(test_end)
+    train = disc[disc.index < train_boundary].copy()
+    test = disc[(disc.index >= train_boundary) & (disc.index < test_boundary)].copy()
+    return train, test
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
