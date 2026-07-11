@@ -603,6 +603,64 @@ def test_barrier_hit_forward_not_the_same_as_barrier_hit_on_same_call():
     assert hasattr(cisd_analysis, "barrier_hit") or True  # already confirmed existing
 
 
+def _prepared_barrier_outcome_frame(forward_high: float, forward_low: float):
+    """Prepared frame with candle[0] at idx=1 and the first forward bar at idx=3."""
+    raw = pd.DataFrame(
+        {
+            "open":   [7, 6, 7, 7, 7],
+            "high":   [8, 10, 9, forward_high, 9],
+            "low":    [6, 5, 6, forward_low, 6],
+            "close":  [7, 8, 7, 7, 7],
+            "volume": [100] * 5,
+        },
+        index=pd.date_range("2026-01-09 11:00", periods=5, freq="15min"),
+    )
+    return cisd_analysis.prepare(raw)
+
+
+def test_barrier_outcome_reversal_when_stop_first():
+    df = _prepared_barrier_outcome_frame(forward_high=11, forward_low=4)
+    assert cisd_analysis.barrier_outcome_forward(df, 1, df.iloc[1], "bullish") == "reversal"
+
+
+def test_barrier_outcome_continuation_when_target_first():
+    df = _prepared_barrier_outcome_frame(forward_high=11, forward_low=6)
+    assert cisd_analysis.barrier_outcome_forward(df, 1, df.iloc[1], "bullish") == "continuation"
+
+
+def test_barrier_outcome_neither_on_timeout():
+    df = _prepared_barrier_outcome_frame(forward_high=9, forward_low=6)
+    assert cisd_analysis.barrier_outcome_forward(df, 1, df.iloc[1], "bullish") == "neither"
+    assert cisd_analysis.barrier_outcome_forward(df, 4, df.iloc[4], "bullish") == "neither"
+
+
+def test_barrier_outcome_bearish_mirror():
+    reversal = _prepared_barrier_outcome_frame(forward_high=11, forward_low=4)
+    continuation = _prepared_barrier_outcome_frame(forward_high=9, forward_low=4)
+    assert cisd_analysis.barrier_outcome_forward(
+        reversal, 1, reversal.iloc[1], "bearish"
+    ) == "reversal"
+    assert cisd_analysis.barrier_outcome_forward(
+        continuation, 1, continuation.iloc[1], "bearish"
+    ) == "continuation"
+
+
+def test_barrier_outcome_continuation_matches_barrier_hit_forward():
+    df = cisd_analysis.prepare(_annotated_post_cisd_df())
+    outcomes = []
+    for pos in pd.Series(range(len(df)))[df["cisd_type"].notna().to_numpy()]:
+        row = df.iloc[pos]
+        ct = row["cisd_type"]
+        outcome = cisd_analysis.barrier_outcome_forward(df, pos, row, ct)
+        outcomes.append(outcome)
+        assert (outcome == "continuation") == cisd_analysis.barrier_hit_forward(
+            df, pos, row, ct
+        )
+
+    assert outcomes
+    assert pd.Series(outcomes).isin({"continuation", "reversal", "neither"}).all()
+
+
 def test_compute_candle1_followthrough_runs_on_prepare_output():
     """compute_candle1_followthrough works on a frame produced by prepare()."""
     df_raw = pd.DataFrame(

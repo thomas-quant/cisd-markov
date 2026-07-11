@@ -80,6 +80,21 @@ def barrier_hit_forward(df: pd.DataFrame, idx: int, row: pd.Series, ct: str) -> 
     return False
 
 
+def barrier_outcome_forward(df: pd.DataFrame, idx: int, row: pd.Series, ct: str) -> str:
+    """Return "continuation", "reversal", or "neither" for the forward barrier window."""
+    for j in range(2, LOOKAHEAD + 2):
+        if idx + j >= len(df):
+            break
+        bar = df.iloc[idx + j]
+        if ct == "bullish":
+            if bar["low"] <= row["low"]:    return "reversal"
+            if bar["high"] >= row["high"]:  return "continuation"
+        else:
+            if bar["high"] >= row["high"]:  return "reversal"
+            if bar["low"] <= row["low"]:    return "continuation"
+    return "neither"
+
+
 def _count_consecutive(idx: int, directions: pd.Series, target: str, max_n: int) -> int:
     count = 0
     for i in range(1, max_n + 1):
@@ -736,6 +751,8 @@ __all__ = [
     # New RES-01 symbols
     "barrier_hit_forward",
     "compute_candle1_followthrough",
+    # New RES-04 symbols
+    "barrier_outcome_forward",
     # New RES-02 symbols
     "compute_post_cisd_context",
 ]
