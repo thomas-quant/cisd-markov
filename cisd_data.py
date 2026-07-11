@@ -439,7 +439,31 @@ def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
     return annotated
 
 
+def _direction_for_signal_type(signal_type: object) -> str | None:
+    text = str(signal_type)
+    if text.startswith("Bullish"):
+        return "bullish"
+    if text.startswith("Bearish"):
+        return "bearish"
+    return None
+
+
 def _annotate_swing_smt_from_events(df: pd.DataFrame, events: pd.DataFrame, instrument: str) -> pd.DataFrame:
+    """Vectorized re-expression of the per-bar SMT-matching loop.
+
+    Behavior-preserving rewrite (Phase 08 Plan 03): reproduces the original
+    O(bars x events) nested loop's exact semantics — left-only window
+    `[index[max(0, idx-2)], index[idx]]` (inclusive, by timestamp) and
+    latest-created-event-wins (with ties broken by original event order) —
+    via a per-direction `searchsorted` lookup instead of a per-bar Python
+    scan over every event. See
+    `.planning/phases/08-performance-vectorize-the-enrichment-validation-hot-path/08-03-PLAN.md`
+    for the derivation: sorting each direction's events by `created_ts` with
+    a STABLE sort preserves original-order ties, so `searchsorted(...,
+    side="right") - 1` against each CISD bar's timestamp lands on exactly the
+    same "last event in ascending-created_ts, then original-order,
+    iteration" winner the original loop's unconditional overwrite produced.
+    """
     required_event_columns = ("signal_type", "created_ts", "sweeping_asset", "failing_asset")
     if "cisd_type" not in df.columns:
         raise ValueError("df must contain cisd_type column")
@@ -457,55 +481,81 @@ def _annotate_swing_smt_from_events(df: pd.DataFrame, events: pd.DataFrame, inst
     if annotated.empty or events.empty:
         return annotated
 
-    event_rows = []
-    for row in events.itertuples(index=False):
-        signal_type = getattr(row, "signal_type", None)
-        created_ts = getattr(row, "created_ts", None)
-        sweeping_asset = getattr(row, "sweeping_asset", None)
-        failing_asset = getattr(row, "failing_asset", None)
-        if pd.isna(created_ts) or signal_type is None:
-            continue
-        direction = "bullish" if str(signal_type).startswith("Bullish") else "bearish" if str(signal_type).startswith("Bearish") else None
-        if direction is None:
-            continue
-        event_rows.append(
-            {
-                "created_ts": created_ts,
-                "direction": direction,
-                "sweeping_asset": sweeping_asset,
-                "failing_asset": failing_asset,
-            }
-        )
+    # Filter: drop events with NaT created_ts (mirrors `pd.isna(created_ts)`);
+    # signal_type values that are None/NaN/unrecognized fall through to
+    # `_direction_for_signal_type` returning None and are dropped below —
+    # matching the original's `signal_type is None` short-circuit plus its
+    # `direction is None` fallback for any other non-matching value.
+    filtered = events.loc[events["created_ts"].notna()].copy()
+    filtered["_direction"] = filtered["signal_type"].map(_direction_for_signal_type)
+    filtered = filtered.loc[filtered["_direction"].notna()]
 
-    if not event_rows:
+    if filtered.empty:
         return annotated
 
-    event_rows.sort(key=lambda r: r["created_ts"])
+    n = len(annotated)
+    idx_ax = annotated.index
+    ct_arr = annotated["cisd_type"].to_numpy(dtype=object)
+    ts_arr = idx_ax.to_numpy()
+    lower_pos = np.maximum(np.arange(n) - 2, 0)
+    lower_ts_arr = ts_arr[lower_pos]
 
-    for idx, ts in enumerate(annotated.index):
-        ct = annotated.iat[idx, annotated.columns.get_loc("cisd_type")]
-        if ct not in ("bullish", "bearish"):
+    has_swing_smt = np.zeros(n, dtype=bool)
+    swing_smt_tag = np.full(n, "no SMT", dtype=object)
+    swing_smt_match_ts = np.full(n, np.datetime64("NaT"), dtype="datetime64[ns]")
+    swing_smt_role = np.full(n, "none", dtype=object)
+
+    for direction in ("bullish", "bearish"):
+        dir_events = filtered.loc[filtered["_direction"] == direction]
+        if dir_events.empty:
             continue
 
-        lower_idx = max(0, idx - 2)
-        lower_ts = annotated.index[lower_idx]
-        best_event = None
-        for event in event_rows:
-            if event["direction"] != ct:
-                continue
-            if lower_ts <= event["created_ts"] <= ts:
-                best_event = event
+        # Stable sort by created_ts: ties preserve original event order,
+        # reproducing the original loop's ascending-created_ts iteration
+        # (event_rows.sort(key=...)) exactly, including its tie behavior.
+        dir_events = dir_events.sort_values("created_ts", kind="mergesort")
+        event_ts       = dir_events["created_ts"].to_numpy()
+        event_sweeping = dir_events["sweeping_asset"].to_numpy()
+        event_failing  = dir_events["failing_asset"].to_numpy()
 
-        if best_event is None:
+        row_mask = ct_arr == direction
+        if not row_mask.any():
+            continue
+        row_positions = np.flatnonzero(row_mask)
+        row_ts        = ts_arr[row_positions]
+        row_lower_ts  = lower_ts_arr[row_positions]
+
+        # Rightmost event with created_ts <= row_ts. For tied created_ts
+        # values this lands on the LAST tied event in `event_ts` (per the
+        # stable sort above), matching the original's "keep overwriting on
+        # every ascending-order match" tie outcome.
+        candidate_pos = np.searchsorted(event_ts, row_ts, side="right") - 1
+        found = candidate_pos >= 0
+        safe_pos = np.clip(candidate_pos, 0, len(event_ts) - 1)
+        candidate_ts = np.where(found, event_ts[safe_pos], np.datetime64("NaT"))
+        in_window = found & (candidate_ts >= row_lower_ts)
+
+        if not in_window.any():
             continue
 
-        annotated.iat[idx, annotated.columns.get_loc("has_swing_smt")] = True
-        annotated.iat[idx, annotated.columns.get_loc("swing_smt_tag")] = "w/ SMT"
-        annotated.iat[idx, annotated.columns.get_loc("swing_smt_match_ts")] = best_event["created_ts"]
-        if instrument == best_event["sweeping_asset"]:
-            annotated.iat[idx, annotated.columns.get_loc("swing_smt_role")] = "swept"
-        elif instrument == best_event["failing_asset"]:
-            annotated.iat[idx, annotated.columns.get_loc("swing_smt_role")] = "failed_to_sweep"
+        match_positions      = row_positions[in_window]
+        matched_candidate_pos = safe_pos[in_window]
+        matched_ts       = event_ts[matched_candidate_pos]
+        matched_sweeping = event_sweeping[matched_candidate_pos]
+        matched_failing  = event_failing[matched_candidate_pos]
+
+        has_swing_smt[match_positions] = True
+        swing_smt_tag[match_positions] = "w/ SMT"
+        swing_smt_match_ts[match_positions] = matched_ts
+        swing_smt_role[match_positions] = np.where(
+            matched_sweeping == instrument, "swept",
+            np.where(matched_failing == instrument, "failed_to_sweep", "none"),
+        )
+
+    annotated["has_swing_smt"]      = has_swing_smt
+    annotated["swing_smt_tag"]      = swing_smt_tag
+    annotated["swing_smt_match_ts"] = swing_smt_match_ts
+    annotated["swing_smt_role"]     = swing_smt_role
 
     return annotated
 
