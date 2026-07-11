@@ -618,8 +618,9 @@ def compute_post_cisd_context(df: pd.DataFrame) -> dict:
     Reading-B (D-04) additional cut: candle2_past_candle1_wick — separate bucket,
     not multiplied into the gap buckets.
 
-    Continuation is measured with barrier_hit_forward (lookahead from idx+2 — no in-window
-    variant, D-06). Returns {dir: {tag: {total, runs}}}.
+    Continuation is measured from idx+2 (no in-window variant, D-06). The
+    failed_gap_against population is also partitioned into reversal and neither.
+    Returns {dir: {tag: {total, runs}}}.
     """
     _GAP_TAGS = {
         "gap_with":    "failed_gap_with",
@@ -630,6 +631,8 @@ def compute_post_cisd_context(df: pd.DataFrame) -> dict:
         ct: {
             "failed_gap_with":           {"total": 0, "runs": 0},
             "failed_gap_against":        {"total": 0, "runs": 0},
+            "failed_gap_against_reversal": {"total": 0, "runs": 0},
+            "failed_gap_against_neither":  {"total": 0, "runs": 0},
             "failed_gap_flat":           {"total": 0, "runs": 0},
             "candle2_past_candle1_wick": {"total": 0, "runs": 0},
         }
@@ -653,7 +656,19 @@ def compute_post_cisd_context(df: pd.DataFrame) -> dict:
         if failed_arr[pos]:
             gap_tag = _GAP_TAGS.get(gap_dir_arr[pos], "failed_gap_flat")
             stats[ct][gap_tag]["total"] += 1
-            if barrier_hit_forward(df, pos, row, ct):
+            if gap_tag == "failed_gap_against":
+                reversal = stats[ct]["failed_gap_against_reversal"]
+                neither = stats[ct]["failed_gap_against_neither"]
+                reversal["total"] += 1
+                neither["total"] += 1
+                outcome = barrier_outcome_forward(df, pos, row, ct)
+                if outcome == "continuation":
+                    stats[ct][gap_tag]["runs"] += 1
+                elif outcome == "reversal":
+                    reversal["runs"] += 1
+                else:
+                    neither["runs"] += 1
+            elif barrier_hit_forward(df, pos, row, ct):
                 stats[ct][gap_tag]["runs"] += 1
 
         # Reading B — separate, no precondition on failed

@@ -949,6 +949,84 @@ def test_compute_post_cisd_context_has_failed_gap_tags():
         assert "failed_gap_flat" in tags, f"Missing failed_gap_flat in {ct}"
 
 
+def _post_cisd_outcome_partition_df():
+    """Prepared frame with continuation, reversal, and neither against-gap events."""
+    size = 14
+    raw = pd.DataFrame(
+        {
+            "open":   [7] * size,
+            "high":   [9] * size,
+            "low":    [6] * size,
+            "close":  [7] * size,
+            "volume": [100] * size,
+        },
+        index=pd.date_range("2026-01-14 13:00", periods=size, freq="15min"),
+    )
+    for pos in (1, 5, 9):
+        raw.iloc[pos, raw.columns.get_loc("high")] = 10
+        raw.iloc[pos, raw.columns.get_loc("low")] = 5
+    raw.iloc[3, raw.columns.get_loc("high")] = 11
+    raw.iloc[7, raw.columns.get_loc("low")] = 4
+
+    df = cisd_analysis.prepare(raw)
+    df["cisd_type"] = None
+    df["candle1_failed_followthrough"] = False
+    df["candle2_gap_dir"] = "flat"
+    df["candle2_past_candle1_wick"] = False
+    for pos in (1, 5, 9):
+        df.iloc[pos, df.columns.get_loc("cisd_type")] = "bullish"
+        df.iloc[pos, df.columns.get_loc("candle1_failed_followthrough")] = True
+        df.iloc[pos, df.columns.get_loc("candle2_gap_dir")] = "gap_against"
+    return df
+
+
+def test_post_cisd_reversal_and_neither_tags_share_against_population():
+    result = cisd_analysis.compute_post_cisd_context(_post_cisd_outcome_partition_df())
+
+    for ct in ("bullish", "bearish"):
+        against = result[ct]["failed_gap_against"]
+        reversal = result[ct]["failed_gap_against_reversal"]
+        neither = result[ct]["failed_gap_against_neither"]
+        assert set(reversal) == {"total", "runs"}
+        assert set(neither) == {"total", "runs"}
+        assert reversal["total"] == against["total"] == neither["total"]
+        assert against["runs"] + reversal["runs"] + neither["runs"] == against["total"]
+
+    assert result["bullish"]["failed_gap_against"] == {"total": 3, "runs": 1}
+    assert result["bullish"]["failed_gap_against_reversal"] == {"total": 3, "runs": 1}
+    assert result["bullish"]["failed_gap_against_neither"] == {"total": 3, "runs": 1}
+
+
+def test_post_cisd_reversal_and_neither_are_scoped_to_against():
+    result = cisd_analysis.compute_post_cisd_context(_post_cisd_outcome_partition_df())
+    for ct in ("bullish", "bearish"):
+        for tag in ("failed_gap_with", "failed_gap_flat", "candle2_past_candle1_wick"):
+            assert set(result[ct][tag]) == {"total", "runs"}
+
+
+def test_post_cisd_against_continuation_matches_barrier_hit_forward():
+    df = _post_cisd_outcome_partition_df()
+    result = cisd_analysis.compute_post_cisd_context(df)
+    expected = 0
+    for pos in (1, 5, 9):
+        expected += cisd_analysis.barrier_hit_forward(df, pos, df.iloc[pos], "bullish")
+    assert result["bullish"]["failed_gap_against"]["runs"] == expected
+
+
+def test_chart_post_cisd_context_renders_reversal_and_neither_tags():
+    import matplotlib.pyplot as plt
+
+    data = cisd_analysis.compute_post_cisd_context(_post_cisd_outcome_partition_df())
+    fig, ax = plt.subplots()
+    try:
+        cisd_analysis.chart_post_cisd_context(ax, data, data)
+        labels = {label.get_text() for label in ax.get_yticklabels()}
+        assert any("failed_gap_against_reversal" in label for label in labels)
+        assert any("failed_gap_against_neither" in label for label in labels)
+    finally:
+        plt.close(fig)
+
+
 def test_compute_post_cisd_context_has_reading_b_tag():
     """Result must include candle2_past_candle1_wick tag (Reading B) per direction."""
     df = cisd_analysis.prepare(_annotated_post_cisd_df())
@@ -1072,6 +1150,20 @@ def test_build_manifest_rows_post_cisd_context_has_failed_gap_buckets():
     assert "failed_gap_with" in buckets, f"Missing failed_gap_with bucket: {buckets}"
     assert "failed_gap_against" in buckets, f"Missing failed_gap_against bucket: {buckets}"
     assert "failed_gap_flat" in buckets, f"Missing failed_gap_flat bucket: {buckets}"
+
+
+def test_build_manifest_rows_post_cisd_context_has_reversal_and_neither_buckets():
+    """Generic manifest dispatch emits both reversal outcome buckets unchanged."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+    from build_validation import build_manifest_rows
+
+    df = _post_cisd_outcome_partition_df()
+    rows = build_manifest_rows(["post_cisd_context"], df, df, "Daily", "discovery")
+    buckets = {r["bucket"] for r in rows if r["analysis"] == "post_cisd_context"}
+    assert "failed_gap_against_reversal" in buckets
+    assert "failed_gap_against_neither" in buckets
 
 
 def test_build_manifest_rows_post_cisd_context_below_min_n_not_dropped():
