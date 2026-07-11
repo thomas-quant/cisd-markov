@@ -5,15 +5,15 @@ milestone_name: Rigorous Validation & Post-CISD Modeling
 current_phase: 08
 current_phase_name: performance-vectorize-the-enrichment-validation-hot-path
 status: executing
-stopped_at: Completed 08-01-PLAN.md — behavior-lock (golden fixtures + parity/characterization tests) done; ready for Plan 08-02 (vectorize _annotate_cisd_research)
-last_updated: "2026-07-11T19:00:51.522Z"
+stopped_at: Completed 08-02-PLAN.md — vectorized _annotate_cisd_research (behavior-preserving); ready for Plan 08-03 (vectorize SMT annotation + authoritative 3-manifest bit-equality proof)
+last_updated: "2026-07-11T19:30:32.784Z"
 last_activity: 2026-07-11
-last_activity_desc: Phase 08 execution started
+last_activity_desc: Plan 08-02 complete (vectorized _annotate_cisd_research, behavior-preserving)
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 7
   percent: 33
 ---
 
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 ## Current Position
 
 Phase: 08 (performance-vectorize-the-enrichment-validation-hot-path) — EXECUTING
-Plan: 2 of 3
-Status: Plan 08-01 (behavior-lock) complete — ready for Plan 08-02
-Last activity: 2026-07-11 — Plan 08-01 complete (golden fixtures + parity/characterization tests)
+Plan: 3 of 3
+Status: Plan 08-02 (vectorize _annotate_cisd_research) complete — ready for Plan 08-03
+Last activity: 2026-07-11 — Plan 08-02 complete (vectorized enrichment hot spot, behavior-preserving; 101 fast tests + non-SMT characterization green)
 
 Progress: [███░░░░░░░] 33% (2 of 6 phases complete)
 
@@ -62,6 +62,7 @@ Progress: [███░░░░░░░] 33% (2 of 6 phases complete)
 *Updated after each plan completion*
 | Phase 06 P02 | 13min | 3 tasks | 5 files |
 | Phase 08 P01 | 35min | 2 tasks | 6 files |
+| Phase 08 P02 | 55min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,7 @@ Recent decisions affecting current work:
 - [Phase 08]: Reused Phase 7's already-captured manifests as golden (user-approved deviation) instead of a fresh ~24min regeneration, since cisd_data.py and scripts/build_validation.py were confirmed clean/unchanged and predate the manifests on disk
 - [Phase 08]: Adopted Phase 7's baseline timing (07-03-SUMMARY.md: ~24min parallel / ~60min sequential) as the SC3 'before' record; Plan 08-03 must measure 'after' comparably
 - [Phase 08]: Deferred the live CISD_PERF_CHAR=1 characterization pass to Plan 08-03's authoritative before/after proof, avoiding a redundant ~24min regeneration in this behavior-lock plan
+- [Phase 08]: Fully vectorized the sweep computation via a two-stage rolling reduction (per-bar trigger + rolling-any) instead of a bounded per-window loop, and left the four private enrichment helpers (_compute_three_bar_swings, _has_directional_fvg, _classify_fvg_hold, _has_directional_sweep) untouched since they are independently unit-tested and exported.
 
 ### Pending Todos
 
@@ -117,8 +119,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-11T19:00:51.475Z
-Stopped at: Completed 08-01-PLAN.md — behavior-lock (golden fixtures + parity/characterization tests) done; ready for Plan 08-02 (vectorize _annotate_cisd_research)
+Last session: 2026-07-11T19:30:02.569Z
+Stopped at: Completed 08-02-PLAN.md — vectorized _annotate_cisd_research (behavior-preserving); ready for Plan 08-03 (vectorize SMT annotation + authoritative 3-manifest bit-equality proof)
 Resume file: .planning/phases/07-corrected-re-validation-of-the-post-cisd-studies/07-CONTEXT.md
 
 ## Operator Next Steps
