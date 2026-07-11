@@ -14,8 +14,8 @@ Requirements for milestone v2.0. Each maps to a roadmap phase.
 
 ### Research Extensions
 
-- [ ] **RES-04**: An explicit reversal barrier for the `post_cisd_context` `failed_gap_against` bucket measures whether `candle[0]`'s opposite extreme is hit first, not just a depressed continuation rate.
-- [ ] **RES-05**: The validation manifest is regenerated end-to-end under the new methodology so `post_cisd_context` and `candle1_followthrough` — never fully validated after Phase 5 — carry real, corrected, walk-forward-confirmed rates.
+- [x] **RES-04**: An explicit reversal barrier for the `post_cisd_context` `failed_gap_against` bucket measures whether `candle[0]`'s opposite extreme is hit first, not just a depressed continuation rate.
+- [x] **RES-05**: The validation manifest is regenerated end-to-end under the new methodology so `post_cisd_context` and `candle1_followthrough` — never fully validated after Phase 5 — carry real, corrected, walk-forward-confirmed rates.
 
 ### Modeling
 
@@ -44,8 +44,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 |-------------|-------|--------|
 | MHT-01 | Phase 6 | Complete |
 | WF-01 | Phase 6 | Complete |
-| RES-04 | Phase 7 | Pending |
-| RES-05 | Phase 7 | Pending |
+| RES-04 | Phase 7 | Complete |
+| RES-05 | Phase 7 | Complete |
 | ML-01 | Phase 8 | Pending |
 
 **Coverage:**
