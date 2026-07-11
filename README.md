@@ -379,6 +379,8 @@ The current CLI surface is limited to the analysis keys listed below.
 
 Phase 6 adds two additive validation capabilities to `scripts/build_validation.py`. Neither changes an existing manifest column or a previously published rate — both are new columns / new sibling artifacts layered on top of the v1.0 harness (sacred chronological holdout, Wilson CI, `min_n_pass` gate).
 
+- **D-04 scope disclaimer:** This harder corrected bar currently applies **only** to the two post-CISD studies, `post_cisd_context` and `candle1_followthrough`. The other 8 published Key Findings sections — Baseline, Wick Position, Combined Wick×Consecutive, Stricter CISD, Consecutive Opposite Candles, Candle Body Size, Volume Ratio, and Swing SMT — have **not** been re-evaluated under it.
+
 **Multiple-comparisons (FDR) correction:**
 
 - Every bucket in the discovery manifest now carries a `p_value` testing `H0: rate = 0.5` (the fixed coin-flip null, not a bucket's own baseline rate) — a two-sided normal-approximation z-test (`p_value_vs_half`).
@@ -394,6 +396,27 @@ Phase 6 adds two additive validation capabilities to `scripts/build_validation.p
 - Each fold is scored by `evaluate_fold()`: both the anchored train window and the test chunk must independently clear `MIN_N` (a per-fold sample-size gate), and the test rate must confirm the train rate's same non-boundary side of 50% (an exact 50% train rate makes no directional prediction and cannot pass).
 - The per-bucket aggregate `wf_verdict` (`walk_forward_verdict()`) requires a **majority — strictly more than 50% — of folds to pass** (`wf-robust`); exactly 50% is `wf-fragile`, not robust. `below-n` folds still count in the denominator.
 - `validation_manifest_walkforward.csv` columns: `analysis, timeframe, instrument, direction, bucket, fold_index, train_end, test_end, train_rate, train_n, test_rate, test_n, fold_verdict, wf_verdict`.
+
+## Post-CISD Context — Corrected Re-Validation (v2.0)
+
+This section extends the badge vocabulary with a fourth, strictly harder tier: **✓ CORRECTED-BAR CLEARED**. Under the D-02 three-condition AND, a bucket must have discovery `corrected_pass`, walk-forward `wf_verdict == 'wf-robust'`, **and** a sacred-OOS rate on the same side of `0.50` as discovery. This is stricter than **✓ CONFIRMED**, which checks the OOS same-side condition without the FDR-correction and walk-forward legs. **not-cleared** means the tag did not clear this corrected bar; it does not replace the existing **✗ NOT CONFIRMED** or **below-n / not a finding** states.
+
+| analysis | tag | n_buckets | n_cleared | verdict |
+|---|---|---:|---:|---|
+| candle1_followthrough | against_forward | 16 | 12 | cleared |
+| candle1_followthrough | against_inwindow | 16 | 12 | cleared |
+| candle1_followthrough | with_past_wick_forward | 16 | 12 | cleared |
+| candle1_followthrough | with_past_wick_inwindow | 16 | 12 | cleared |
+| candle1_followthrough | with_within_wick_forward | 16 | 8 | not-cleared |
+| candle1_followthrough | with_within_wick_inwindow | 16 | 9 | cleared |
+| post_cisd_context | candle2_past_candle1_wick | 16 | 12 | cleared |
+| post_cisd_context | failed_gap_against | 16 | 10 | cleared |
+| post_cisd_context | failed_gap_against_neither | 16 | 10 | cleared |
+| post_cisd_context | failed_gap_against_reversal | 16 | 10 | cleared |
+| post_cisd_context | failed_gap_flat | 16 | 10 | cleared |
+| post_cisd_context | failed_gap_with | 16 | 11 | cleared |
+
+For the `failed_gap_against` reversal-barrier reading, the mutually exclusive outcomes partition the same population. Discovery is **32.9% continuation** (`failed_gap_against`, n=23,247), **59.2% reversal** (n=23,247), and **7.9% neither** (n=23,247). Sacred OOS is **34.3% continuation** (n=10,706), **57.8% reversal** (n=10,706), and **7.9% neither** (n=10,706). The majority therefore reverse after a failed-gap-against CISD; that reversal rate is distinct from, and is not conflated with, the continuation rate in the CISD direction.
 
 ## Configuration
 
