@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Rigorous Validation & Post-CISD Modeling
-current_phase: 08
-current_phase_name: performance-vectorize-the-enrichment-validation-hot-path
-status: executing
-stopped_at: Completed 08-03-PLAN.md — vectorized _annotate_swing_smt_from_events + removed redundant prepare_pair recompute; SC2 bit-equality PASS (3 manifests identical to golden), SC3 faster (suite 21m14s→6m35s), SC4 green (213 passed). Phase 08 execution complete — pending verification.
-last_updated: "2026-07-11T20:50:00.000Z"
+current_phase: 9
+current_phase_name: SMT Geometry & Invalidation Honesty
+status: verifying
+stopped_at: Completed 08-02-PLAN.md — vectorized _annotate_cisd_research (behavior-preserving); ready for Plan 08-03 (vectorize SMT annotation + authoritative 3-manifest bit-equality proof)
+last_updated: "2026-07-11T20:58:17.015Z"
 last_activity: 2026-07-11
-last_activity_desc: Plan 08-03 complete (vectorized SMT annotation + end-to-end bit-equality proof; all Phase 8 SCs met)
+last_activity_desc: Phase 08 complete, transitioned to Phase 9
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 8
   completed_plans: 8
-  percent: 33
+  percent: 50
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 
 ## Current Position
 
-Phase: 08 (performance-vectorize-the-enrichment-validation-hot-path) — EXECUTING
-Plan: 3 of 3 — all complete
+Phase: 9 — SMT Geometry & Invalidation Honesty
+Plan: Not started
 Status: Phase 08 execution complete — both hot spots vectorized, SC2 bit-equality PASS, SC3/SC4 met; pending phase verification
-Last activity: 2026-07-11 — Plan 08-03 complete (vectorized SMT annotation, removed redundant recompute; 3 manifests bit-identical to golden, full suite 213 passed)
+Last activity: 2026-07-11 — Phase 08 complete, transitioned to Phase 9
 
 Progress: [███░░░░░░░] 33% (2 of 6 phases complete)
 
@@ -39,7 +39,7 @@ Progress: [███░░░░░░░] 33% (2 of 6 phases complete)
 
 **Velocity:**
 
-- Total plans completed: 5 (v1.0)
+- Total plans completed: 8 (v1.0)
 - Average duration: -
 - Total execution time: 0 hours (v2.0)
 

@@ -16,10 +16,16 @@ Requirements for milestone v2.0. Each maps to a roadmap phase.
 
 - [x] **RES-04**: An explicit reversal barrier for the `post_cisd_context` `failed_gap_against` bucket measures whether `candle[0]`'s opposite extreme is hit first, not just a depressed continuation rate.
 - [x] **RES-05**: The validation manifest is regenerated end-to-end under the new methodology so `post_cisd_context` and `candle1_followthrough` — never fully validated after Phase 5 — carry real, corrected, walk-forward-confirmed rates.
+- [ ] **RES-06**: The SMT study carries the price/lifecycle fields the scanner already returns (`reference_price`, `invalidation_level`, `broken_ts`, `status`); the already-invalidated-at-`t` `w/ SMT` tagging bug is fixed; and SMT role, magnitude (`smt_block_size_atr`), CISD-in-block containment (`cisd_in_smt_block`), and a survived-vs-broke-in-window split are added and validated through the harness. Changes to published SMT rates are deliberate and documented, never silent.
+- [ ] **RES-07**: Three new conditioning-feature families are added and validated through the harness — continuous ATR-normalized magnitude versions of the binary flags (distance past wick, sweep depth, FVG size), session / time-of-day tags from the ET index, and CISD volume-anomaly measures (rolling RVOL / z-score, effort-vs-result, optional cross-asset volume divergence) distinct from the already-negligible 1-bar volume ratio.
+
+### Performance
+
+- [x] **PERF-01**: The enrichment and validation hot path is vectorized (the row-by-row `_annotate_swing_smt_from_events` and `_annotate_cisd_research` loops, plus redundant `prepare_pair` calls) so the end-to-end manifest regen is fast; strictly behavior-preserving, proven by a characterization test that the regenerated manifests are identical to the pre-change output.
 
 ### Modeling
 
-- [ ] **ML-01**: `post_cisd_ml`, a small ML model over the post-CISD context features, is built only if RES-05's corrected results show the discrete tags carry a real, durable effect.
+- [ ] **ML-01**: A small model over the qualifying feature families is built only if the corrected results from Phases 7/9/10 show at least one family carries a real, durable effect; "no model warranted" is a valid outcome.
 
 ## v2 Requirements
 
@@ -46,14 +52,17 @@ Which phases cover which requirements. Populated during roadmap creation.
 | WF-01 | Phase 6 | Complete |
 | RES-04 | Phase 7 | Complete |
 | RES-05 | Phase 7 | Complete |
-| ML-01 | Phase 8 | Pending |
+| PERF-01 | Phase 8 | Complete |
+| RES-06 | Phase 9 | Pending |
+| RES-07 | Phase 10 | Pending |
+| ML-01 | Phase 11 | Pending |
 
 **Coverage:**
 
-- v1 requirements: 5 total
-- Mapped to phases: 5
+- v1 requirements: 8 total
+- Mapped to phases: 8
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-10*
-*Last updated: 2026-07-10 after roadmap creation (Phases 6–8 mapped)*
+*Last updated: 2026-07-11 after milestone extension (Phases 8–10 inserted for performance + feature expansion; ML-01 moved to Phase 11)*
