@@ -38,13 +38,13 @@ A reported edge can be trusted: every published rate is sample-size gated, carri
 - ✓ Existing README findings reconciled against discovery and OOS results with explicit verdict badges — v1.0
 - ✓ Modular `cisd_data` / `cisd_barriers` / `cisd_charts` architecture, central analysis registry, and vectorized hot paths — v1.0
 - ✓ `candle[1]` follow-through and multi-bar post-CISD context studies wired through the validation harness — v1.0
+- ✓ Explicit reversal barrier for `failed_gap_against` (`barrier_outcome_forward`) reporting continuation/reversal/neither distinctly (RES-04) — Validated in Phase 7
+- ✓ Validation manifest regenerated end-to-end under the corrected methodology; `post_cisd_context` and `candle1_followthrough` now carry real, FDR-corrected, walk-forward-confirmed rates with a published per-tag go/no-go verdict (RES-05) — Validated in Phase 7
 
 ### Active
 
 - [ ] Multiple-comparisons / data-snooping correction applied across the validation harness's full bucket grid (MHT-01).
 - [ ] Walk-forward / rolling-window validation supplementing the single sacred discovery/OOS split (WF-01).
-- [ ] Explicit reversal barrier for RES-02 — measure whether `candle[0]`'s opposite extreme is hit first, not just a depressed continuation rate.
-- [ ] Validation manifest re-run under the corrected methodology so `post_cisd_context` and `candle1_followthrough` carry real, corrected, OOS-confirmed rates.
 - [ ] `post_cisd_ml` — a small model over the post-CISD context features, built only once the discrete tags clear the corrected evidence bar (ML-01).
 
 ### Out of Scope
@@ -87,4 +87,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-10 after starting v2.0 milestone definition*
+*Last updated: 2026-07-11 after Phase 7 complete — post-CISD studies corrected re-validation published*
