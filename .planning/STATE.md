@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Rigorous Validation & Post-CISD Modeling
-current_phase: 8
-current_phase_name: Performance — Vectorize the Enrichment & Validation Hot Path
-status: planned
-stopped_at: Phase 8 planned — 3 plans across 3 waves, ready to execute
-last_updated: "2026-07-11T17:56:46.000Z"
+current_phase: 08
+current_phase_name: performance-vectorize-the-enrichment-validation-hot-path
+status: executing
+stopped_at: Completed 08-01-PLAN.md — behavior-lock (golden fixtures + parity/characterization tests) done; ready for Plan 08-02 (vectorize _annotate_cisd_research)
+last_updated: "2026-07-11T19:00:51.522Z"
 last_activity: 2026-07-11
-last_activity_desc: Phase 8 planned — 3 plans (behavior-lock → vectorize research annotation → vectorize SMT annotation + de-dupe harness), plan-checker passed
+last_activity_desc: Phase 08 execution started
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 8
+  completed_plans: 6
   percent: 33
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** A reported edge can be trusted — every published rate is sample-size gated, carries a confidence interval, and is confirmed out-of-sample.
-**Current focus:** Phase 08 — performance: vectorize the enrichment & validation hot path
+**Current focus:** Phase 08 — performance-vectorize-the-enrichment-validation-hot-path
 
 ## Current Position
 
-Phase: 8 — Performance — Vectorize the Enrichment & Validation Hot Path
-Plan: 3 plans (08-01, 08-02, 08-03) across 3 waves
-Status: Ready to execute — planned & checker-verified (VERIFICATION PASSED)
-Last activity: 2026-07-11 — Phase 8 planned: 3 plans, plan-checker passed
+Phase: 08 (performance-vectorize-the-enrichment-validation-hot-path) — EXECUTING
+Plan: 2 of 3
+Status: Plan 08-01 (behavior-lock) complete — ready for Plan 08-02
+Last activity: 2026-07-11 — Plan 08-01 complete (golden fixtures + parity/characterization tests)
 
 Progress: [███░░░░░░░] 33% (2 of 6 phases complete)
 
@@ -61,6 +61,7 @@ Progress: [███░░░░░░░] 33% (2 of 6 phases complete)
 
 *Updated after each plan completion*
 | Phase 06 P02 | 13min | 3 tasks | 5 files |
+| Phase 08 P01 | 35min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,9 @@ Recent decisions affecting current work:
 - [Phase 05-02]: post_cisd_context uses barrier_hit_forward (continuation target = candle[0] extreme in CISD direction); RES-04 adds the opposite-extreme reversal measurement
 - [Phase 06]: WF-01: WALK_FORWARD_FOLDS frozen at 4 discovery-percentile calendar dates (20th/40th/60th/80th); slice_fold anchors folds to the discovery region only; evaluate_fold uses a per-fold MIN_N gate; walk_forward_verdict requires a strict majority (>50%) of folds to pass
 - [Phase 06]: walk-forward CLI branch takes precedence over --oos if both are passed, and writes output/validation_manifest_walkforward.csv as a purely additive sibling artifact without touching the discovery/OOS manifests or the sacred OOS banner
+- [Phase 08]: Reused Phase 7's already-captured manifests as golden (user-approved deviation) instead of a fresh ~24min regeneration, since cisd_data.py and scripts/build_validation.py were confirmed clean/unchanged and predate the manifests on disk
+- [Phase 08]: Adopted Phase 7's baseline timing (07-03-SUMMARY.md: ~24min parallel / ~60min sequential) as the SC3 'before' record; Plan 08-03 must measure 'after' comparably
+- [Phase 08]: Deferred the live CISD_PERF_CHAR=1 characterization pass to Plan 08-03's authoritative before/after proof, avoiding a redundant ~24min regeneration in this behavior-lock plan
 
 ### Pending Todos
 
@@ -113,8 +117,8 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-10T20:11:32.811Z
-Stopped at: Phase 7 context gathered
+Last session: 2026-07-11T19:00:51.475Z
+Stopped at: Completed 08-01-PLAN.md — behavior-lock (golden fixtures + parity/characterization tests) done; ready for Plan 08-02 (vectorize _annotate_cisd_research)
 Resume file: .planning/phases/07-corrected-re-validation-of-the-post-cisd-studies/07-CONTEXT.md
 
 ## Operator Next Steps
