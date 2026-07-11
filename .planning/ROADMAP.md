@@ -36,7 +36,7 @@ Full phase details in [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
 **Milestone Goal:** Upgrade the validation harness with multiple-comparisons correction and walk-forward validation, re-validate the post-CISD studies under that harder bar, then use the corrected evidence to decide whether the post-CISD context tags justify a small ML model.
 
 - [x] **Phase 6: Harder Evidence Bar — Multiple-Comparisons Correction & Walk-Forward Validation** - Extend the harness with FDR correction across the bucket grid and rolling walk-forward windows, as additive output that leaves existing numbers untouched (completed 2026-07-10)
-- [ ] **Phase 7: Corrected Re-Validation of the Post-CISD Studies** - Regenerate the manifest end-to-end under the corrected methodology for `post_cisd_context` / `candle1_followthrough`, add the `failed_gap_against` reversal barrier, and issue the go/no-go verdict for modeling
+- [x] **Phase 7: Corrected Re-Validation of the Post-CISD Studies** - Regenerate the manifest end-to-end under the corrected methodology for `post_cisd_context` / `candle1_followthrough`, add the `failed_gap_against` reversal barrier, and issue the go/no-go verdict for modeling (completed 2026-07-11)
 - [ ] **Phase 8: Conditional Post-CISD Model** - Gated strictly on Phase 7's verdict, either build and validate `post_cisd_ml` or ship a documented "no model warranted" conclusion
 
 ## Phase Details
@@ -74,7 +74,7 @@ Full phase details in [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
   3. A written verdict states, per post-CISD tag, whether it clears the corrected evidence bar (a real, durable, corrected, walk-forward-confirmed effect) — serving as the explicit go/no-go input to Phase 8.
   4. Any change in how these two studies' rates read versus their Phase 5 numbers is documented as a deliberate, visible methodology change in the summary/README — never a silent drift — and the behavior-lock tests on unchanged code paths still pass.
 
-**Plans**: 2/3 plans executed
+**Plans**: 3/3 plans complete
 
 **Wave 1** *(parallel — disjoint files)*
 
@@ -83,7 +83,7 @@ Full phase details in [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 07-03-PLAN.md — Regenerate all three manifests end-to-end + D-10 sanity check, run the verdict script, publish the go/no-go README section + D-04 disclaimer (RES-04, RES-05)
+- [x] 07-03-PLAN.md — Regenerate all three manifests end-to-end + D-10 sanity check, run the verdict script, publish the go/no-go README section + D-04 disclaimer (RES-04, RES-05)
 
 ### Phase 8: Conditional Post-CISD Model
 
@@ -107,5 +107,5 @@ Phases execute in numeric order: 6 → 7 → 8. Phase 7 requires the corrected h
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 6. Harder Evidence Bar (MHT + Walk-Forward) | v2.0 | 2/2 | Complete    | 2026-07-10 |
-| 7. Corrected Re-Validation of Post-CISD Studies | v2.0 | 2/3 | In Progress|  |
+| 7. Corrected Re-Validation of Post-CISD Studies | v2.0 | 3/3 | Complete   | 2026-07-11 |
 | 8. Conditional Post-CISD Model | v2.0 | 0/TBD | Not started | - |
