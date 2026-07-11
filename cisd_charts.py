@@ -338,6 +338,8 @@ def chart_post_cisd_context(ax, data_nq, data_es):
     _TAGS = [
         ("failed_gap_with",          1.0),
         ("failed_gap_against",       0.7),
+        ("failed_gap_against_reversal", 0.55),
+        ("failed_gap_against_neither",  0.4),
         ("failed_gap_flat",          0.45),
         ("candle2_past_candle1_wick", 0.85),
     ]
