@@ -56,6 +56,7 @@ from cisd_data import (
 from cisd_barriers import (
     barrier_hit,
     barrier_hit_forward,
+    barrier_outcome_forward,
     _count_consecutive,
     ANALYSES,
     ANALYSIS_META,
@@ -149,7 +150,8 @@ __all__ = [
     "_annotate_swing_smt_from_events", "_to_smt_ohlc",
     "_load_scan_smts_historical", "_scan_swing_smt_events", "prepare_pair",
     # cisd_barriers exports
-    "barrier_hit", "barrier_hit_forward", "_count_consecutive", "ANALYSES", "ANALYSIS_META",
+    "barrier_hit", "barrier_hit_forward", "barrier_outcome_forward", "_count_consecutive",
+    "ANALYSES", "ANALYSIS_META",
     "compute_basic", "compute_mc", "compute_significance", "compute_wick",
     "compute_combined", "compute_volume", "compute_candle_size", "compute_size_cross",
     "compute_smt_cisd", "compute_cisd_fvg", "compute_fvg_hold",
