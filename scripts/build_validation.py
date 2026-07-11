@@ -16,7 +16,7 @@ if str(REPO_ROOT) not in sys.path:
 from cisd_analysis import (
     ANALYSES, INSTRUMENTS, MAX_CONSEC, TIMEFRAMES, OOS_START, MIN_N, CI_LEVEL,
     WALK_FORWARD_FOLDS,
-    load_1m, resample_ohlcv, prepare_pair,
+    load_1m, resample_ohlcv, prepare_pair, _load_scan_smts_historical,
 )
 
 SLICES_PATH   = REPO_ROOT / "output" / "validation_slices.csv"
@@ -626,8 +626,7 @@ def main() -> None:
         dfs_1m = {inst: load_1m(path) for inst, path in INSTRUMENTS.items()}
 
         try:
-            _first_rule = next(iter(TIMEFRAMES.values()))
-            prepare_pair(dfs_1m["NQ"], dfs_1m["ES"], _first_rule, with_swing_smt=True)
+            _load_scan_smts_historical()
             with_smt = True
         except (FileNotFoundError, ImportError) as exc:
             print(f"[warn] SMT unavailable ({exc}); swing SMT columns will be absent")
@@ -665,8 +664,7 @@ def main() -> None:
     # (data error, resampling failure) should propagate so the researcher
     # sees a real traceback rather than a silent SMT disable.
     try:
-        _first_rule = next(iter(TIMEFRAMES.values()))
-        prepare_pair(dfs_1m["NQ"], dfs_1m["ES"], _first_rule, with_swing_smt=True)
+        _load_scan_smts_historical()
         with_smt = True
     except (FileNotFoundError, ImportError) as exc:
         print(f"[warn] SMT unavailable ({exc}); swing SMT columns will be absent")
