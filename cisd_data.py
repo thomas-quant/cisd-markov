@@ -180,132 +180,261 @@ def _has_directional_sweep(
 
 
 def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
+    """Vectorized re-expression of the per-event annotation loop.
+
+    Behavior-preserving rewrite (Phase 08 Plan 02): every column below is
+    produced via whole-frame numpy/pandas operations instead of a Python
+    `for idx in event_pos` loop with nested `.iloc`/`.iat` window scans. The
+    private helpers `_compute_three_bar_swings`, `_has_directional_fvg`,
+    `_classify_fvg_hold`, and `_has_directional_sweep` are left untouched
+    (they are independently unit-tested and part of the public re-export
+    surface) — this function no longer calls them, but reproduces their exact
+    documented semantics using array-level equivalents. See
+    `.planning/phases/08-performance-vectorize-the-enrichment-validation-hot-path/08-02-SUMMARY.md`
+    for the derivation of each equivalence (in particular the "any value in
+    a future/past window crosses a threshold" -> "window min/max vs
+    threshold" reduction used for the sweep and FVG-hold checks).
+    """
     if "cisd_type" not in df.columns:
         raise ValueError("df must contain cisd_type column")
 
     annotated = df.copy()
     swing_low, swing_high = _compute_three_bar_swings(annotated)
 
-    n = len(annotated)
+    idx_ax = annotated.index
     ct_arr = annotated["cisd_type"].to_numpy(dtype=object)
+    is_bullish = ct_arr == "bullish"
+    is_bearish = ct_arr == "bearish"
 
-    # Pre-initialise result lists with defaults (bool columns → False; hold columns → "none")
-    has_dir_fvg_mid0_lst          = [False] * n
-    has_dir_fvg_mid1_lst          = [False] * n
-    fvg_mid0_hold_close_near_lst  = ["none"] * n
-    fvg_mid0_hold_wick_far_lst    = ["none"] * n
-    fvg_mid1_hold_close_near_lst  = ["none"] * n
-    fvg_mid1_hold_wick_far_lst    = ["none"] * n
-    has_dir_sweep_lst             = [False] * n
-    prev_bar_is_dir_swing_lst     = [False] * n
-    cisd_bar_is_dir_swing_lst     = [False] * n
-    # Candle[1] feature columns — forward-analog of the wick-position split
-    candle1_close_dir_lst         = ["against"] * n   # "with" | "against"
-    candle1_past_candle0_wick_lst = [False] * n        # True only when "with" + clears c[0] wick
-    # Candle[1]-failed + candle[2]-gap + Reading-B columns (RES-02)
-    candle1_failed_followthrough_lst = [False] * n    # True when c[1] fails to close past c[0] extreme
-    candle2_gap_dir_lst              = ["flat"] * n   # "gap_with" | "gap_against" | "flat"
-    candle2_past_candle1_wick_lst    = [False] * n    # Reading B: c[2] closes past c[1] wick
+    open_ = annotated["open"].to_numpy(dtype=float)
+    high  = annotated["high"].to_numpy(dtype=float)
+    low   = annotated["low"].to_numpy(dtype=float)
+    close = annotated["close"].to_numpy(dtype=float)
 
-    event_pos = np.flatnonzero(pd.notna(ct_arr) & np.isin(ct_arr, ["bullish", "bearish"]))
+    open_s  = pd.Series(open_, index=idx_ax)
+    high_s  = pd.Series(high, index=idx_ax)
+    low_s   = pd.Series(low, index=idx_ax)
+    close_s = pd.Series(close, index=idx_ax)
 
-    for idx in event_pos:
-        ct = ct_arr[idx]
+    # ── prev-bar / cisd-bar swing flags (direction-specific) ────────────────
+    swing_low_np       = swing_low.to_numpy(dtype=bool)
+    swing_high_np      = swing_high.to_numpy(dtype=bool)
+    prev_swing_low_np  = swing_low.shift(1).fillna(False).to_numpy(dtype=bool)
+    prev_swing_high_np = swing_high.shift(1).fillna(False).to_numpy(dtype=bool)
 
-        if ct == "bullish":
-            prev_bar_is_dir_swing_lst[idx] = bool(swing_low.iloc[idx - 1]) if idx > 0 else False
-            cisd_bar_is_dir_swing_lst[idx] = bool(swing_low.iloc[idx])
-        else:
-            prev_bar_is_dir_swing_lst[idx] = bool(swing_high.iloc[idx - 1]) if idx > 0 else False
-            cisd_bar_is_dir_swing_lst[idx] = bool(swing_high.iloc[idx])
+    cisd_bar_is_dir_swing = np.where(is_bullish, swing_low_np, np.where(is_bearish, swing_high_np, False))
+    prev_bar_is_dir_swing = np.where(is_bullish, prev_swing_low_np, np.where(is_bearish, prev_swing_high_np, False))
 
-        has_dir_sweep_lst[idx] = _has_directional_sweep(
-            annotated,
-            idx,
-            ct,
-            swing_low,
-            swing_high,
-        )
+    # ── directional sweep ────────────────────────────────────────────────────
+    # `_has_directional_sweep` (per event idx) scans sweep_idx in
+    # [idx-(SWEEP_TOLERANCE-1), idx] and, for each candidate sweep_idx, looks
+    # back up to SWEEP_SWING_LOOKBACK bars for a prior direction-appropriate
+    # swing extreme that the candidate bar's low/high undercuts/exceeds.
+    # Equivalent bar-independent form: for every bar p, compute whether
+    # low[p] undercuts the rolling min of prior swing-low values in the
+    # trailing SWEEP_SWING_LOOKBACK window ending at p-1 (mask non-swing bars
+    # to +/-inf so they never win the rolling reduction, and treat a
+    # non-finite reduction — no swing point yet in range — as "no trigger",
+    # matching the original's `prior_lows.empty` short-circuit). Then
+    # has_dir_sweep at a CISD bar idx is just "any per-bar trigger in the
+    # trailing SWEEP_TOLERANCE-bar window ending at idx" (a rolling any()).
+    masked_low_for_swing  = np.where(swing_low_np, low, np.inf)
+    masked_high_for_swing = np.where(swing_high_np, high, -np.inf)
 
-        if _has_directional_fvg(annotated, idx, ct):
-            has_dir_fvg_mid0_lst[idx]         = True
-            fvg_mid0_hold_close_near_lst[idx]  = _classify_fvg_hold(annotated, idx, ct, "close_near")
-            fvg_mid0_hold_wick_far_lst[idx]    = _classify_fvg_hold(annotated, idx, ct, "wick_far")
+    roll_min_prior_swing_low = (
+        pd.Series(masked_low_for_swing, index=idx_ax)
+        .rolling(window=SWEEP_SWING_LOOKBACK, min_periods=1)
+        .min()
+        .shift(1)
+        .to_numpy()
+    )
+    roll_max_prior_swing_high = (
+        pd.Series(masked_high_for_swing, index=idx_ax)
+        .rolling(window=SWEEP_SWING_LOOKBACK, min_periods=1)
+        .max()
+        .shift(1)
+        .to_numpy()
+    )
 
-        mid1_idx = idx + 1
-        if _has_directional_fvg(annotated, mid1_idx, ct):
-            has_dir_fvg_mid1_lst[idx]         = True
-            fvg_mid1_hold_close_near_lst[idx]  = _classify_fvg_hold(annotated, mid1_idx, ct, "close_near")
-            fvg_mid1_hold_wick_far_lst[idx]    = _classify_fvg_hold(annotated, mid1_idx, ct, "wick_far")
+    bullish_sweep_trigger = np.isfinite(roll_min_prior_swing_low) & (low < roll_min_prior_swing_low)
+    bearish_sweep_trigger = np.isfinite(roll_max_prior_swing_high) & (high > roll_max_prior_swing_high)
 
-        # Candle[1] feature columns: compare candle[1]'s close to candle[0]'s close/wick
-        if idx + 1 < n:
-            c0 = annotated.iloc[idx]      # CISD bar
-            c1 = annotated.iloc[idx + 1]  # bar after CISD
-            if ct == "bullish":
-                if c1["close"] > c0["close"]:
-                    candle1_close_dir_lst[idx] = "with"
-                    if c1["close"] > c0["high"]:
-                        candle1_past_candle0_wick_lst[idx] = True
-            else:  # bearish
-                if c1["close"] < c0["close"]:
-                    candle1_close_dir_lst[idx] = "with"
-                    if c1["close"] < c0["low"]:
-                        candle1_past_candle0_wick_lst[idx] = True
-        # else: idx+1 out of range → defaults remain ("against" / False)
+    bullish_sweep_any = (
+        pd.Series(bullish_sweep_trigger, index=idx_ax)
+        .rolling(window=SWEEP_TOLERANCE, min_periods=1)
+        .max()
+        .fillna(0)
+        .to_numpy()
+        > 0
+    )
+    bearish_sweep_any = (
+        pd.Series(bearish_sweep_trigger, index=idx_ax)
+        .rolling(window=SWEEP_TOLERANCE, min_periods=1)
+        .max()
+        .fillna(0)
+        .to_numpy()
+        > 0
+    )
 
-        # Candle[1]-failed + candle[2]-gap + Reading-B (RES-02)
-        if idx + 1 < n:
-            c0 = annotated.iloc[idx]
-            c1 = annotated.iloc[idx + 1]
-            # candle1_failed_followthrough: negation of past_candle0_wick
-            if ct == "bullish":
-                failed = c1["close"] <= c0["high"]
-            else:
-                failed = c1["close"] >= c0["low"]
-            candle1_failed_followthrough_lst[idx] = bool(failed)
+    has_dir_sweep = np.where(is_bullish, bullish_sweep_any, np.where(is_bearish, bearish_sweep_any, False))
 
-            if idx + 2 < n:
-                c2 = annotated.iloc[idx + 2]
-                # candle2_gap_dir: signed gap = c2.open - c1.close, mapped by CISD direction
-                gap = c2["open"] - c1["close"]
-                if ct == "bullish":
-                    if gap > 0:
-                        candle2_gap_dir_lst[idx] = "gap_with"
-                    elif gap < 0:
-                        candle2_gap_dir_lst[idx] = "gap_against"
-                    else:
-                        candle2_gap_dir_lst[idx] = "flat"
-                else:  # bearish
-                    if gap < 0:
-                        candle2_gap_dir_lst[idx] = "gap_with"
-                    elif gap > 0:
-                        candle2_gap_dir_lst[idx] = "gap_against"
-                    else:
-                        candle2_gap_dir_lst[idx] = "flat"
-                # Reading B: candle[2] closes past candle[1]'s wick in the CISD direction
-                if ct == "bullish":
-                    candle2_past_candle1_wick_lst[idx] = bool(c2["close"] > c1["high"])
-                else:
-                    candle2_past_candle1_wick_lst[idx] = bool(c2["close"] < c1["low"])
-            # else: idx+2 out of range → gap_dir stays "flat", past_wick stays False
-        # else: idx+1 out of range → all candle[2] defaults remain
+    # ── FVG mid0 (middle = CISD bar) / mid1 (middle = idx+1) detection ──────
+    # `_has_directional_fvg(df, middle_idx, direction)` compares
+    # df.iloc[middle_idx-1] against df.iloc[middle_idx+1], returning False at
+    # the middle_idx<=0 / >=len-1 boundary. shift(1)/shift(-1) naturally
+    # produce NaN at those boundaries, and NaN comparisons evaluate False —
+    # reproducing the boundary guard without an explicit bounds check.
+    left_high_mid0  = high_s.shift(1).to_numpy()
+    left_low_mid0   = low_s.shift(1).to_numpy()
+    right_low_mid0  = low_s.shift(-1).to_numpy()
+    right_high_mid0 = high_s.shift(-1).to_numpy()
 
-    # Bulk-assign accumulated lists to columns
-    annotated["has_dir_fvg_mid0"]         = has_dir_fvg_mid0_lst
-    annotated["has_dir_fvg_mid1"]         = has_dir_fvg_mid1_lst
-    annotated["fvg_mid0_hold_close_near"] = fvg_mid0_hold_close_near_lst
-    annotated["fvg_mid0_hold_wick_far"]   = fvg_mid0_hold_wick_far_lst
-    annotated["fvg_mid1_hold_close_near"] = fvg_mid1_hold_close_near_lst
-    annotated["fvg_mid1_hold_wick_far"]   = fvg_mid1_hold_wick_far_lst
-    annotated["has_dir_sweep"]            = has_dir_sweep_lst
-    annotated["prev_bar_is_dir_swing"]    = prev_bar_is_dir_swing_lst
-    annotated["cisd_bar_is_dir_swing"]    = cisd_bar_is_dir_swing_lst
-    annotated["candle1_close_dir"]              = candle1_close_dir_lst
-    annotated["candle1_past_candle0_wick"]      = candle1_past_candle0_wick_lst
-    annotated["candle1_failed_followthrough"]   = candle1_failed_followthrough_lst
-    annotated["candle2_gap_dir"]                = candle2_gap_dir_lst
-    annotated["candle2_past_candle1_wick"]      = candle2_past_candle1_wick_lst
+    bull_fvg_mid0 = left_high_mid0 < right_low_mid0
+    bear_fvg_mid0 = left_low_mid0 > right_high_mid0
+    has_dir_fvg_mid0 = np.where(is_bullish, bull_fvg_mid0, np.where(is_bearish, bear_fvg_mid0, False))
+
+    # mid1: middle_idx = idx+1, so "left" = df.iloc[idx] (the CISD bar itself)
+    # and "right" = df.iloc[idx+2].
+    right_low_mid1  = low_s.shift(-2).to_numpy()
+    right_high_mid1 = high_s.shift(-2).to_numpy()
+
+    bull_fvg_mid1 = high < right_low_mid1
+    bear_fvg_mid1 = low > right_high_mid1
+    has_dir_fvg_mid1 = np.where(is_bullish, bull_fvg_mid1, np.where(is_bearish, bear_fvg_mid1, False))
+
+    # ── FVG hold classification ──────────────────────────────────────────────
+    # `_classify_fvg_hold` returns "none" when the FVG_HOLD_LOOKAHEAD window
+    # doesn't fit, else checks `any(...)` over the future window against a
+    # left-bar threshold. Since each check is a one-sided inequality, "any
+    # future value violates threshold" is equivalent to "the future window's
+    # min (for `<` checks) or max (for `>` checks) violates threshold" — so a
+    # per-bar forward-looking rolling min/max reduction reproduces `.any()`
+    # exactly, without scanning the window per event.
+    close_roll_min = close_s.rolling(window=FVG_HOLD_LOOKAHEAD, min_periods=FVG_HOLD_LOOKAHEAD).min()
+    low_roll_min   = low_s.rolling(window=FVG_HOLD_LOOKAHEAD, min_periods=FVG_HOLD_LOOKAHEAD).min()
+    close_roll_max = close_s.rolling(window=FVG_HOLD_LOOKAHEAD, min_periods=FVG_HOLD_LOOKAHEAD).max()
+    high_roll_max  = high_s.rolling(window=FVG_HOLD_LOOKAHEAD, min_periods=FVG_HOLD_LOOKAHEAD).max()
+
+    # For middle_idx m, the future window [m+1, m+1+FVG_HOLD_LOOKAHEAD) is the
+    # rolling window ending at position m+FVG_HOLD_LOOKAHEAD; shift(-k) brings
+    # that value back to position m. mid0: m=idx (k=LOOKAHEAD).
+    # mid1: m=idx+1 (k=LOOKAHEAD+1).
+    mid0_future_min_close = close_roll_min.shift(-FVG_HOLD_LOOKAHEAD).to_numpy()
+    mid0_future_min_low   = low_roll_min.shift(-FVG_HOLD_LOOKAHEAD).to_numpy()
+    mid0_future_max_close = close_roll_max.shift(-FVG_HOLD_LOOKAHEAD).to_numpy()
+    mid0_future_max_high  = high_roll_max.shift(-FVG_HOLD_LOOKAHEAD).to_numpy()
+
+    mid1_future_min_close = close_roll_min.shift(-(FVG_HOLD_LOOKAHEAD + 1)).to_numpy()
+    mid1_future_min_low   = low_roll_min.shift(-(FVG_HOLD_LOOKAHEAD + 1)).to_numpy()
+    mid1_future_max_close = close_roll_max.shift(-(FVG_HOLD_LOOKAHEAD + 1)).to_numpy()
+    mid1_future_max_high  = high_roll_max.shift(-(FVG_HOLD_LOOKAHEAD + 1)).to_numpy()
+
+    mid0_none_mask = ~np.isfinite(mid0_future_min_close)
+    mid1_none_mask = ~np.isfinite(mid1_future_min_close)
+
+    def _hold_str(failed: np.ndarray, none_mask: np.ndarray) -> np.ndarray:
+        return np.where(none_mask, "none", np.where(failed, "failed", "held"))
+
+    # mid0 left = bar at idx-1; mid1 left = bar at idx (the CISD bar itself).
+    fvg_mid0_hold_close_near_bull = _hold_str(mid0_future_min_close < left_high_mid0, mid0_none_mask)
+    fvg_mid0_hold_wick_far_bull   = _hold_str(mid0_future_min_low < left_low_mid0, mid0_none_mask)
+    fvg_mid0_hold_close_near_bear = _hold_str(mid0_future_max_close > left_low_mid0, mid0_none_mask)
+    fvg_mid0_hold_wick_far_bear   = _hold_str(mid0_future_max_high > left_high_mid0, mid0_none_mask)
+
+    fvg_mid1_hold_close_near_bull = _hold_str(mid1_future_min_close < high, mid1_none_mask)
+    fvg_mid1_hold_wick_far_bull   = _hold_str(mid1_future_min_low < low, mid1_none_mask)
+    fvg_mid1_hold_close_near_bear = _hold_str(mid1_future_max_close > low, mid1_none_mask)
+    fvg_mid1_hold_wick_far_bear   = _hold_str(mid1_future_max_high > high, mid1_none_mask)
+
+    fvg_mid0_hold_close_near = np.select(
+        [is_bullish & has_dir_fvg_mid0, is_bearish & has_dir_fvg_mid0],
+        [fvg_mid0_hold_close_near_bull, fvg_mid0_hold_close_near_bear],
+        default="none",
+    )
+    fvg_mid0_hold_wick_far = np.select(
+        [is_bullish & has_dir_fvg_mid0, is_bearish & has_dir_fvg_mid0],
+        [fvg_mid0_hold_wick_far_bull, fvg_mid0_hold_wick_far_bear],
+        default="none",
+    )
+    fvg_mid1_hold_close_near = np.select(
+        [is_bullish & has_dir_fvg_mid1, is_bearish & has_dir_fvg_mid1],
+        [fvg_mid1_hold_close_near_bull, fvg_mid1_hold_close_near_bear],
+        default="none",
+    )
+    fvg_mid1_hold_wick_far = np.select(
+        [is_bullish & has_dir_fvg_mid1, is_bearish & has_dir_fvg_mid1],
+        [fvg_mid1_hold_wick_far_bull, fvg_mid1_hold_wick_far_bear],
+        default="none",
+    )
+
+    # ── candle[1] / candle[2] follow-through features ───────────────────────
+    # All comparisons use shift(-1)/shift(-2) values that are NaN when the
+    # bar is out of range; NaN comparisons evaluate False in numpy, which
+    # reproduces the original's "idx+1 < n" / "idx+2 < n" guards (out-of-range
+    # rows fall through to the same defaults: "against"/False/"flat"/False).
+    close_shift1 = close_s.shift(-1).to_numpy()
+    open_shift2  = open_s.shift(-2).to_numpy()
+    high_shift1  = high_s.shift(-1).to_numpy()
+    low_shift1   = low_s.shift(-1).to_numpy()
+    close_shift2 = close_s.shift(-2).to_numpy()
+
+    bull_with      = close_shift1 > close
+    bull_past_wick = bull_with & (close_shift1 > high)
+    bear_with      = close_shift1 < close
+    bear_past_wick = bear_with & (close_shift1 < low)
+
+    candle1_close_dir = np.where(
+        is_bullish, np.where(bull_with, "with", "against"),
+        np.where(is_bearish, np.where(bear_with, "with", "against"), "against"),
+    )
+    candle1_past_candle0_wick = np.where(
+        is_bullish, bull_past_wick,
+        np.where(is_bearish, bear_past_wick, False),
+    )
+
+    # candle1_failed_followthrough: c1 fails to close past c0's extreme.
+    bull_failed_followthrough = close_shift1 <= high
+    bear_failed_followthrough = close_shift1 >= low
+    candle1_failed_followthrough = np.where(
+        is_bullish, bull_failed_followthrough,
+        np.where(is_bearish, bear_failed_followthrough, False),
+    )
+
+    # candle2_gap_dir: signed gap = c2.open - c1.close, mapped by CISD
+    # direction; NaN (out-of-range c1/c2) and a literal zero gap both fall
+    # through to "flat", matching the original's explicit else branch.
+    gap = open_shift2 - close_shift1
+
+    candle2_gap_dir_bull = np.where(gap > 0, "gap_with", np.where(gap < 0, "gap_against", "flat"))
+    candle2_gap_dir_bear = np.where(gap < 0, "gap_with", np.where(gap > 0, "gap_against", "flat"))
+    candle2_gap_dir = np.where(
+        is_bullish, candle2_gap_dir_bull,
+        np.where(is_bearish, candle2_gap_dir_bear, "flat"),
+    )
+
+    # Reading B: candle[2] closes past candle[1]'s wick in the CISD direction.
+    bull_c2_past_wick = close_shift2 > high_shift1
+    bear_c2_past_wick = close_shift2 < low_shift1
+    candle2_past_candle1_wick = np.where(
+        is_bullish, bull_c2_past_wick,
+        np.where(is_bearish, bear_c2_past_wick, False),
+    )
+
+    # ── Bulk-assign vectorized results to columns ────────────────────────────
+    annotated["has_dir_fvg_mid0"]         = has_dir_fvg_mid0.astype(bool)
+    annotated["has_dir_fvg_mid1"]         = has_dir_fvg_mid1.astype(bool)
+    annotated["fvg_mid0_hold_close_near"] = fvg_mid0_hold_close_near
+    annotated["fvg_mid0_hold_wick_far"]   = fvg_mid0_hold_wick_far
+    annotated["fvg_mid1_hold_close_near"] = fvg_mid1_hold_close_near
+    annotated["fvg_mid1_hold_wick_far"]   = fvg_mid1_hold_wick_far
+    annotated["has_dir_sweep"]            = has_dir_sweep.astype(bool)
+    annotated["prev_bar_is_dir_swing"]    = prev_bar_is_dir_swing.astype(bool)
+    annotated["cisd_bar_is_dir_swing"]    = cisd_bar_is_dir_swing.astype(bool)
+    annotated["candle1_close_dir"]              = candle1_close_dir
+    annotated["candle1_past_candle0_wick"]      = candle1_past_candle0_wick.astype(bool)
+    annotated["candle1_failed_followthrough"]   = candle1_failed_followthrough.astype(bool)
+    annotated["candle2_gap_dir"]                = candle2_gap_dir
+    annotated["candle2_past_candle1_wick"]      = candle2_past_candle1_wick.astype(bool)
 
     return annotated
 
