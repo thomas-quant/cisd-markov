@@ -20,13 +20,16 @@ A reported edge can be trusted: every published rate is sample-size gated, carri
 
 ## Current Milestone: v2.0 Rigorous Validation & Post-CISD Modeling
 
-**Goal:** Upgrade the validation harness with multiple-comparisons correction and walk-forward validation, then use that harder evidence bar to decide whether the post-CISD context tags justify a small ML model.
+**Goal:** Upgrade the validation harness with multiple-comparisons correction and walk-forward validation, re-validate the post-CISD studies under that harder bar, then — after vectorizing the hot path and widening the feature surface on that same validated footing — use the corrected, expanded evidence to decide whether any feature family justifies a small model.
 
 **Target features:**
 - MHT-01 — multiple-comparisons / data-snooping correction across the full bucket grid
 - WF-01 — walk-forward / rolling-window validation, supplementing the single sacred discovery/OOS split
 - Explicit reversal barrier for RES-02 — whether `candle[0]`'s opposite extreme is hit first, not just a depressed continuation rate
-- ML-01 — `post_cisd_ml`, gated on the discrete post-CISD tags first showing a real, corrected, OOS-confirmed effect
+- PERF-01 — vectorize the enrichment/validation hot path so the end-to-end regen is fast (behavior-preserving; no published number moves)
+- RES-06 — SMT geometry & invalidation honesty (carry the scanner's price/lifecycle fields, fix the invalidated-SMT tagging bug, add role/magnitude/CISD-in-block/survived-vs-broke features)
+- RES-07 — new conditioning features: continuous magnitudes of the binary flags, session/time-of-day, and CISD volume anomalies
+- ML-01 — a small model, gated on whichever feature families first show a real, corrected, OOS-confirmed effect (post-CISD tags, SMT geometry, session, volume)
 
 ## Requirements
 
@@ -45,7 +48,10 @@ A reported edge can be trusted: every published rate is sample-size gated, carri
 
 - [ ] Multiple-comparisons / data-snooping correction applied across the validation harness's full bucket grid (MHT-01).
 - [ ] Walk-forward / rolling-window validation supplementing the single sacred discovery/OOS split (WF-01).
-- [ ] `post_cisd_ml` — a small model over the post-CISD context features, built only once the discrete tags clear the corrected evidence bar (ML-01).
+- [x] Vectorized enrichment/validation hot path so the end-to-end regen is fast, behavior-preserving (PERF-01). — Validated in Phase 8: both annotation loops vectorized + redundant recompute removed; all 3 manifests bit-identical to pre-change golden; suite 21m14s→6m35s.
+- [ ] SMT geometry & invalidation honesty — carry the scanner's price/lifecycle fields, fix the invalidated-SMT tagging bug, add role/magnitude/CISD-in-block/survived-vs-broke, all validated (RES-06).
+- [ ] New conditioning features — continuous magnitudes of the binary flags, session/time-of-day, and CISD volume anomalies, all validated (RES-07).
+- [ ] A small model over the qualifying feature families, built only once at least one family clears the corrected evidence bar (ML-01).
 
 ### Out of Scope
 
@@ -68,6 +74,7 @@ The codebase contains approximately 7,900 lines of Python and retains its offlin
 | Publish failures explicitly | Avoid silently retaining only attractive findings | README distinguishes confirmed, not-confirmed, and below-n results |
 | v2.0 scope = MHT-01 + WF-01 + reversal barrier + ML-01 | Matches the "v2" tags already used in STATE.md's Deferred Items; ML-01 requires the harness upgrade to run first | — Pending |
 | Phase 3/5 verification debt left out of v2.0 | User chose to prioritize the research/methodology backlog over closing prior-milestone paperwork gaps | — Pending |
+| v2.0 extended mid-milestone with feature engineering before ML (Phases 8–10) | Give the model economically-motivated, harness-validated inputs rather than let it mine noise; the slow single-threaded annotation hot path had to be vectorized first so feature iteration is cheap | Phases 8 (perf), 9 (SMT geometry & invalidation honesty), 10 (magnitude/session/volume) inserted; ML-01 moved to Phase 11 and broadened to consume whichever families clear the corrected bar |
 
 ## Evolution
 
@@ -87,4 +94,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-11 after Phase 7 complete — post-CISD studies corrected re-validation published*
+*Last updated: 2026-07-11 after Phase 8 complete — enrichment/validation hot path vectorized (PERF-01), behavior-preserving (manifests bit-identical); next: Phase 9 (SMT geometry & invalidation honesty)*
