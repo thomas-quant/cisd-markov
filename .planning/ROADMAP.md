@@ -74,11 +74,11 @@ Full phase details in [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
   3. A written verdict states, per post-CISD tag, whether it clears the corrected evidence bar (a real, durable, corrected, walk-forward-confirmed effect) — serving as the explicit go/no-go input to Phase 8.
   4. Any change in how these two studies' rates read versus their Phase 5 numbers is documented as a deliberate, visible methodology change in the summary/README — never a silent drift — and the behavior-lock tests on unchanged code paths still pass.
 
-**Plans**: 3 plans
+**Plans**: 1/3 plans executed
 
 **Wave 1** *(parallel — disjoint files)*
 
-- [ ] 07-01-PLAN.md — Reversal barrier for `failed_gap_against`: `barrier_outcome_forward` (continuation/reversal/neither) + new tags on `compute_post_cisd_context` + chart (RES-04)
+- [x] 07-01-PLAN.md — Reversal barrier for `failed_gap_against`: `barrier_outcome_forward` (continuation/reversal/neither) + new tags on `compute_post_cisd_context` + chart (RES-04)
 - [ ] 07-02-PLAN.md — Corrected go/no-go verdict script (`build_post_cisd_verdict.py`): D-02 three-condition bar + D-03 per-tag majority roll-up, fixture-tested (RES-05)
 
 **Wave 2** *(blocked on Wave 1)*
@@ -107,5 +107,5 @@ Phases execute in numeric order: 6 → 7 → 8. Phase 7 requires the corrected h
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 6. Harder Evidence Bar (MHT + Walk-Forward) | v2.0 | 2/2 | Complete    | 2026-07-10 |
-| 7. Corrected Re-Validation of Post-CISD Studies | v2.0 | 0/3 | Planned | - |
+| 7. Corrected Re-Validation of Post-CISD Studies | v2.0 | 1/3 | In Progress|  |
 | 8. Conditional Post-CISD Model | v2.0 | 0/TBD | Not started | - |
