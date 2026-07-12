@@ -415,6 +415,66 @@ def test_volume_anomaly_compute_functions_in_all():
 
 # ── Phase 10 Plan 02, Task 3: registry wiring for all six new analyses ─────
 
+# ── Phase 10 Plan 03, Task 1: compute_session (flat 3-tag, TF-agnostic) ────
+
+def test_compute_session_flat_shape_and_totals_sum_to_all_cisds():
+    """compute_session returns the flat {ct: {rth_open|rth|overnight: {total,
+    runs}}} shape; every CISD contributes to exactly one bucket per its
+    session_tag, so bucket totals sum to the total CISD count (D-01/D-14)."""
+    from cisd_barriers import compute_session
+
+    n = 6
+    idx = pd.date_range("2026-01-01", periods=n, freq="15min")
+    df = pd.DataFrame({
+        "open": [100.0] * n, "high": [101.0] * n, "low": [99.0] * n, "close": [100.0] * n,
+        "cisd_type":   ["bullish", "bearish", None,        "bullish", "bearish", "bullish"],
+        "session_tag": ["rth_open", "rth",    "overnight", "overnight", "rth_open", "rth"],
+    }, index=idx)
+
+    out = compute_session(df)
+
+    for ct in ("bullish", "bearish"):
+        assert set(out[ct].keys()) == {"rth_open", "rth", "overnight"}
+        for tag in ("rth_open", "rth", "overnight"):
+            assert set(out[ct][tag].keys()) == {"total", "runs"}
+
+    total = sum(d["total"] for ct in out for d in out[ct].values())
+    assert total == 5  # rows 0,1,3,4,5 (row 2 has no cisd_type)
+    assert out["bullish"]["rth_open"]["total"] == 1   # row 0
+    assert out["bearish"]["rth"]["total"] == 1        # row 1
+    assert out["bullish"]["overnight"]["total"] == 1  # row 3
+    assert out["bearish"]["rth_open"]["total"] == 1   # row 4
+    assert out["bullish"]["rth"]["total"] == 1        # row 5
+
+
+def test_compute_session_all_three_buckets_populated_on_15min_frame():
+    """On a 15min frame spanning all three sessions, all three buckets are
+    populated for a direction with CISDs in each session."""
+    from cisd_barriers import compute_session
+
+    n = 3
+    idx = pd.date_range("2026-01-01 09:45", periods=n, freq="1D")
+    df = pd.DataFrame({
+        "open": [100.0] * n, "high": [101.0] * n, "low": [99.0] * n, "close": [100.0] * n,
+        "cisd_type":   ["bullish", "bullish", "bullish"],
+        "session_tag": ["rth_open", "rth", "overnight"],
+    }, index=idx)
+
+    out = compute_session(df)
+
+    assert out["bullish"]["rth_open"]["total"] == 1
+    assert out["bullish"]["rth"]["total"] == 1
+    assert out["bullish"]["overnight"]["total"] == 1
+
+
+def test_compute_session_registered_in_analyses_and_all():
+    import cisd_barriers
+    from cisd_barriers import ANALYSES
+
+    assert "session" in ANALYSES
+    assert "compute_session" in cisd_barriers.__all__
+
+
 def test_new_analyses_registered_and_dispatch_generically():
     from cisd_barriers import ANALYSES, ANALYSIS_META
     from cisd_data import prepare

@@ -45,6 +45,7 @@ from cisd_charts import (
     chart_effort_result,
     chart_rvol,
     chart_volume_zscore,
+    chart_session,
 )
 
 
@@ -536,6 +537,45 @@ def compute_volume_zscore(df: pd.DataFrame) -> dict:
                 if barrier_hit(df, pos, df.iloc[pos], ct):
                     stats[ct][lbl]["runs"] += 1
                 break
+    return stats
+
+
+def compute_session(df: pd.DataFrame) -> dict:
+    """
+    Barrier run rate split by session_tag (rth_open / rth / overnight,
+    Phase 10 Plan 01, D-01/D-02a). Flat three-way tag split over EVERY
+    CISD in the frame — compute_session is deliberately TF-agnostic
+    (D-14 preferred mechanism): it does not infer timeframe from bar
+    spacing or otherwise gate on frequency. The intraday-only scoping
+    (session is economically meaningless on Daily/4H bars that span
+    multiple sessions, D-02) lives entirely in the registry
+    (ANALYSIS_META['session'].applies_to) and the two dispatch layers
+    (scripts/build_validation.py's tf_keys filter, cisd_charts.py's
+    figure-dispatch guard) — never here.
+    """
+    if "session_tag" not in df.columns:
+        raise ValueError("df must contain session_tag column")
+
+    stats = {
+        ct: {
+            "rth_open":  {"total": 0, "runs": 0},
+            "rth":       {"total": 0, "runs": 0},
+            "overnight": {"total": 0, "runs": 0},
+        }
+        for ct in ("bullish", "bearish")
+    }
+
+    ct_arr    = df["cisd_type"].to_numpy(dtype=object)
+    tag_arr   = df["session_tag"].to_numpy(dtype=object)
+    event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    for pos in event_pos:
+        ct  = ct_arr[pos]
+        tag = tag_arr[pos]
+        if ct not in stats or tag not in stats[ct]:
+            continue
+        stats[ct][tag]["total"] += 1
+        if barrier_hit(df, pos, df.iloc[pos], ct):
+            stats[ct][tag]["runs"] += 1
     return stats
 
 
@@ -1102,6 +1142,7 @@ ANALYSES = {
     "effort_result":  ("Effort-vs-Result (Volume/Range)",    compute_effort_result,  chart_effort_result),
     "rvol":           ("RVOL (Slot-Normalized)",             compute_rvol,           chart_rvol),
     "volume_zscore":  ("Volume Z-Score (Slot-Normalized)",   compute_volume_zscore,  chart_volume_zscore),
+    "session":        ("Session / Time-of-Day",              compute_session,        chart_session),
 }
 
 
@@ -1193,4 +1234,6 @@ __all__ = [
     "compute_effort_result",
     "compute_rvol",
     "compute_volume_zscore",
+    # New RES-07 symbols (Phase 10 Plan 03: session / time-of-day)
+    "compute_session",
 ]
