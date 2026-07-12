@@ -484,6 +484,123 @@ This section extends the badge vocabulary with a fourth, strictly harder tier: *
 
 For the `failed_gap_against` reversal-barrier reading, the mutually exclusive outcomes partition the same population. Discovery is **32.9% continuation** (`failed_gap_against`, n=23,247), **59.2% reversal** (n=23,247), and **7.9% neither** (n=23,247). Sacred OOS is **34.3% continuation** (n=10,706), **57.8% reversal** (n=10,706), and **7.9% neither** (n=10,706). The majority therefore reverse after a failed-gap-against CISD; that reversal rate is distinct from, and is not conflated with, the continuation rate in the CISD direction.
 
+## Conditioning Features — Magnitude, Session & Volume Anomaly (v2.0)
+
+Phase 10 (RES-07) adds three economically-motivated conditioning-feature families on top of the existing binary flags, each pushed through the **full corrected harness** (n ≥ 50 gate, Wilson CI, one global Benjamini-Hochberg FDR correction, and walk-forward robustness) with **zero harness change** — every new analysis is an additive standalone `compute_*` / `chart_*` / `ANALYSES` entry (the Phase-9 "new feature = additive standalone analysis" pattern). All **408 new discovery buckets are published**, including those that do not clear the bar — the point is to hand Phase 11's model economically-motivated, harness-validated inputs rather than let it mine noise.
+
+**Families:**
+
+1. **Magnitude** — continuous ATR-normalized versions of existing binary flags: `wick_distance` (signed distance past the prior wick, with a bin edge exactly at 0 so the old past/within split stays recoverable), `sweep_depth` (how far the CISD extreme pierced the swept level), `fvg_size` (gap width).
+2. **Session / time-of-day** — the engine's first temporal dimension: a frozen 3-bucket `rth_open` (09:30–10:30 ET) / `rth` (10:30–16:00) / `overnight` (16:00–09:30) split from the tz-naive ET index, with no timezone or DST math. Registered on **15min and 1H only** — a session tag on a Daily/4H bar spans multiple sessions and is economically meaningless, and would only add below-n cells that dilute the global FDR family.
+3. **Volume anomaly** — measures beyond the already-negligible 1-bar volume ratio (which stays untouched): `effort_result` (within-bar volume ÷ range, baseline-free), and slot-normalized `rvol` / `volume_zscore` (same-time-of-day trailing baseline, frozen `K=20`, so the intraday volume profile is *removed* rather than *measured*).
+
+**Badges in this section.** `corrected` is the discovery **BH-FDR** verdict (`corrected_pass = min_n_pass AND bh_significant`); `below-n` = discovery n < 50; `✗ NOT CONFIRMED` = eligible but did not clear the corrected bar. `OOS` is the sacred-holdout rate; `walk-fwd` is the expanding-window `wf_verdict`. The strongest evidence is a bucket that is corrected-confirmed **and** walk-forward `wf-robust` **and** whose OOS rate holds the discovery side of 0.50. All frozen bins were shape-informed **once** from the discovery-slice histogram (index < `OOS_START`, ~225k obs) **outcome-blind** — chosen from the distribution, never tuned to hit rates — then frozen in-code.
+
+### Summary — 408 new discovery buckets
+
+| feature | ✓ confirmed | ✗ not-conf | below-n | wf-robust | wf-fragile |
+|---|--:|--:|--:|--:|--:|
+| wick_distance | 44 | 12 | 8 | 32 | 32 |
+| sweep_depth | 30 | 7 | 27 | 16 | 48 |
+| fvg_size | 44 | 0 | 20 | 16 | 48 |
+| effort_result | 30 | 8 | 26 | 28 | 36 |
+| rvol | 45 | 13 | 6 | 37 | 27 |
+| volume_zscore | 47 | 13 | 4 | 36 | 28 |
+| session | 24 | 0 | 0 | 20 | 4 |
+
+(wf-robust / wf-fragile count each bucket once; the confirmed/not-confirmed/below-n split is the discovery BH-FDR verdict.)
+
+### Representative results
+
+**Magnitude · signed wick distance — monotonic, the standout**  _(15min NQ bullish)_
+
+| bucket | disc rate | n | Wilson CI | corrected | OOS | walk-fwd |
+|---|--:|--:|:--:|:--:|--:|:--:|
+| <-1x ATR (deep within wick) | 55.5% | 1880 | [53.2%–57.7%] | ✓ CONFIRMED | 53.9% | wf-robust |
+| -1x-0 ATR (within wick) | 58.5% | 13354 | [57.7%–59.4%] | ✓ CONFIRMED | 58.0% | wf-robust |
+| 0-1x ATR (past wick) | 72.2% | 5790 | [71.1%–73.4%] | ✓ CONFIRMED | 71.5% | wf-robust |
+| >1x ATR (far past wick) | 76.2% | 491 | [72.2%–79.7%] | ✓ CONFIRMED | 76.4% | wf-robust |
+
+**Magnitude · FVG size**  _(15min NQ bullish)_
+
+| bucket | disc rate | n | Wilson CI | corrected | OOS | walk-fwd |
+|---|--:|--:|:--:|:--:|--:|:--:|
+| <0.5x ATR | 92.5% | 3913 | [91.6%–93.3%] | ✓ CONFIRMED | 92.4% | wf-robust |
+| 0.5x-1x ATR | 92.3% | 888 | [90.4%–93.9%] | ✓ CONFIRMED | 93.8% | wf-robust |
+| 1x-1.5x ATR | 89.8% | 283 | [85.7%–92.8%] | ✓ CONFIRMED | 92.7% | wf-robust |
+| >1.5x ATR | 87.4% | 182 | [81.8%–91.4%] | ✓ CONFIRMED | 76.0% | wf-fragile |
+
+**Magnitude · sweep depth — confirmed but flat (little gradient)**  _(15min NQ bullish)_
+
+| bucket | disc rate | n | Wilson CI | corrected | OOS | walk-fwd |
+|---|--:|--:|:--:|:--:|--:|:--:|
+| <0.5x ATR | 70.5% | 664 | [66.9%–73.8%] | ✓ CONFIRMED | 71.3% | wf-robust |
+| 0.5x-1x ATR | 72.1% | 458 | [67.8%–76.0%] | ✓ CONFIRMED | 70.2% | wf-robust |
+| 1x-1.5x ATR | 71.5% | 354 | [66.6%–75.9%] | ✓ CONFIRMED | 68.1% | wf-robust |
+| >1.5x ATR | 66.8% | 596 | [62.9%–70.4%] | ✓ CONFIRMED | 69.1% | wf-robust |
+
+**Volume · slot-relative RVOL — monotonic**  _(15min NQ bullish)_
+
+| bucket | disc rate | n | Wilson CI | corrected | OOS | walk-fwd |
+|---|--:|--:|:--:|:--:|--:|:--:|
+| <0.7x slot | 58.3% | 6723 | [57.1%–59.5%] | ✓ CONFIRMED | 58.7% | wf-robust |
+| 0.7x-1x slot | 63.2% | 6670 | [62.0%–64.3%] | ✓ CONFIRMED | 61.9% | wf-robust |
+| 1x-1.5x slot (elevated) | 64.7% | 5324 | [63.4%–65.9%] | ✓ CONFIRMED | 63.9% | wf-robust |
+| >1.5x slot (spike) | 65.4% | 2359 | [63.5%–67.3%] | ✓ CONFIRMED | 66.2% | wf-robust |
+
+**Volume · slot z-score — monotonic**  _(15min NQ bullish)_
+
+| bucket | disc rate | n | Wilson CI | corrected | OOS | walk-fwd |
+|---|--:|--:|:--:|:--:|--:|:--:|
+| <-0.5 sigma | 58.8% | 8093 | [57.7%–59.9%] | ✓ CONFIRMED | 59.3% | wf-robust |
+| -0.5-0.5 sigma | 63.7% | 8510 | [62.7%–64.7%] | ✓ CONFIRMED | 62.7% | wf-robust |
+| 0.5-1.5 sigma | 66.0% | 2794 | [64.2%–67.7%] | ✓ CONFIRMED | 64.7% | wf-robust |
+| >1.5 sigma (spike) | 65.3% | 1679 | [63.0%–67.6%] | ✓ CONFIRMED | 64.8% | wf-robust |
+
+**Volume · effort-vs-result — noisy / TF-scale-fragmented**  _(15min ES bullish)_
+
+| bucket | disc rate | n | Wilson CI | corrected | OOS | walk-fwd |
+|---|--:|--:|:--:|:--:|--:|:--:|
+| <150 | 62.5% | 8 | [30.6%–86.3%] | below-n | 68.9% | wf-fragile |
+| 150-550 | 65.8% | 4124 | [64.3%–67.2%] | ✓ CONFIRMED | 63.7% | wf-robust |
+| 550-1500 | 61.2% | 8294 | [60.2%–62.3%] | ✓ CONFIRMED | 59.5% | wf-robust |
+| >1500 | 61.7% | 7742 | [60.6%–62.8%] | ✓ CONFIRMED | 61.5% | wf-robust |
+
+**Session · time-of-day — rth_open > rth > overnight**  _(1H NQ bullish)_
+
+| bucket | disc rate | n | Wilson CI | corrected | OOS | walk-fwd |
+|---|--:|--:|:--:|:--:|--:|:--:|
+| rth_open | 67.4% | 227 | [61.1%–73.2%] | ✓ CONFIRMED | 63.4% | wf-fragile |
+| rth | 66.1% | 1143 | [63.3%–68.7%] | ✓ CONFIRMED | 64.7% | wf-robust |
+| overnight | 59.8% | 4092 | [58.2%–61.2%] | ✓ CONFIRMED | 62.7% | wf-robust |
+
+**Session · time-of-day**  _(15min ES bullish)_
+
+| bucket | disc rate | n | Wilson CI | corrected | OOS | walk-fwd |
+|---|--:|--:|:--:|:--:|--:|:--:|
+| rth_open | 66.3% | 879 | [63.1%–69.4%] | ✓ CONFIRMED | 69.2% | wf-robust |
+| rth | 64.8% | 4838 | [63.4%–66.1%] | ✓ CONFIRMED | 63.2% | wf-robust |
+| overnight | 61.3% | 14451 | [60.5%–62.1%] | ✓ CONFIRMED | 60.9% | wf-robust |
+
+### Interpretation
+
+- **`wick_distance` — the standout.** The signed magnitude is cleanly monotonic and genuinely subsumes the binary wick split: continuation climbs deep-within → within → just-past → far-past-wick (≈55% → 58% → 72% → 76%+), holding out-of-sample and walk-forward-robust across the high-n intraday timeframes. It enriches `compute_wick`, it does not merely restate it.
+- **`fvg_size`.** Small FVGs (< 0.5× ATR) continue ≈90–95%; the rate softens and turns walk-forward-fragile for the largest gaps (> 1.5× ATR — e.g. 15min NQ bull OOS 76%, `wf-fragile`). Tight gaps are the higher-continuation regime.
+- **`session`.** A clean, fully-confirmed temporal ordering — `rth_open` > `rth` > `overnight` — on both 1H and 15min: the opening-drive hour carries the highest CISD continuation. The engine's first temporal edge.
+- **`rvol` / `volume_zscore`.** A modest but consistent, monotonic, walk-forward-robust anomaly signal — higher slot-relative volume → higher continuation — and the two independent measures agree.
+- **`sweep_depth`.** Confirmed but **flat** across depth (≈67–72%, no gradient): the pierce-depth magnitude adds little beyond the binary sweep flag it enriches.
+- **`effort_result`.** The weakest and noisiest — its raw baseline-free ratio has a scale that differs sharply across timeframes (D-07), fragmenting the fixed bins so Daily/4H buckets are mostly below-n while the intraday buckets confirm without a strong gradient.
+
+### Honesty caveats (D-11)
+
+- **OHLCV-only limitation.** These volume features are **unsigned effort / anomaly proxies** computed from OHLCV alone. No signed or delta **order flow** is available on this data, so none of them can distinguish buying from selling pressure — they measure *how much* volume/effort, never *which side*. Read them as activity-intensity conditioning, not order flow.
+- **Slot-normalization is partial.** The slot baseline (same time-of-day, trailing `K=20`) neutralizes **most but not necessarily all** of the intraday volume profile. A residual seasonality can survive, especially in the thin/heterogeneous overnight window (Asia / London / pre-market differ), so `rvol` / `volume_zscore` should not be read as fully seasonality-free.
+
+### No silent drift (D-12 / D-13)
+
+- **Existing base rates are byte-stable (D-12).** All **19 pre-existing analyses'** published `rate / n / successes / ci_low / ci_high / min_n_pass` are unchanged — the seven new features are purely additive standalone analyses that touch no existing compute or annotation column. This is enforced by `scripts/build_conditioning_report.py`, a drift gate that exits non-zero on any change to an existing analysis's base columns, run against the golden manifest before it is refreshed.
+- **Moved corrected verdicts are correct, not drift (D-13).** Adding ~408 buckets **does** shift the `bh_q_value` / `corrected_pass` of some *existing* buckets, because `apply_bh_correction` builds **one global BH family** across every analysis × timeframe × instrument × direction in the discovery slice — never grouped per-analysis-key. A moved corrected verdict is the correct consequence of honestly accounting for more tested hypotheses (exactly what MHT-01 is for), **not** a base-rate drift: the base rates themselves do not move (proven by the drift gate); only the multiple-comparisons-corrected verdicts — which are the additive `bh_*` columns — do.
+
 ## Configuration
 
 Edit constants at the top of `cisd_analysis.py`:
