@@ -43,13 +43,13 @@ A reported edge can be trusted: every published rate is sample-size gated, carri
 - ✓ `candle[1]` follow-through and multi-bar post-CISD context studies wired through the validation harness — v1.0
 - ✓ Explicit reversal barrier for `failed_gap_against` (`barrier_outcome_forward`) reporting continuation/reversal/neither distinctly (RES-04) — Validated in Phase 7
 - ✓ Validation manifest regenerated end-to-end under the corrected methodology; `post_cisd_context` and `candle1_followthrough` now carry real, FDR-corrected, walk-forward-confirmed rates with a published per-tag go/no-go verdict (RES-05) — Validated in Phase 7
+- ✓ SMT geometry & invalidation honesty — scanner's lifecycle fields carried, the already-invalidated-SMT tagging bug fixed with a three-way split (`w/ SMT` / `expired SMT` / `no SMT`), role/magnitude (`smt_block_size_atr`)/CISD-in-block (`cisd_in_smt_block`)/survived-vs-broke added and validated through the full harness (n + Wilson CI + BH-FDR + walk-forward); the resulting change to published SMT rates is documented as a deliberate before/after methodology change with a script-enforced zero-drift guarantee for every other analysis (RES-06) — Validated in Phase 9
 
 ### Active
 
 - [ ] Multiple-comparisons / data-snooping correction applied across the validation harness's full bucket grid (MHT-01).
 - [ ] Walk-forward / rolling-window validation supplementing the single sacred discovery/OOS split (WF-01).
 - [x] Vectorized enrichment/validation hot path so the end-to-end regen is fast, behavior-preserving (PERF-01). — Validated in Phase 8: both annotation loops vectorized + redundant recompute removed; all 3 manifests bit-identical to pre-change golden; suite 21m14s→6m35s.
-- [ ] SMT geometry & invalidation honesty — carry the scanner's price/lifecycle fields, fix the invalidated-SMT tagging bug, add role/magnitude/CISD-in-block/survived-vs-broke, all validated (RES-06).
 - [ ] New conditioning features — continuous magnitudes of the binary flags, session/time-of-day, and CISD volume anomalies, all validated (RES-07).
 - [ ] A small model over the qualifying feature families, built only once at least one family clears the corrected evidence bar (ML-01).
 
@@ -94,4 +94,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-11 after Phase 8 complete — enrichment/validation hot path vectorized (PERF-01), behavior-preserving (manifests bit-identical); next: Phase 9 (SMT geometry & invalidation honesty)*
+*Last updated: 2026-07-12 after Phase 9 complete — SMT invalidation-honesty bug fixed and geometry/role features validated through the full harness (RES-06); next: Phase 10 (new conditioning features) or Phase 11 (conditional post-CISD model)*
