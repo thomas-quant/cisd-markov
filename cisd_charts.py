@@ -490,7 +490,7 @@ def build_csv_rows(keys: list, df_nq: pd.DataFrame, df_es: pd.DataFrame) -> pd.D
                     for bucket_lbl, d in data[ct].items():
                         add(label, instr, ct, bucket_lbl, d["total"], d["runs"])
 
-            elif key == "smt_cisd":
+            elif key in ("smt_cisd", "smt_role", "smt_block_size", "smt_in_block"):
                 for ct in ("bullish", "bearish"):
                     for tag, d in data[ct].items():
                         add(label, instr, ct, tag, d["total"], d["runs"])
