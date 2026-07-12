@@ -203,3 +203,14 @@ The plan's own `<read_first>` block for Task 1 instructed reading `prev_high`/`p
 ---
 *Phase: 10-new-conditioning-features-magnitude-session-volume-anomaly*
 *Completed: 2026-07-12*
+
+## Self-Check: PASSED
+
+- FOUND: `cisd_data.py`
+- FOUND: `tests/test_conditioning_features.py`
+- FOUND: `.planning/phases/10-new-conditioning-features-magnitude-session-volume-anomaly/10-01-SUMMARY.md`
+- FOUND commit: `5fb93a1` (test: RED gate)
+- FOUND commit: `5b0fad8` (feat: Task 1 magnitude columns)
+- FOUND commit: `8b80fdd` (feat: Task 2 session_tag)
+- FOUND commit: `0a0277b` (feat: Task 3 volume anomaly)
+- FOUND commit: `fb9f8a4` (fix: regression fix)
