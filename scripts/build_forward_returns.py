@@ -28,6 +28,10 @@ DEFAULT_STATE = {
     "core": {"smt": "all", "size_cross": "all", "wick": "all", "consec": "all"},
     "fvg": {"fvg_bucket": "all", "fvg_mode": "all", "fvg_state": "all"},
     "structure": {"sweep": "all", "prev_swing": "all", "cisd_swing": "all"},
+    # Phase 10 (D-01/D-02): session is a new standalone family (not folded into
+    # "core") so the existing core_combo_key/apply_family_filters "core" shape
+    # (and its tests) stay untouched -- additive-only, mirrors fvg/structure.
+    "session": {"session": "all"},
 }
 
 
@@ -43,10 +47,15 @@ def structure_combo_key(state: dict[str, str]) -> str:
     return "|".join([state["sweep"], state["prev_swing"], state["cisd_swing"]])
 
 
+def session_combo_key(state: dict[str, str]) -> str:
+    return state["session"]
+
+
 COMBO_KEY_BUILDERS = {
     "core": core_combo_key,
     "fvg": fvg_combo_key,
     "structure": structure_combo_key,
+    "session": session_combo_key,
 }
 
 
@@ -105,6 +114,7 @@ def build_forward_return_rows(prepared: pd.DataFrame, instrument: str) -> pd.Dat
         ("has_dir_sweep", False),
         ("prev_bar_is_dir_swing", False),
         ("cisd_bar_is_dir_swing", False),
+        ("session_tag", "overnight"),
     ):
         _ensure_column(rows, column, default)
 
@@ -113,6 +123,7 @@ def build_forward_return_rows(prepared: pd.DataFrame, instrument: str) -> pd.Dat
     rows["size_cross"] = "all"
     rows["wick"] = "all"
     rows["consec"] = "all"
+    rows["session"] = rows["session_tag"]
 
     rows["fvg_bucket"] = np.select(
         [rows["has_dir_fvg_mid0"], rows["has_dir_fvg_mid1"]],
@@ -171,6 +182,11 @@ def apply_family_filters(rows: pd.DataFrame, family: str, state: dict[str, str])
         for column, key in (("sweep", "sweep"), ("prev_swing", "prev_swing"), ("cisd_swing", "cisd_swing")):
             if state[key] != "all":
                 filtered = filtered[filtered[column] == state[key]]
+        return filtered.copy()
+
+    if family == "session":
+        if state["session"] != "all":
+            filtered = filtered[filtered["session"] == state["session"]]
         return filtered.copy()
 
     raise ValueError(f"unknown family: {family}")
@@ -302,6 +318,20 @@ def build_config() -> dict[str, object]:
                             {"value": "all", "label": "All"},
                             {"value": "yes", "label": "yes"},
                             {"value": "no", "label": "no"},
+                        ],
+                    },
+                },
+            },
+            "session": {
+                "label": "Session",
+                "dimensions": {
+                    "session": {
+                        "label": "Session",
+                        "values": [
+                            {"value": "all", "label": "All"},
+                            {"value": "rth_open", "label": "RTH open"},
+                            {"value": "rth", "label": "RTH"},
+                            {"value": "overnight", "label": "Overnight"},
                         ],
                     },
                 },
@@ -525,6 +555,9 @@ def render_html(data: dict[str, object], config: dict[str, object]) -> str:
     }
     if (family === "fvg") {
       return `${familyStateValue.fvg_bucket}|${familyStateValue.fvg_mode}|${familyStateValue.fvg_state}`;
+    }
+    if (family === "session") {
+      return `${familyStateValue.session}`;
     }
     return `${familyStateValue.sweep}|${familyStateValue.prev_swing}|${familyStateValue.cisd_swing}`;
   }

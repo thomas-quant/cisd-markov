@@ -46,7 +46,8 @@ CSV_PATH = REPO_ROOT / "output" / "cisd_expectancy.csv"
 MD_PATH = REPO_ROOT / "output" / "cisd_expectancy.md"
 
 # Case-flag columns carried onto each event row, with safe defaults when a run
-# did not produce them (e.g. SMT scan unavailable).
+# did not produce them (e.g. SMT scan unavailable, or an older cache predating
+# Phase 10's session_tag annotation).
 CASE_FLAG_DEFAULTS = {
     "has_dir_fvg_mid0": False,
     "has_dir_fvg_mid1": False,
@@ -54,9 +55,18 @@ CASE_FLAG_DEFAULTS = {
     "prev_bar_is_dir_swing": False,
     "cisd_bar_is_dir_swing": False,
     "swing_smt_tag": "no SMT",
+    "session_tag": "overnight",
 }
 
 # (case key, human label). Masks are resolved in ``case_masks``.
+#
+# Session (Phase 10, D-01/D-02) is a 3-bucket categorical column, so it is
+# surfaced as three mutually-exclusive, exhaustive cases (rth_open/rth/
+# overnight) mirroring the existing fvg_mid0/fvg_mid1/fvg_none 3-way split,
+# rather than the binary smt/no_smt shape. Continuous magnitude/volume
+# columns (wick_distance_atr, sweep_depth_atr, fvg_size_atr, rvol,
+# volume_zscore, effort-vs-result) are deliberately NOT surfaced here to
+# keep the case list lean (Claude's Discretion, 10-CONTEXT.md).
 CASES = [
     ("all_cisd", "All CISDs"),
     ("fvg_any", "CISD w/ FVG (mid0|mid1)"),
@@ -69,6 +79,9 @@ CASES = [
     ("cisd_swing", "CISD-bar swing"),
     ("smt", "CISD w/ SMT"),
     ("no_smt", "CISD no SMT"),
+    ("session_rth_open", "Session: RTH open (09:30-10:30 ET)"),
+    ("session_rth", "Session: RTH (10:30-16:00 ET)"),
+    ("session_overnight", "Session: overnight"),
 ]
 
 
@@ -165,6 +178,10 @@ def case_masks(events: pd.DataFrame) -> dict[str, pd.Series]:
     mid1 = events["has_dir_fvg_mid1"].astype(bool)
     sweep = events["has_dir_sweep"].astype(bool)
     has_smt = events["swing_smt_tag"].astype(str) != "no SMT"
+    if "session_tag" in events.columns:
+        session = events["session_tag"].astype(str)
+    else:
+        session = pd.Series("overnight", index=events.index)
     truthy = pd.Series(True, index=events.index)
     return {
         "all_cisd": truthy,
@@ -178,6 +195,9 @@ def case_masks(events: pd.DataFrame) -> dict[str, pd.Series]:
         "cisd_swing": events["cisd_bar_is_dir_swing"].astype(bool),
         "smt": has_smt,
         "no_smt": ~has_smt,
+        "session_rth_open": session == "rth_open",
+        "session_rth": session == "rth",
+        "session_overnight": session == "overnight",
     }
 
 
