@@ -326,8 +326,15 @@ def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
     atr_arr = atr.to_numpy(dtype=float)
     atr_valid = np.isfinite(atr_arr) & (atr_arr > 0)
     safe_atr = np.where(atr_valid, atr_arr, np.nan)
-    prev_high_arr = annotated["prev_high"].to_numpy(dtype=float)
-    prev_low_arr  = annotated["prev_low"].to_numpy(dtype=float)
+    # prev_high/prev_low are derived locally from high_s/low_s.shift(1) rather
+    # than read off an annotated["prev_high"]/["prev_low"] column — this is
+    # the exact same value `prepare()` assigns (`df["high"].shift(1)`), but
+    # keeps `_annotate_cisd_research` self-contained so it does not require
+    # callers to have pre-populated those columns (several pre-existing
+    # behavior-lock tests call this function directly on a minimal
+    # open/high/low/close/cisd_type frame).
+    prev_high_arr = high_s.shift(1).to_numpy(dtype=float)
+    prev_low_arr  = low_s.shift(1).to_numpy(dtype=float)
 
     # wick_distance_atr: signed, ALL CISDs (D-05/D-06). Positive = closed past
     # the prior bar's wick; negative/zero = closed within it. This single
@@ -407,36 +414,50 @@ def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
     # vol_per_range: within-bar effort/result ratio (D-07, baseline-free
     # anchor) — no lookback window, no intraday seasonality. High value =
     # high-volume-goes-nowhere (churn/absorption).
-    vol_arr = annotated["volume"].to_numpy(dtype=float)
-    rng = high - low
-    safe_rng = np.where(rng > 0, rng, np.nan)
-    vol_per_range = np.where(rng > 0, vol_arr / safe_rng, np.nan)
+    #
+    # "volume" is guaranteed on real pipeline output (resample_ohlcv always
+    # sets it), but several pre-existing behavior-lock tests call
+    # `_annotate_cisd_research` directly on a minimal open/high/low/close/
+    # cisd_type frame with no "volume" column — degrade gracefully to NaN
+    # rather than raising, mirroring the SMT-columns-absent convention
+    # elsewhere in this module.
+    if "volume" in annotated.columns:
+        vol_arr = annotated["volume"].to_numpy(dtype=float)
+        rng = high - low
+        safe_rng = np.where(rng > 0, rng, np.nan)
+        vol_per_range = np.where(rng > 0, vol_arr / safe_rng, np.nan)
 
-    # rvol / volume_zscore: same-time-of-day-slot trailing baseline (D-08),
-    # NOT a naive trailing window — intraday volume has a large time-of-day
-    # profile, so grouping by minute-of-day (reused from the session_tag
-    # block above) removes it. shift(1) inside each slot group excludes the
-    # current bar (no lookahead — the baseline is strictly trailing within
-    # its own slot). On a Daily frame every bar shares one slot, so this
-    # degenerates to a single plain trailing window (correct — no intraday
-    # profile there). min_periods=RVOL_SLOT_K leaves the warm-up NaN
-    # (those bars fall below-n and are naturally excluded downstream).
-    slot = pd.Series(minute_of_day, index=idx_ax)
-    vol_s = pd.Series(vol_arr, index=idx_ax)
-    slot_mean = vol_s.groupby(slot).transform(
-        lambda s: s.shift(1).rolling(RVOL_SLOT_K, min_periods=RVOL_SLOT_K).mean()
-    )
-    slot_std = vol_s.groupby(slot).transform(
-        lambda s: s.shift(1).rolling(RVOL_SLOT_K, min_periods=RVOL_SLOT_K).std()
-    )
-    slot_mean_arr = slot_mean.to_numpy()
-    slot_std_arr  = slot_std.to_numpy()
-    safe_slot_mean = np.where(slot_mean_arr > 0, slot_mean_arr, np.nan)
-    safe_slot_std  = np.where(slot_std_arr > 0, slot_std_arr, np.nan)
-    rvol = np.where(slot_mean_arr > 0, vol_arr / safe_slot_mean, np.nan)
-    volume_zscore = np.where(
-        slot_std_arr > 0, (vol_arr - slot_mean_arr) / safe_slot_std, np.nan,
-    )
+        # rvol / volume_zscore: same-time-of-day-slot trailing baseline
+        # (D-08), NOT a naive trailing window — intraday volume has a large
+        # time-of-day profile, so grouping by minute-of-day (reused from the
+        # session_tag block above) removes it. shift(1) inside each slot
+        # group excludes the current bar (no lookahead — the baseline is
+        # strictly trailing within its own slot). On a Daily frame every bar
+        # shares one slot, so this degenerates to a single plain trailing
+        # window (correct — no intraday profile there). min_periods=
+        # RVOL_SLOT_K leaves the warm-up NaN (those bars fall below-n and
+        # are naturally excluded downstream).
+        slot = pd.Series(minute_of_day, index=idx_ax)
+        vol_s = pd.Series(vol_arr, index=idx_ax)
+        slot_mean = vol_s.groupby(slot).transform(
+            lambda s: s.shift(1).rolling(RVOL_SLOT_K, min_periods=RVOL_SLOT_K).mean()
+        )
+        slot_std = vol_s.groupby(slot).transform(
+            lambda s: s.shift(1).rolling(RVOL_SLOT_K, min_periods=RVOL_SLOT_K).std()
+        )
+        slot_mean_arr = slot_mean.to_numpy()
+        slot_std_arr  = slot_std.to_numpy()
+        safe_slot_mean = np.where(slot_mean_arr > 0, slot_mean_arr, np.nan)
+        safe_slot_std  = np.where(slot_std_arr > 0, slot_std_arr, np.nan)
+        rvol = np.where(slot_mean_arr > 0, vol_arr / safe_slot_mean, np.nan)
+        volume_zscore = np.where(
+            slot_std_arr > 0, (vol_arr - slot_mean_arr) / safe_slot_std, np.nan,
+        )
+    else:
+        n_rows = len(annotated)
+        vol_per_range = np.full(n_rows, np.nan)
+        rvol = np.full(n_rows, np.nan)
+        volume_zscore = np.full(n_rows, np.nan)
 
     # ── FVG hold classification ──────────────────────────────────────────────
     # `_classify_fvg_hold` returns "none" when the FVG_HOLD_LOOKAHEAD window

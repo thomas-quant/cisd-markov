@@ -18,9 +18,12 @@ conditioning-features-magnitude-session-volume-anomaly/10-01-PLAN.md`):
 All fixtures are synthetic (hand-built annotation-input frames, bypassing
 `prepare()`/`resample_ohlcv` entirely — the same style as
 `tests/test_smt_geometry.py`) — no data files or SMT package required.
-`_annotate_cisd_research` is called directly, so fixtures must supply every
-column `prepare()` would normally set before calling it: `open`, `high`,
-`low`, `close`, `volume`, `cisd_type`, `prev_high`, `prev_low`.
+`_annotate_cisd_research` is called directly with a minimal
+`open`/`high`/`low`/`close`/`cisd_type`/`volume` frame; `prev_high`/
+`prev_low` are derived internally from `high`/`low`.shift(1) (matching
+`prepare()`'s own definition) rather than read from a pre-supplied column,
+so fixtures control wick-distance scenarios via the actual preceding bar's
+`high`/`low`, not an overridable `prev_high`/`prev_low` column.
 """
 
 import numpy as np
@@ -53,8 +56,6 @@ def _fixture(n, freq="15min", start="2026-01-01 09:00", **overrides):
         "low":       [99.0] * n,
         "close":     [100.0] * n,
         "cisd_type": [None] * n,
-        "prev_high": [np.nan] * n,
-        "prev_low":  [np.nan] * n,
         "volume":    [1000.0] * n,
     }
     data.update(overrides)
@@ -64,58 +65,67 @@ def _fixture(n, freq="15min", start="2026-01-01 09:00", **overrides):
 # ── Task 1: wick_distance_atr (signed, all CISDs) ───────────────────────────
 
 def test_wick_distance_atr_signed_past_vs_within_wick():
-    n = 16
+    n = 18
     cisd_types = [None] * n
-    prev_high  = [np.nan] * n
     highs      = [101.0] * n
     lows       = [99.0] * n
     closes     = [100.0] * n
 
-    # Row 14 (0-indexed, ATR window already warmed up): bullish CISD closing
-    # ABOVE prev_high -> strictly positive wick_distance_atr ("past the wick").
+    # Row 13 (0-indexed): the "reference" bar whose high (100.0) becomes
+    # row 14's prev_high via high.shift(1). Keep high-low=2.0 so ATR(14)
+    # (warmed up by row 13) stays exactly 2.0 throughout.
+    highs[13] = 100.0
+    lows[13]  = 98.0
+
+    # Row 14: bullish CISD closing ABOVE prev_high (100.0) -> strictly
+    # positive wick_distance_atr ("past the wick").
     cisd_types[14] = "bullish"
-    prev_high[14]  = 100.0
     closes[14]     = 105.0
     highs[14]      = 106.0
-    lows[14]       = 104.0  # keep high-low=2.0 so ATR stays 2.0
+    lows[14]       = 104.0
 
-    # Row 15: bullish CISD closing AT-OR-BELOW prev_high -> <=0 ("within the
-    # prior wick").
-    cisd_types[15] = "bullish"
-    prev_high[15]  = 100.0
-    closes[15]     = 99.0
-    highs[15]      = 100.0
-    lows[15]       = 98.0
+    # Row 15: a second "reference" bar (high=100.0) for row 16's prev_high.
+    highs[15] = 100.0
+    lows[15]  = 98.0
 
-    df = _fixture(n, cisd_type=cisd_types, prev_high=prev_high,
-                  high=highs, low=lows, close=closes)
+    # Row 16: bullish CISD closing AT-OR-BELOW prev_high (100.0) -> <=0
+    # ("within the prior wick").
+    cisd_types[16] = "bullish"
+    closes[16]     = 99.0
+    highs[16]      = 100.0
+    lows[16]       = 98.0
+
+    df = _fixture(n, cisd_type=cisd_types, high=highs, low=lows, close=closes)
     out = _annotate_cisd_research(df)
 
     assert out["wick_distance_atr"].iloc[14] == pytest.approx(2.5)
     assert out["wick_distance_atr"].iloc[14] > 0
-    assert out["wick_distance_atr"].iloc[15] == pytest.approx(-0.5)
-    assert out["wick_distance_atr"].iloc[15] <= 0
+    assert out["wick_distance_atr"].iloc[16] == pytest.approx(-0.5)
+    assert out["wick_distance_atr"].iloc[16] <= 0
     # non-CISD rows are NaN
-    assert out["wick_distance_atr"].iloc[:14].isna().all()
+    non_cisd = out["wick_distance_atr"].drop(out.index[[14, 16]])
+    assert non_cisd.isna().all()
 
 
 def test_wick_distance_atr_bearish_mirror():
     n = 16
     cisd_types = [None] * n
-    prev_low   = [np.nan] * n
     highs      = [101.0] * n
     lows       = [99.0] * n
     closes     = [100.0] * n
 
-    # Bearish CISD closing BELOW prev_low -> positive (past the wick).
+    # Row 13: reference bar whose low (100.0) becomes row 14's prev_low.
+    highs[13] = 102.0
+    lows[13]  = 100.0
+
+    # Row 14: bearish CISD closing BELOW prev_low (100.0) -> positive
+    # (past the wick).
     cisd_types[14] = "bearish"
-    prev_low[14]   = 100.0
     closes[14]     = 95.0
     highs[14]      = 96.0
     lows[14]       = 94.0
 
-    df = _fixture(n, cisd_type=cisd_types, prev_low=prev_low,
-                  high=highs, low=lows, close=closes)
+    df = _fixture(n, cisd_type=cisd_types, high=highs, low=lows, close=closes)
     out = _annotate_cisd_research(df)
 
     assert out["wick_distance_atr"].iloc[14] == pytest.approx(2.5)
