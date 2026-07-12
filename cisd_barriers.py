@@ -219,6 +219,133 @@ def compute_wick(df: pd.DataFrame) -> dict:
     return stats
 
 
+def compute_wick_distance(df: pd.DataFrame) -> dict:
+    """
+    Barrier run rate segmented by signed wick_distance_atr — the ATR-normalized
+    distance the CISD close travelled past (positive) or fell within (negative
+    or zero) the prior bar's wick (Phase 10 Plan 01/02, D-05/D-06). Population
+    is ALL CISDs (no gating beyond ATR validity, matching compute_candle_size's
+    ungated event_pos loop) — this single signed feature subsumes and enriches
+    the binary compute_wick past/within split (compute_wick is left untouched,
+    D-10/D-12).
+
+    D-06 reconciliation (frozen, 2026-07-12): compute_wick classifies a CISD
+    as "past_wick" only when the close STRICTLY clears the prior high/low
+    (`close > prev_high` bullish / `close < prev_low` bearish); a close that
+    lands exactly at the prior wick is "within_wick". wick_distance_atr == 0
+    is exactly that boundary case, so this function (uniquely among the
+    fixed-bin compute_* functions) uses a `lo < ratio <= hi` comparator
+    instead of the codebase's usual `lo <= ratio < hi` — this puts ratio == 0
+    in the "within wick" bucket, not "past wick", so the two >0 bins' totals
+    recover compute_wick's past_wick total exactly, and the two <=0 bins'
+    totals recover within_wick exactly.
+    """
+    if "wick_distance_atr" not in df.columns:
+        raise ValueError("df must contain wick_distance_atr column")
+
+    BINS = [
+        (-1e18, -1.0, "<-1x ATR (deep within wick)"),
+        (-1.0,   0.0, "-1x-0 ATR (within wick)"),
+        (0.0,    1.0, "0-1x ATR (past wick)"),
+        (1.0,   1e18, ">1x ATR (far past wick)"),
+    ]
+    ct_arr    = df["cisd_type"].to_numpy(dtype=object)
+    ratio_arr = df["wick_distance_atr"].to_numpy(dtype=float)
+    event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    stats = {ct: {lbl: {"total": 0, "runs": 0} for _, _, lbl in BINS}
+             for ct in ("bullish", "bearish")}
+    for pos in event_pos:
+        ratio = ratio_arr[pos]
+        if pd.isna(ratio):
+            continue
+        ct = ct_arr[pos]
+        for lo, hi, lbl in BINS:
+            if lo < ratio <= hi:
+                stats[ct][lbl]["total"] += 1
+                if barrier_hit(df, pos, df.iloc[pos], ct):
+                    stats[ct][lbl]["runs"] += 1
+                break
+    return stats
+
+
+def compute_sweep_depth(df: pd.DataFrame) -> dict:
+    """
+    Barrier run rate segmented by sweep penetration depth (sweep_depth_atr)
+    as a multiple of ATR(14), over the has_dir_sweep population only
+    (Phase 10 Plan 01/02, D-05). Rows with no directional sweep carry
+    sweep_depth_atr == NaN and are excluded — the annotation already leaves
+    the ratio off-population NaN, so no separate has_dir_sweep re-check is
+    needed here (same discipline as compute_smt_block_size, whose ATR-bin
+    convention this copies near-verbatim). compute_sweep (the existing binary
+    w/sweep vs no-sweep analysis) is left untouched (D-10/D-12).
+    """
+    if "sweep_depth_atr" not in df.columns:
+        raise ValueError("df must contain sweep_depth_atr column")
+
+    BINS = [
+        (0,    0.5,  "<0.5x ATR"),
+        (0.5,  1.0,  "0.5x-1x ATR"),
+        (1.0,  1.5,  "1x-1.5x ATR"),
+        (1.5,  1e18, ">1.5x ATR"),
+    ]
+    ct_arr    = df["cisd_type"].to_numpy(dtype=object)
+    ratio_arr = df["sweep_depth_atr"].to_numpy(dtype=float)
+    event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    stats = {ct: {lbl: {"total": 0, "runs": 0} for _, _, lbl in BINS}
+             for ct in ("bullish", "bearish")}
+    for pos in event_pos:
+        ratio = ratio_arr[pos]
+        if pd.isna(ratio):
+            continue
+        ct = ct_arr[pos]
+        for lo, hi, lbl in BINS:
+            if lo <= ratio < hi:
+                stats[ct][lbl]["total"] += 1
+                if barrier_hit(df, pos, df.iloc[pos], ct):
+                    stats[ct][lbl]["runs"] += 1
+                break
+    return stats
+
+
+def compute_fvg_size(df: pd.DataFrame) -> dict:
+    """
+    Barrier run rate segmented by FVG size (fvg_size_atr) as a multiple of
+    ATR(14), over the has_dir_fvg (mid0-priority union) population only
+    (Phase 10 Plan 01/02, D-05). Rows with no directional FVG carry
+    fvg_size_atr == NaN and are excluded via the same pd.isna(ratio) skip as
+    compute_sweep_depth / compute_smt_block_size. Single flat population
+    (mid0-priority per the Plan 01 frozen decision) — not split mid0/mid1,
+    keeping the flat {dir: {tag: {total, runs}}} shape. compute_cisd_fvg (the
+    existing mid0/mid1/no_fvg presence analysis) is left untouched (D-10/D-12).
+    """
+    if "fvg_size_atr" not in df.columns:
+        raise ValueError("df must contain fvg_size_atr column")
+
+    BINS = [
+        (0,    0.5,  "<0.5x ATR"),
+        (0.5,  1.0,  "0.5x-1x ATR"),
+        (1.0,  1.5,  "1x-1.5x ATR"),
+        (1.5,  1e18, ">1.5x ATR"),
+    ]
+    ct_arr    = df["cisd_type"].to_numpy(dtype=object)
+    ratio_arr = df["fvg_size_atr"].to_numpy(dtype=float)
+    event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    stats = {ct: {lbl: {"total": 0, "runs": 0} for _, _, lbl in BINS}
+             for ct in ("bullish", "bearish")}
+    for pos in event_pos:
+        ratio = ratio_arr[pos]
+        if pd.isna(ratio):
+            continue
+        ct = ct_arr[pos]
+        for lo, hi, lbl in BINS:
+            if lo <= ratio < hi:
+                stats[ct][lbl]["total"] += 1
+                if barrier_hit(df, pos, df.iloc[pos], ct):
+                    stats[ct][lbl]["runs"] += 1
+                break
+    return stats
+
+
 def compute_combined(df: pd.DataFrame) -> dict:
     """Barrier run rate cross-tabulated: wick position x consecutive candle count."""
     directions     = df["direction"]
@@ -911,4 +1038,12 @@ __all__ = [
     "barrier_outcome_forward",
     # New RES-02 symbols
     "compute_post_cisd_context",
+    # New RES-07 symbols (Phase 10 Plan 02: magnitude)
+    "compute_wick_distance",
+    "compute_sweep_depth",
+    "compute_fvg_size",
+    # New RES-07 symbols (Phase 10 Plan 02: volume anomaly)
+    "compute_effort_result",
+    "compute_rvol",
+    "compute_volume_zscore",
 ]
