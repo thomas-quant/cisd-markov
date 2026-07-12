@@ -24,6 +24,53 @@ import pytest
 from cisd_analysis import _annotate_cisd_research, _annotate_swing_smt_from_events
 
 
+# ── Shared fixture helpers for the SMT lifecycle columns (Phase 09 Plan 01) ─
+
+_EVENT_LIFECYCLE_DEFAULTS = {
+    "reference_price": 100.0,
+    "invalidation_asset": "ES",
+    "invalidation_direction": "above",
+    "invalidation_level": 9999.0,
+    "broken_ts": pd.NaT,
+    "status": "active",
+}
+
+
+def _event(signal_type, created_ts, sweeping_asset, failing_asset, reference_timestamp=None, **overrides):
+    row = {
+        "signal_type": signal_type,
+        "created_ts": created_ts,
+        "sweeping_asset": sweeping_asset,
+        "failing_asset": failing_asset,
+        "reference_timestamp": created_ts if reference_timestamp is None else reference_timestamp,
+    }
+    row.update(_EVENT_LIFECYCLE_DEFAULTS)
+    row.update(overrides)
+    return row
+
+
+def _ohlc_df(cisd_types, index):
+    n = len(index)
+    opens = [10.0 + i for i in range(n)]
+    return pd.DataFrame(
+        {
+            "open": opens,
+            "high": [o + 1.0 for o in opens],
+            "low": [o - 1.0 for o in opens],
+            "close": [o + 0.5 for o in opens],
+            "cisd_type": cisd_types,
+        },
+        index=index,
+    )
+
+
+_EMPTY_EVENT_COLUMNS = [
+    "signal_type", "created_ts", "sweeping_asset", "failing_asset",
+    "reference_price", "invalidation_asset", "invalidation_direction",
+    "invalidation_level", "broken_ts", "status", "reference_timestamp",
+]
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # _annotate_swing_smt_from_events
 # ══════════════════════════════════════════════════════════════════════════
@@ -37,16 +84,11 @@ def test_swing_smt_last_matching_event_in_window_wins():
     semantic a vectorized rewrite must preserve.
     """
     index = pd.date_range("2026-01-01 09:30", periods=6, freq="15min")
-    df = pd.DataFrame(
-        {"cisd_type": [None, "bullish", "bullish", "bullish", "bearish", None]},
-        index=index,
-    )
+    df = _ohlc_df([None, "bullish", "bullish", "bullish", "bearish", None], index)
     events = pd.DataFrame(
         [
-            {"signal_type": "Bullish Swing SMT", "created_ts": index[1],
-             "sweeping_asset": "NQ", "failing_asset": "ES"},
-            {"signal_type": "Bullish Swing SMT", "created_ts": index[2],
-             "sweeping_asset": "ES", "failing_asset": "NQ"},
+            _event("Bullish Swing SMT", index[1], "NQ", "ES"),
+            _event("Bullish Swing SMT", index[2], "ES", "NQ"),
         ]
     )
 
@@ -63,15 +105,9 @@ def test_swing_smt_opposite_direction_event_ignored():
     """An event whose direction does not match the CISD bar's cisd_type is
     never a candidate, regardless of timestamp proximity."""
     index = pd.date_range("2026-01-01 09:30", periods=6, freq="15min")
-    df = pd.DataFrame(
-        {"cisd_type": [None, "bullish", "bullish", "bullish", "bearish", None]},
-        index=index,
-    )
+    df = _ohlc_df([None, "bullish", "bullish", "bullish", "bearish", None], index)
     events = pd.DataFrame(
-        [
-            {"signal_type": "Bearish Swing SMT", "created_ts": index[2],
-             "sweeping_asset": "NQ", "failing_asset": "ES"},
-        ]
+        [_event("Bearish Swing SMT", index[2], "NQ", "ES")]
     )
 
     nq = _annotate_swing_smt_from_events(df, events, instrument="NQ")
@@ -87,12 +123,9 @@ def test_swing_smt_event_outside_left_window_does_not_match():
     """An event created at t-3 (outside the [t-2, t] left window) must NOT
     match, even when same-direction."""
     index = pd.date_range("2026-01-01 09:30", periods=5, freq="15min")
-    df = pd.DataFrame({"cisd_type": [None, None, None, "bullish", None]}, index=index)
+    df = _ohlc_df([None, None, None, "bullish", None], index)
     events = pd.DataFrame(
-        [
-            {"signal_type": "Bullish Swing SMT", "created_ts": index[0],  # t-3 relative to idx[3]
-             "sweeping_asset": "NQ", "failing_asset": "ES"},
-        ]
+        [_event("Bullish Swing SMT", index[0], "NQ", "ES")]  # t-3 relative to idx[3]
     )
 
     nq = _annotate_swing_smt_from_events(df, events, instrument="NQ")
@@ -109,15 +142,9 @@ def test_swing_smt_role_resolves_to_none_when_instrument_is_neither_asset():
     the sweeping_asset nor the failing_asset of the matching event, even
     though has_swing_smt/swing_smt_tag still register the match."""
     index = pd.date_range("2026-01-01 09:30", periods=6, freq="15min")
-    df = pd.DataFrame(
-        {"cisd_type": [None, "bullish", "bullish", "bullish", "bearish", None]},
-        index=index,
-    )
+    df = _ohlc_df([None, "bullish", "bullish", "bullish", "bearish", None], index)
     events = pd.DataFrame(
-        [
-            {"signal_type": "Bullish Swing SMT", "created_ts": index[1],
-             "sweeping_asset": "ES", "failing_asset": "GC"},
-        ]
+        [_event("Bullish Swing SMT", index[1], "ES", "GC")]
     )
 
     nq = _annotate_swing_smt_from_events(df, events, instrument="NQ")
@@ -132,15 +159,9 @@ def test_swing_smt_role_swept_vs_failed_to_sweep():
     """swing_smt_role is 'swept' when instrument == sweeping_asset and
     'failed_to_sweep' when instrument == failing_asset, for the SAME event."""
     index = pd.date_range("2026-01-01 09:30", periods=6, freq="15min")
-    df = pd.DataFrame(
-        {"cisd_type": [None, "bullish", "bullish", "bullish", "bearish", None]},
-        index=index,
-    )
+    df = _ohlc_df([None, "bullish", "bullish", "bullish", "bearish", None], index)
     events = pd.DataFrame(
-        [
-            {"signal_type": "Bullish Swing SMT", "created_ts": index[1],
-             "sweeping_asset": "NQ", "failing_asset": "ES"},
-        ]
+        [_event("Bullish Swing SMT", index[1], "NQ", "ES")]
     )
 
     nq = _annotate_swing_smt_from_events(df, events, instrument="NQ")
@@ -154,13 +175,8 @@ def test_swing_smt_empty_events_returns_all_default_columns():
     """An empty events frame returns the all-default columns for every row:
     has_swing_smt=False, swing_smt_tag='no SMT', match_ts=NaT, role='none'."""
     index = pd.date_range("2026-01-01 09:30", periods=6, freq="15min")
-    df = pd.DataFrame(
-        {"cisd_type": [None, "bullish", "bullish", "bullish", "bearish", None]},
-        index=index,
-    )
-    empty_events = pd.DataFrame(
-        columns=["signal_type", "created_ts", "sweeping_asset", "failing_asset"]
-    )
+    df = _ohlc_df([None, "bullish", "bullish", "bullish", "bearish", None], index)
+    empty_events = pd.DataFrame(columns=_EMPTY_EVENT_COLUMNS)
 
     nq = _annotate_swing_smt_from_events(df, empty_events, instrument="NQ")
 
@@ -175,10 +191,7 @@ def test_swing_smt_empty_frame_returns_empty_with_default_columns():
     four default-value columns (no KeyError / IndexError on empty input)."""
     empty_df = pd.DataFrame({"cisd_type": []})
     events = pd.DataFrame(
-        [
-            {"signal_type": "Bullish Swing SMT", "created_ts": pd.Timestamp("2026-01-01"),
-             "sweeping_asset": "NQ", "failing_asset": "ES"},
-        ]
+        [_event("Bullish Swing SMT", pd.Timestamp("2026-01-01"), "NQ", "ES")]
     )
 
     nq = _annotate_swing_smt_from_events(empty_df, events, instrument="NQ")
