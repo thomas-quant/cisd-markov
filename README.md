@@ -251,33 +251,90 @@ The near-flat distribution across all four buckets at 1H/15min confirms that vol
 
 *(See `SMT_CISD_All_Timeframes.png`)*
 
-A co-occurring same-direction **Swing SMT** (divergence between NQ and ES swing highs/lows, lookback=20) is used as a confirmation filter. Results vary sharply by timeframe.
+A co-occurring same-direction **Swing SMT** (divergence between NQ and ES swing highs/lows, lookback=20) is used as a confirmation filter. As of v2.0 the `w/ SMT` population is corrected — see "SMT Invalidation Honesty (v2.0)" below for what changed and why. Results vary sharply by timeframe.
 
 | Timeframe | Instrument | Direction | w/ SMT Rate | w/ SMT N | 95% CI | no SMT Rate | Δ | Verdict (w/ SMT) |
 |---|---|---|---|---|---|---|---|---|
-| Daily | NQ | Bullish | 63.3% | 49 | [49.3–75.3%] | 60.5% | +2.8pp | below-n / not a finding |
-| Daily | NQ | Bearish | 67.4% | 46 | [52.9–79.1%] | 57.5% | +9.8pp | below-n / not a finding |
-| Daily | ES | Bullish | 51.0% | 51 | [37.7–64.1%] | 59.1% | −8.1pp | ✓ CONFIRMED |
-| Daily | ES | Bearish | 54.7% | 53 | [41.5–67.3%] | 55.4% | −0.7pp | ✗ NOT CONFIRMED |
-| 4H | NQ | Bullish | 55.3% | 219 | [48.6–61.7%] | 54.9% | +0.3pp | ✓ CONFIRMED |
-| 4H | NQ | Bearish | 51.1% | 231 | [44.7–57.5%] | 50.1% | +1.0pp | ✓ CONFIRMED |
-| 4H | ES | Bullish | 59.5% | 215 | [52.9–65.9%] | 56.7% | +2.9pp | ✓ CONFIRMED |
-| 4H | ES | Bearish | 55.9% | 222 | [49.3–62.2%] | 51.1% | +4.7pp | ✗ NOT CONFIRMED |
-| 1H | NQ | Bullish | 62.9% | 728 | [59.3–66.3%] | 61.2% | +1.8pp | ✓ CONFIRMED |
-| 1H | NQ | Bearish | 56.0% | 825 | [52.6–59.4%] | 57.5% | −1.5pp | ✓ CONFIRMED |
-| 1H | ES | Bullish | 63.4% | 691 | [59.7–66.9%] | 62.6% | +0.8pp | ✓ CONFIRMED |
-| 1H | ES | Bearish | 56.8% | 787 | [53.3–60.2%] | 58.8% | −2.0pp | ✓ CONFIRMED |
-| 15min | NQ | Bullish | **65.3%** | 2703 | [63.5–67.1%] | 61.9% | +3.4pp | ✓ CONFIRMED |
-| 15min | NQ | Bearish | **62.4%** | 2822 | [60.6–64.1%] | 58.6% | +3.7pp | ✓ CONFIRMED |
-| 15min | ES | Bullish | **64.3%** | 2557 | [62.4–66.1%] | 62.1% | +2.2pp | ✓ CONFIRMED |
-| 15min | ES | Bearish | **61.0%** | 2672 | [59.1–62.8%] | 59.7% | +1.3pp | ✓ CONFIRMED |
+| Daily | NQ | Bullish | 69.2% | 39 | [53.6–81.4%] | 60.5% | +8.7pp | below-n / not a finding |
+| Daily | NQ | Bearish | 64.3% | 28 | [45.8–79.3%] | 57.5% | +6.8pp | below-n / not a finding |
+| Daily | ES | Bullish | 57.1% | 42 | [42.2–70.9%] | 59.1% | −1.9pp | below-n / not a finding |
+| Daily | ES | Bearish | 51.4% | 35 | [35.6–67.0%] | 55.4% | −4.0pp | below-n / not a finding |
+| 4H | NQ | Bullish | 59.0% | 156 | [51.1–66.4%] | 54.9% | +4.1pp | ✓ CONFIRMED |
+| 4H | NQ | Bearish | 50.3% | 171 | [42.9–57.7%] | 50.1% | +0.2pp | ✓ CONFIRMED |
+| 4H | ES | Bullish | 64.5% | 152 | [56.6–71.6%] | 56.7% | +7.8pp | ✓ CONFIRMED |
+| 4H | ES | Bearish | 52.2% | 161 | [44.5–59.7%] | 51.1% | +1.0pp | ✓ CONFIRMED |
+| 1H | NQ | Bullish | 59.0% | 503 | [54.7–63.3%] | 61.2% | −2.1pp | ✓ CONFIRMED |
+| 1H | NQ | Bearish | 54.9% | 565 | [50.7–58.9%] | 57.5% | −2.7pp | ✓ CONFIRMED |
+| 1H | ES | Bullish | 60.4% | 472 | [55.9–64.7%] | 62.6% | −2.3pp | ✓ CONFIRMED |
+| 1H | ES | Bearish | 55.3% | 535 | [51.1–59.5%] | 58.8% | −3.4pp | ✓ CONFIRMED |
+| 15min | NQ | Bullish | **64.9%** | 1887 | [62.7–67.0%] | 61.9% | +2.9pp | ✓ CONFIRMED |
+| 15min | NQ | Bearish | **61.2%** | 1965 | [59.0–63.4%] | 58.6% | +2.6pp | ✓ CONFIRMED |
+| 15min | ES | Bullish | **63.9%** | 1810 | [61.7–66.1%] | 62.1% | +1.9pp | ✓ CONFIRMED |
+| 15min | ES | Bearish | **60.5%** | 1884 | [58.3–62.7%] | 59.7% | +0.8pp | ✓ CONFIRMED |
 
-**Key takeaways:**
+The invalidation fix also surfaces the **`expired SMT`** bucket — CISDs that matched a same-direction Swing SMT in the `[t-2, t]` window, but that SMT was already invalidated (`broken_ts <= t`) by the time the CISD formed. These were previously mis-credited as `w/ SMT`; they are now reported separately and are **not** part of the corrected `w/ SMT` rate above:
 
-- **Daily** SMT: NQ w/ SMT is `below-n / not a finding` (both directions, n < 50). ES bullish w/ SMT is confirmed but shows a −8pp deficit vs no-SMT (SMT does not add value here). ES bearish w/ SMT is `✗ NOT CONFIRMED` — the bearish Daily SMT edge did not hold OOS and should not be treated as a finding.
-- **4H** SMT: Three of four w/ SMT buckets are confirmed, but the differences are within ±3pp and ES bearish is `✗ NOT CONFIRMED`. No consistent directional edge.
-- **1H** SMT: All four w/ SMT buckets confirmed. NQ and ES bullish get a small lift (+0.8–1.8pp); bearish combos are slightly negative but OOS rates still >50%. SMT is a neutral-to-slight-positive filter at this timeframe.
-- **15min** shows the most consistent positive effect: **+2–4pp** across all four combos with large discovery samples (n=2,557–2,822). All four confirmed. SMT confirmation adds the most value at **15min**.
+| Timeframe | Instrument | Direction | expired SMT Rate | expired SMT N |
+|---|---|---|---|---|
+| Daily | NQ | Bullish | 40.0% | 10 |
+| Daily | NQ | Bearish | 72.2% | 18 |
+| Daily | ES | Bullish | 22.2% | 9 |
+| Daily | ES | Bearish | 61.1% | 18 |
+| 4H | NQ | Bullish | 46.0% | 63 |
+| 4H | NQ | Bearish | 53.3% | 60 |
+| 4H | ES | Bullish | 47.6% | 63 |
+| 4H | ES | Bearish | 65.6% | 61 |
+| 1H | NQ | Bullish | 71.6% | 225 |
+| 1H | NQ | Bearish | 58.5% | 260 |
+| 1H | ES | Bullish | 69.9% | 219 |
+| 1H | ES | Bearish | 59.9% | 252 |
+| 15min | NQ | Bullish | 66.3% | 816 |
+| 15min | NQ | Bearish | 65.0% | 857 |
+| 15min | ES | Bullish | 65.2% | 747 |
+| 15min | ES | Bearish | 62.2% | 788 |
+
+**Key takeaways (corrected, v2.0):**
+
+- **Daily** SMT: all four `w/ SMT` buckets are now `below-n / not a finding` (n < 50 in every combo) — the two ES buckets that were previously eligible (n=51, n=53) dropped below the n=50 gate once the `expired SMT` split removed already-dead matches from the `w/ SMT` population. Daily SMT carries no finding at either the before-fix or after-fix bar.
+- **4H** SMT: all four `w/ SMT` buckets are confirmed post-fix. **ES Bearish flips from `✗ NOT CONFIRMED` to `✓ CONFIRMED`** — the pre-fix bucket's discovery rate (55.9%) held on OOS at 46.7% (opposite side), but the corrected discovery rate (52.2%) now holds the same side as the corrected OOS rate (51.5%). This flip is a direct, documented consequence of the invalidation fix, not a new discovery.
+- **1H** SMT: all four `w/ SMT` buckets remain confirmed; rates shift down modestly (−2 to −4pp vs the pre-fix numbers) now that expired matches are excluded, but the same-side-of-50% OOS confirmation is unaffected.
+- **15min** remains the strongest timeframe: all four buckets confirmed, **+0.8–2.9pp** over no-SMT with large discovery samples (n=1,810–1,965).
+- **Scope note:** the `w/ SMT & survived` / `w/ SMT & broke` split (new in v2.0) is a **diagnostic only** — the aggregate `w/ SMT` population above is never filtered on survival, since that would be hindsight (an outcome only knowable after the barrier window closes). See `output/smt_invalidation_report.csv` and `SMT_Role_All_Timeframes.png` / `SMT_BlockSize_All_Timeframes.png` / `SMT_InBlock_All_Timeframes.png` for the new `smt_role` / `smt_block_size` / `smt_in_block` validated buckets (n + Wilson CI + BH-FDR + walk-forward), which are separate analyses, not sub-splits of `smt_cisd`.
+
+---
+
+## SMT Invalidation Honesty (v2.0)
+
+Phase 9 fixes a bug in the Swing SMT confirmation tagging: a matched same-direction SMT was credited as `w/ SMT` even when it had **already been invalidated by the CISD bar `t`** (`broken_ts <= t`). Because sub-bar ordering between an intrabar invalidation and the CISD close is unknowable, an SMT whose `broken_ts` lands exactly on bar `t` is now treated conservatively as dead — the CISD is reclassified into a new **`expired SMT`** bucket instead of `w/ SMT`. The `swing_smt_tag` split is therefore three-way as of v2.0: `w/ SMT` (still valid at `t`) / `expired SMT` (matched but dead by `t`) / `no SMT` (no same-direction match at all).
+
+This changes the previously-published `w/ SMT` rate and n for every timeframe/instrument/direction combo — always a reduction in n (dead matches leave the bucket) and a rate shift in either direction depending on how the removed expired matches performed. Per D-09a, the "before" numbers below are the currently-published (pre-fix) §8 values already on record — no separate recompute or snapshot ceremony was needed. "After" is the corrected, regenerated discovery manifest. The table is generated by `scripts/build_smt_invalidation_report.py` from `output/smt_invalidation_report.csv`:
+
+| Timeframe | Instrument | Direction | Before Rate | Before N | After Rate | After N | Δ Rate | Δ N |
+|---|---|---|---|---|---|---|---|---|
+| Daily | NQ | Bullish | 63.3% | 49 | 69.2% | 39 | +6.0pp | −10 |
+| Daily | NQ | Bearish | 67.4% | 46 | 64.3% | 28 | −3.1pp | −18 |
+| Daily | ES | Bullish | 51.0% | 51 | 57.1% | 42 | +6.2pp | −9 |
+| Daily | ES | Bearish | 54.7% | 53 | 51.4% | 35 | −3.3pp | −18 |
+| 4H | NQ | Bullish | 55.3% | 219 | 59.0% | 156 | +3.7pp | −63 |
+| 4H | NQ | Bearish | 51.1% | 231 | 50.3% | 171 | −0.8pp | −60 |
+| 4H | ES | Bullish | 59.5% | 215 | 64.5% | 152 | +4.9pp | −63 |
+| 4H | ES | Bearish | 55.9% | 222 | 52.2% | 161 | −3.7pp | −61 |
+| 1H | NQ | Bullish | 62.9% | 728 | 59.0% | 503 | −3.9pp | −225 |
+| 1H | NQ | Bearish | 56.0% | 825 | 54.9% | 565 | −1.1pp | −260 |
+| 1H | ES | Bullish | 63.4% | 691 | 60.4% | 472 | −3.0pp | −219 |
+| 1H | ES | Bearish | 56.8% | 787 | 55.3% | 535 | −1.5pp | −252 |
+| 15min | NQ | Bullish | 65.3% | 2703 | 64.9% | 1887 | −0.4pp | −816 |
+| 15min | NQ | Bearish | 62.4% | 2822 | 61.2% | 1965 | −1.1pp | −857 |
+| 15min | ES | Bullish | 64.3% | 2557 | 63.9% | 1810 | −0.4pp | −747 |
+| 15min | ES | Bearish | 61.0% | 2672 | 60.5% | 1884 | −0.5pp | −788 |
+
+**What changed, in plain terms:**
+
+- Every combo loses n (10–857 CISDs move out of `w/ SMT` into `expired SMT`) — the previously mis-credited already-dead-SMT population is now visible as its own bucket instead of silently inflating `w/ SMT`.
+- Rate moves are mixed (−3.9pp to +6.2pp) depending on how the removed expired-SMT matches happened to run relative to the still-valid ones — there is no systematic direction to the correction, consistent with fixing a labeling bug rather than discovering a new effect.
+- Two Daily ES buckets drop from eligible (n≥50) to `below-n` purely because of the n reduction — not because their behavior changed.
+- **One verdict flip:** 4H ES Bearish moves from `✗ NOT CONFIRMED` (pre-fix) to `✓ CONFIRMED` (corrected) — see the §8 key takeaways above for the discovery/OOS numbers behind the flip.
+- **Every non-`smt_*` analysis is confirmed byte-value unchanged** by the regeneration's own drift check (`build_non_smt_drift` in `scripts/build_smt_invalidation_report.py`, run against the regenerated `output/validation_manifest_discovery.csv`): it compares every non-SMT `(analysis, timeframe, instrument, direction, bucket)` row's `rate`/`n` before vs after and exits non-zero if anything moved. The regen that produced this table's "after" numbers reported zero drifted rows — the other 15 published analyses (Baseline, Wick Position, Combined, Stricter CISD, Consecutive Candles, Candle Size, Volume, CISD FVG, FVG Hold, CISD FVG Interaction, Sweep, SSSF Swing, and both post-CISD studies) moved by exactly nothing (D-09a).
 
 ---
 
@@ -302,6 +359,12 @@ A co-occurring same-direction **Swing SMT** (divergence between NQ and ES swing 
 ![Volume Ratio](output/Volume_All_Timeframes.png)
 
 ![Swing SMT Confirmation](output/SMT_CISD_All_Timeframes.png)
+
+![Swing SMT Role (Swept vs Failed-to-Sweep)](output/SMT_Role_All_Timeframes.png)
+
+![SMT Block Size vs ATR(14)](output/SMT_BlockSize_All_Timeframes.png)
+
+![CISD In SMT Block Containment](output/SMT_InBlock_All_Timeframes.png)
 
 ---
 
@@ -347,7 +410,10 @@ The current CLI surface is limited to the analysis keys listed below.
 | `volume` | **Volume Ratio** | Segments by CISD volume relative to previous candle. Standalone all-TF output. |
 | `candle_size` | **Candle Body vs ATR** | Segments by CISD body size as a multiple of ATR(14). Standalone all-TF output. |
 | `size_cross` | **CISD Body × Prev Body** | Cross-tab: both candles vs ATR(14). Standalone all-TF output. |
-| `smt_cisd` | **Swing SMT Confirmation** | Barrier rate split by whether a same-direction Swing SMT co-occurs. Standalone. |
+| `smt_cisd` | **Swing SMT Confirmation** | Barrier rate split by whether a same-direction, still-valid-at-`t` Swing SMT co-occurs (`w/ SMT` / `expired SMT` / `no SMT`), plus `w/ SMT & survived`/`w/ SMT & broke` diagnostic sub-buckets. Standalone. |
+| `smt_role` | **Swing SMT Role** | Swept vs failed-to-sweep split over the valid `w/ SMT` population only. Standalone. |
+| `smt_block_size` | **SMT Block Size vs ATR** | Segments the matched-SMT population by `smt_block_size_atr` (reference-bar range / ATR(14)) using the `candle_size` bucket convention. Standalone. |
+| `smt_in_block` | **CISD In SMT Block** | Splits the matched-SMT population by whether the CISD body is fully contained within the SMT's reference-bar range (`cisd_in_block`/`cisd_out_block`). Standalone. |
 | `cisd_fvg` | **CISD FVG Creation** | Barrier rate split by whether the CISD is the middle candle of a same-direction FVG (`mid0`), the next bar is the middle candle (`mid1`), or no linked FVG exists. Standalone. |
 | `fvg_hold` | **FVG Hold** | Hold rate of same-direction CISD-linked FVGs over a 10-bar window from the FVG middle candle, reported for both hold-failure modes and both `mid0`/`mid1` buckets. Standalone. |
 | `cisd_fvg_interaction` | **CISD FVG Interaction** | Barrier rate of the parent CISD split by whether its linked same-direction FVG later held or failed, for both failure modes and both `mid0`/`mid1` buckets. Standalone. |
