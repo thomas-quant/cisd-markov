@@ -1,5 +1,5 @@
 """
-CISD (Close Implies Subsequent Direction) Analysis Suite
+CISD (Change in State of Delivery) Analysis Suite
 =========================================================
 All analyses use BARRIER logic: a "run" only counts if the
 target (high for bullish, low for bearish) is hit BEFORE
