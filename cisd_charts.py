@@ -239,10 +239,13 @@ def chart_size_cross(ax, data_nq, data_es):
 
 
 def chart_smt_cisd(ax, data_nq, data_es):
+    # Three-way tags only (D-03); the "w/ SMT & survived"/"w/ SMT & broke"
+    # diagnostic sub-buckets are manifest-only (SC4) and intentionally not
+    # rendered here to avoid double-counting rows in a single axis.
     rows = []
     for instr, data in (("NQ", data_nq), ("ES", data_es)):
         for ct in ("bullish", "bearish"):
-            for tag, alpha in (("w/ SMT", 1.0), ("no SMT", 0.55)):
+            for tag, alpha in (("w/ SMT", 1.0), ("expired SMT", 0.75), ("no SMT", 0.45)):
                 d = data[ct][tag]
                 rows.append((f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})",
                              pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
@@ -251,6 +254,53 @@ def chart_smt_cisd(ax, data_nq, data_es):
     for b in bars:
         _bar_label(ax, b)
     _style_ax(ax, "Swing SMT Confirmation")
+
+
+def chart_smt_role(ax, data_nq, data_es):
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for tag, alpha in (("swept", 1.0), ("failed_to_sweep", 0.6)):
+                d = data[ct][tag]
+                rows.append((f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})",
+                             pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+    bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55)
+            for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "Swing SMT Role (Swept vs Failed-to-Sweep)")
+
+
+def chart_smt_block_size(ax, data_nq, data_es):
+    bucket_labels = ["<0.5x ATR", "0.5x-1x ATR", "1x-1.5x ATR", ">1.5x ATR"]
+    alphas = [1.0, 0.75, 0.55, 0.4]
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for lbl, alpha in zip(bucket_labels, alphas):
+                d = data[ct][lbl]
+                rows.append((f"{instr} {ct.capitalize()} {lbl}  (n={d['total']:,})",
+                             pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+    bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55)
+            for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "SMT Block Size vs ATR(14)")
+
+
+def chart_smt_in_block(ax, data_nq, data_es):
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for tag, alpha in (("cisd_in_block", 1.0), ("cisd_out_block", 0.55)):
+                d = data[ct][tag]
+                rows.append((f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})",
+                             pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+    bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55)
+            for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "CISD Inside SMT Block")
 
 
 def chart_cisd_fvg(ax, data_nq, data_es):
@@ -599,6 +649,9 @@ __all__ = [
     "chart_candle_size",
     "chart_size_cross",
     "chart_smt_cisd",
+    "chart_smt_role",
+    "chart_smt_block_size",
+    "chart_smt_in_block",
     "chart_cisd_fvg",
     "chart_fvg_hold",
     "chart_cisd_fvg_interaction",
