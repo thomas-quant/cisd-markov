@@ -9,6 +9,10 @@ def test_annotate_swing_smt_uses_left_window_and_sets_role():
     index = pd.date_range("2026-01-01 09:30", periods=6, freq="15min")
     df = pd.DataFrame(
         {
+            "open": [1, 2, 3, 4, 5, 6],
+            "high": [2, 3, 4, 5, 6, 7],
+            "low": [0, 1, 2, 3, 4, 5],
+            "close": [1.5, 2.5, 3.5, 4.5, 5.5, 6.5],
             "cisd_type": [None, "bullish", "bullish", "bullish", "bearish", None],
         },
         index=index,

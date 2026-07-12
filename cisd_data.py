@@ -471,9 +471,11 @@ def _annotate_swing_smt_from_events(df: pd.DataFrame, events: pd.DataFrame, inst
     strictly greater than `t`) and used to split the tag into a three-way
     `"w/ SMT"` / `"expired SMT"` / `"no SMT"` (D-01/D-02/D-03/D-03a — the
     validity check NEVER reads `status`, and only the single latest-created
-    matched SMT is checked, matching the existing selection rule), and the
+    matched SMT is checked, matching the existing selection rule), the
     survived-vs-broke-in-window horizon flag `smt_broke_in_window` is
-    computed (D-06).
+    computed (D-06), and the block-geometry columns `smt_block_size_atr` /
+    `cisd_in_smt_block` are computed over the matched population (D-04/D-05/
+    D-05a).
     """
     required_event_columns = (
         "signal_type", "created_ts", "sweeping_asset", "failing_asset",
@@ -500,6 +502,8 @@ def _annotate_swing_smt_from_events(df: pd.DataFrame, events: pd.DataFrame, inst
     annotated["smt_invalidation_asset"] = "none"
     annotated["smt_invalidation_direction"] = "none"
     annotated["smt_broke_in_window"] = False
+    annotated["smt_block_size_atr"] = np.nan
+    annotated["cisd_in_smt_block"] = False
 
     if annotated.empty or events.empty:
         return annotated
@@ -525,6 +529,14 @@ def _annotate_swing_smt_from_events(df: pd.DataFrame, events: pd.DataFrame, inst
     upper_pos = np.minimum(np.arange(n) + 2, n - 1)
     upper_ts_arr = ts_arr[upper_pos]
 
+    # ATR(14) and OHLC arrays for the D-04/D-05 geometry columns, computed
+    # once over the whole annotated frame (same convention as
+    # `compute_candle_size`: `(high - low).rolling(14).mean()`, evaluated at
+    # bar t).
+    atr_arr = (annotated["high"] - annotated["low"]).rolling(14).mean().to_numpy(dtype=float)
+    open_arr = annotated["open"].to_numpy(dtype=float)
+    close_arr = annotated["close"].to_numpy(dtype=float)
+
     has_swing_smt = np.zeros(n, dtype=bool)
     swing_smt_tag = np.full(n, "no SMT", dtype=object)
     swing_smt_match_ts = np.full(n, np.datetime64("NaT"), dtype="datetime64[ns]")
@@ -537,6 +549,8 @@ def _annotate_swing_smt_from_events(df: pd.DataFrame, events: pd.DataFrame, inst
     smt_invalidation_asset = np.full(n, "none", dtype=object)
     smt_invalidation_direction = np.full(n, "none", dtype=object)
     smt_broke_in_window = np.zeros(n, dtype=bool)
+    smt_block_size_atr = np.full(n, np.nan, dtype=float)
+    cisd_in_smt_block = np.zeros(n, dtype=bool)
 
     for direction in ("bullish", "bearish"):
         dir_events = filtered.loc[filtered["_direction"] == direction]
@@ -623,6 +637,26 @@ def _annotate_swing_smt_from_events(df: pd.DataFrame, events: pd.DataFrame, inst
             & (matched_broken_ts <= matched_upper_ts)
         )
 
+        # D-04/D-05: block geometry, computed for the WHOLE matched
+        # population (w/ SMT and expired SMT alike, D-05a) from the
+        # reference_timestamp bar's own high/low on the annotated
+        # instrument. `reindex` yields NaN on a miss, propagating gracefully.
+        block_high = annotated["high"].reindex(matched_reference_ts).to_numpy(dtype=float)
+        block_low = annotated["low"].reindex(matched_reference_ts).to_numpy(dtype=float)
+        atr_t = atr_arr[match_positions]
+        open_t = open_arr[match_positions]
+        close_t = close_arr[match_positions]
+        block_range = block_high - block_low
+
+        smt_block_size_atr[match_positions] = np.where(
+            (atr_t > 0) & np.isfinite(block_range), block_range / atr_t, np.nan,
+        )
+        contained = (
+            (open_t >= block_low) & (open_t <= block_high)
+            & (close_t >= block_low) & (close_t <= block_high)
+        )
+        cisd_in_smt_block[match_positions] = np.where(np.isfinite(block_range), contained, False)
+
     annotated["has_swing_smt"]      = has_swing_smt
     annotated["swing_smt_tag"]      = swing_smt_tag
     annotated["swing_smt_match_ts"] = swing_smt_match_ts
@@ -635,6 +669,8 @@ def _annotate_swing_smt_from_events(df: pd.DataFrame, events: pd.DataFrame, inst
     annotated["smt_invalidation_asset"] = smt_invalidation_asset
     annotated["smt_invalidation_direction"] = smt_invalidation_direction
     annotated["smt_broke_in_window"] = smt_broke_in_window
+    annotated["smt_block_size_atr"] = smt_block_size_atr
+    annotated["cisd_in_smt_block"] = cisd_in_smt_block
 
     return annotated
 
