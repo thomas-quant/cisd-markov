@@ -404,6 +404,135 @@ def compute_volume(df: pd.DataFrame) -> dict:
     return stats
 
 
+def compute_effort_result(df: pd.DataFrame) -> dict:
+    """
+    Barrier run rate segmented by vol_per_range (effort-vs-result: within-bar
+    volume / range) — the baseline-free anchor of the volume-anomaly family
+    (Phase 10 Plan 01/02, D-07). Rows with no defined ratio (zero-range bar)
+    carry vol_per_range == NaN and are skipped (same pd.isna(ratio) discipline
+    as compute_smt_block_size). compute_volume (the existing 1-bar CISD/prev
+    volume ratio) is left untouched (D-10/D-12) — this is a distinct measure.
+
+    Frozen bins (outcome-blind, discovery-slice only, index < OOS_START,
+    ~225k-230k finite obs across all 4 TFs x 2 instruments, 2026-07-12):
+    discovery percentiles [p10,p25,p33,p50,p66,p75,p90] =
+    [81, 156, 268, 552, 968, 1500, 5192]. Cut points chosen near p25/p50/p75
+    (156/552/1500). vol_per_range is a raw, deliberately baseline-free ratio
+    (D-07) whose scale differs across timeframes, so Daily/4H may concentrate
+    mass in one bucket -> those cells publish as below-n (honest, SC4), while
+    15min/1H populate multiple buckets.
+    """
+    if "vol_per_range" not in df.columns:
+        raise ValueError("df must contain vol_per_range column")
+
+    BINS = [
+        (0,     150,  "<150"),
+        (150,   550,  "150-550"),
+        (550,   1500, "550-1500"),
+        (1500,  1e18, ">1500"),
+    ]
+    ct_arr    = df["cisd_type"].to_numpy(dtype=object)
+    ratio_arr = df["vol_per_range"].to_numpy(dtype=float)
+    event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    stats = {ct: {lbl: {"total": 0, "runs": 0} for _, _, lbl in BINS}
+             for ct in ("bullish", "bearish")}
+    for pos in event_pos:
+        ratio = ratio_arr[pos]
+        if pd.isna(ratio):
+            continue
+        ct = ct_arr[pos]
+        for lo, hi, lbl in BINS:
+            if lo <= ratio < hi:
+                stats[ct][lbl]["total"] += 1
+                if barrier_hit(df, pos, df.iloc[pos], ct):
+                    stats[ct][lbl]["runs"] += 1
+                break
+    return stats
+
+
+def compute_rvol(df: pd.DataFrame) -> dict:
+    """
+    Barrier run rate segmented by rvol — same-time-of-day-slot trailing
+    relative volume (Phase 10 Plan 01/02, D-08). Warm-up rows (fewer than
+    RVOL_SLOT_K prior same-slot observations) carry rvol == NaN and are
+    skipped. compute_volume (the existing 1-bar ratio) is left untouched
+    (D-10/D-12) — this is a distinct, seasonality-aware measure.
+
+    Frozen bins (outcome-blind, discovery-slice only, index < OOS_START,
+    2026-07-12): discovery percentiles [p10,p25,p33,p50,p66,p75,p90] =
+    [0.49, 0.66, 0.74, 0.90, 1.07, 1.21, 1.65]. The 1.0 edge is preserved by
+    design (D-08 — a value of 1.0 must land in a "normal" bucket, not an
+    extreme one); interior cut points sit near p27/p60/p88.
+    """
+    if "rvol" not in df.columns:
+        raise ValueError("df must contain rvol column")
+
+    BINS = [
+        (0,    0.7,  "<0.7x slot"),
+        (0.7,  1.0,  "0.7x-1x slot"),
+        (1.0,  1.5,  "1x-1.5x slot (elevated)"),
+        (1.5,  1e18, ">1.5x slot (spike)"),
+    ]
+    ct_arr    = df["cisd_type"].to_numpy(dtype=object)
+    ratio_arr = df["rvol"].to_numpy(dtype=float)
+    event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    stats = {ct: {lbl: {"total": 0, "runs": 0} for _, _, lbl in BINS}
+             for ct in ("bullish", "bearish")}
+    for pos in event_pos:
+        ratio = ratio_arr[pos]
+        if pd.isna(ratio):
+            continue
+        ct = ct_arr[pos]
+        for lo, hi, lbl in BINS:
+            if lo <= ratio < hi:
+                stats[ct][lbl]["total"] += 1
+                if barrier_hit(df, pos, df.iloc[pos], ct):
+                    stats[ct][lbl]["runs"] += 1
+                break
+    return stats
+
+
+def compute_volume_zscore(df: pd.DataFrame) -> dict:
+    """
+    Barrier run rate segmented by volume_zscore — same-time-of-day-slot
+    trailing volume z-score (Phase 10 Plan 01/02, D-08). Warm-up rows carry
+    volume_zscore == NaN and are skipped. compute_volume (the existing 1-bar
+    ratio) is left untouched (D-10/D-12).
+
+    Frozen bins (outcome-blind, discovery-slice only, index < OOS_START,
+    2026-07-12): discovery percentiles [p10,p25,p33,p50,p66,p75,p90] =
+    [-1.07, -0.69, -0.54, -0.23, 0.17, 0.48, 1.48]. Symmetric bins straddling
+    0 (0 sits inside the central -0.5..0.5 bucket); cut points near
+    p35/p76/p90.
+    """
+    if "volume_zscore" not in df.columns:
+        raise ValueError("df must contain volume_zscore column")
+
+    BINS = [
+        (-1e18, -0.5, "<-0.5 sigma"),
+        (-0.5,   0.5, "-0.5-0.5 sigma"),
+        (0.5,    1.5, "0.5-1.5 sigma"),
+        (1.5,   1e18, ">1.5 sigma (spike)"),
+    ]
+    ct_arr    = df["cisd_type"].to_numpy(dtype=object)
+    ratio_arr = df["volume_zscore"].to_numpy(dtype=float)
+    event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    stats = {ct: {lbl: {"total": 0, "runs": 0} for _, _, lbl in BINS}
+             for ct in ("bullish", "bearish")}
+    for pos in event_pos:
+        ratio = ratio_arr[pos]
+        if pd.isna(ratio):
+            continue
+        ct = ct_arr[pos]
+        for lo, hi, lbl in BINS:
+            if lo <= ratio < hi:
+                stats[ct][lbl]["total"] += 1
+                if barrier_hit(df, pos, df.iloc[pos], ct):
+                    stats[ct][lbl]["runs"] += 1
+                break
+    return stats
+
+
 def compute_candle_size(df: pd.DataFrame) -> dict:
     """
     Barrier run rate segmented by CISD body size as multiple of ATR(14).
