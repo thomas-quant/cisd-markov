@@ -193,12 +193,16 @@ def main() -> None:
 
     per_tf_keys  = [k for k in requested if k not in STANDALONE_KEYS]
     standalone   = [k for k in requested if k in STANDALONE_KEYS]
-    needs_swing_smt = "smt_cisd" in requested
+    # Keys that require SMT-derived columns (swing_smt_role, smt_block_size_atr,
+    # cisd_in_smt_block), populated only when prepare_pair(with_swing_smt=True) runs.
+    _SMT_DEPENDENT_KEYS = {"smt_cisd", "smt_role", "smt_block_size", "smt_in_block"}
+    needs_swing_smt = bool(_SMT_DEPENDENT_KEYS & set(requested))
 
     if needs_swing_smt and not _SMT_PKG_PATH.exists():
-        print(f"[warn] SMT package not found at {_SMT_PKG_PATH!s}; skipping smt_cisd analysis.")
-        requested       = [k for k in requested if k != "smt_cisd"]
-        standalone      = [k for k in standalone if k != "smt_cisd"]
+        skipped = _SMT_DEPENDENT_KEYS & set(requested)
+        print(f"[warn] SMT package not found at {_SMT_PKG_PATH!s}; skipping {', '.join(sorted(skipped))}.")
+        requested       = [k for k in requested if k not in _SMT_DEPENDENT_KEYS]
+        standalone      = [k for k in standalone if k not in _SMT_DEPENDENT_KEYS]
         needs_swing_smt = False
 
     out_dir = Path(__file__).parent / "output"
