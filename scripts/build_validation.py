@@ -14,7 +14,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from cisd_analysis import (
-    ANALYSES, INSTRUMENTS, MAX_CONSEC, TIMEFRAMES, OOS_START, MIN_N, CI_LEVEL,
+    ANALYSES, ANALYSIS_META, INSTRUMENTS, MAX_CONSEC, TIMEFRAMES, OOS_START, MIN_N, CI_LEVEL,
     WALK_FORWARD_FOLDS,
     load_1m, resample_ohlcv, prepare_pair, _load_scan_smts_historical,
 )
@@ -635,8 +635,12 @@ def main() -> None:
         all_keys = list(ANALYSES.keys())
         wf_rows: list[dict[str, object]] = []
         for tf_label, tf_rule in TIMEFRAMES.items():
+            # D-14: scope all_keys per timeframe so e.g. session (D-02,
+            # applies_to=("1H", "15min")) is excluded from Daily/4H folds.
+            tf_keys = [k for k in all_keys
+                       if (ANALYSIS_META[k].applies_to is None) or (tf_label in ANALYSIS_META[k].applies_to)]
             df_nq, df_es = prepare_pair(dfs_1m["NQ"], dfs_1m["ES"], tf_rule, with_swing_smt=with_smt)
-            wf_rows.extend(build_walkforward_rows(all_keys, df_nq, df_es, tf_label))
+            wf_rows.extend(build_walkforward_rows(tf_keys, df_nq, df_es, tf_label))
 
         wf_out = _manifest_path("walkforward")
         wf_out.parent.mkdir(exist_ok=True)
@@ -675,6 +679,10 @@ def main() -> None:
     manifest_rows: list[dict[str, object]] = []
 
     for tf_label, tf_rule in TIMEFRAMES.items():
+        # D-14: scope all_keys per timeframe so e.g. session (D-02,
+        # applies_to=("1H", "15min")) produces manifest rows only on 1H/15min.
+        tf_keys = [k for k in all_keys
+                   if (ANALYSIS_META[k].applies_to is None) or (tf_label in ANALYSIS_META[k].applies_to)]
         df_nq, df_es = prepare_pair(dfs_1m["NQ"], dfs_1m["ES"], tf_rule, with_swing_smt=with_smt)
         nq_sl = slice_df(df_nq, oos=args.oos)
         es_sl = slice_df(df_es, oos=args.oos)
@@ -689,7 +697,7 @@ def main() -> None:
             })
             print(f"  {tf_label} {inst}: {len(sl):,} bars ({slice_label})")
         manifest_rows.extend(
-            build_manifest_rows(all_keys, nq_sl, es_sl, tf_label, slice_label)
+            build_manifest_rows(tf_keys, nq_sl, es_sl, tf_label, slice_label)
         )
 
     SLICES_PATH.parent.mkdir(exist_ok=True)

@@ -541,3 +541,70 @@ def test_new_analyses_registered_and_dispatch_generically():
     rows = build_manifest_rows(keys, prepared, prepared, "1H", "discovery")
     analyses_seen = {r["analysis"] for r in rows}
     assert set(keys) <= analyses_seen
+
+
+# ── Phase 10 Plan 03, Task 3: build_validation.py TF-scoping ───────────────
+
+def _tf_keys_for(tf_label):
+    """Mirrors scripts/build_validation.py's tf_keys filter construction
+    (both all_keys sites), used directly to avoid a full pipeline run."""
+    from cisd_barriers import ANALYSES, ANALYSIS_META
+
+    all_keys = list(ANALYSES.keys())
+    return [k for k in all_keys
+            if (ANALYSIS_META[k].applies_to is None) or (tf_label in ANALYSIS_META[k].applies_to)]
+
+
+def _synthetic_prepared_frame(seed, n=60):
+    from cisd_data import prepare
+
+    rng = np.random.default_rng(seed)
+    opens, highs, lows, closes = [], [], [], []
+    price = 100.0
+    for i in range(n):
+        step = 1.0 if i < 20 else rng.normal(0, 1.5)
+        o = price
+        c = price + step
+        h = max(o, c) + abs(rng.normal(0, 0.5)) + 0.1
+        l = min(o, c) - abs(rng.normal(0, 0.5)) - 0.1
+        opens.append(o); highs.append(h); lows.append(l); closes.append(c)
+        price = c
+    idx = pd.date_range("2026-01-01", periods=n, freq="1h")
+    df = pd.DataFrame({
+        "open": opens, "high": highs, "low": lows, "close": closes,
+        "volume": np.linspace(500, 1500, n),
+    }, index=idx)
+    return prepare(df)
+
+
+def test_tf_scope_excludes_session_on_daily_and_4h():
+    from scripts.build_validation import build_manifest_rows
+
+    for tf_label in ("Daily", "4H"):
+        prepared = _synthetic_prepared_frame(seed=11)
+        rows = build_manifest_rows(_tf_keys_for(tf_label), prepared, prepared, tf_label, "discovery")
+        assert not any(r["analysis"] == "session" for r in rows)
+
+
+def test_session_manifest_rows_present_on_intraday_timeframes():
+    from scripts.build_validation import build_manifest_rows
+
+    for tf_label in ("1H", "15min"):
+        prepared = _synthetic_prepared_frame(seed=13)
+        rows = build_manifest_rows(_tf_keys_for(tf_label), prepared, prepared, tf_label, "discovery")
+        assert any(r["analysis"] == "session" for r in rows)
+
+
+def test_non_session_analyses_unaffected_across_all_timeframes():
+    from scripts.build_validation import build_manifest_rows
+
+    for tf_label in ("Daily", "4H", "1H", "15min"):
+        prepared = _synthetic_prepared_frame(seed=17)
+        rows = build_manifest_rows(_tf_keys_for(tf_label), prepared, prepared, tf_label, "discovery")
+        analyses_seen = {r["analysis"] for r in rows}
+        assert "wick_distance" in analyses_seen
+
+
+def test_build_validation_imports_analysis_meta():
+    from scripts.build_validation import build_manifest_rows  # noqa: F401
+    from cisd_analysis import ANALYSIS_META  # noqa: F401
