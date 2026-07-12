@@ -152,11 +152,11 @@ Full phase details in [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
   3. CISD volume-anomaly measures — rolling RVOL / z-score (distinct from the existing negligible 1-bar ratio), effort-vs-result (volume ÷ range/body), and optional cross-asset NQ-vs-ES volume divergence on normalized terms — are computed and validated; the OHLCV-only limitation (no signed/delta order flow) is stated explicitly.
   4. Every new bucket carries n, Wilson CI, the FDR-corrected verdict, and a walk-forward robustness verdict; non-confirming features are published as not-confirmed / below-n rather than dropped.
 
-**Plans**: 4 plans
+**Plans**: 1/4 plans executed
 
 **Wave 1**
 
-- [ ] 10-01-PLAN.md — Annotation layer: all new columns for the three feature families in `_annotate_cisd_research` (signed wick distance, sweep depth + pierced level, FVG size + gap width, session tag, effort-vs-result, slot-normalized RVOL / z-score) (RES-07)
+- [x] 10-01-PLAN.md — Annotation layer: all new columns for the three feature families in `_annotate_cisd_research` (signed wick distance, sweep depth + pierced level, FVG size + gap width, session tag, effort-vs-result, slot-normalized RVOL / z-score) (RES-07)
 
 **Wave 2** *(blocked on Wave 1 — reads the new annotation columns)*
 
@@ -195,5 +195,5 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11. Phase 7 requ
 | 7. Corrected Re-Validation of Post-CISD Studies | v2.0 | 3/3 | Complete    | 2026-07-11 |
 | 8. Performance — Vectorize Enrichment & Validation Hot Path | v2.0 | 3/3 | Complete    | 2026-07-11 |
 | 9. SMT Geometry & Invalidation Honesty | v2.0 | 3/3 | Complete    | 2026-07-12 |
-| 10. New Conditioning Features (Magnitude, Session, Volume Anomaly) | v2.0 | 0/4 | Not started | - |
+| 10. New Conditioning Features (Magnitude, Session, Volume Anomaly) | v2.0 | 1/4 | In Progress|  |
 | 11. Conditional Post-CISD Model | v2.0 | 0/TBD | Not started | - |

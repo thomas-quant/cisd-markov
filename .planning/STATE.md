@@ -6,14 +6,14 @@ current_phase: 10
 current_phase_name: New Conditioning Features — Magnitude, Session & Volume Anomaly
 status: executing
 stopped_at: Phase 10 context gathered
-last_updated: "2026-07-12T13:59:39.078Z"
+last_updated: "2026-07-12T14:49:31.201Z"
 last_activity: 2026-07-12
-last_activity_desc: Phase 09 complete, transitioned to Phase 10
+last_activity_desc: Phase 10 execution started
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 11
-  completed_plans: 11
+  total_plans: 15
+  completed_plans: 12
   percent: 67
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** A reported edge can be trusted — every published rate is sample-size gated, carries a confidence interval, and is confirmed out-of-sample.
-**Current focus:** Phase 09 — smt-geometry-invalidation-honesty
+**Current focus:** Phase 10 — New Conditioning Features — Magnitude, Session & Volume Anomaly
 
 ## Current Position
 
-Phase: 10 — New Conditioning Features — Magnitude, Session & Volume Anomaly
-Plan: Not started
+Phase: 10 (New Conditioning Features — Magnitude, Session & Volume Anomaly) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-07-12 — Phase 09 complete, transitioned to Phase 10
+Last activity: 2026-07-12 — Phase 10 execution started
 
 Progress: [███░░░░░░░] 33% (2 of 6 phases complete)
 
@@ -66,6 +66,7 @@ Progress: [███░░░░░░░] 33% (2 of 6 phases complete)
 | Phase 09 P01 | 15min | 2 tasks | 4 files |
 | Phase 09 P02 | 20min | 3 tasks | 4 files |
 | Phase 09 P03 | 68min | 3 tasks | 5 files |
+| Phase 10 P01 | 50min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -89,6 +90,9 @@ Recent decisions affecting current work:
 - [Phase 09-01]: D-01/D-02/D-03/D-03a validity fix (broken_ts vs t, never status, latest-match-only) + smt_broke_in_window (D-06) + smt_block_size_atr/cisd_in_smt_block geometry (D-04/D-05/D-05a) implemented vectorized in _annotate_swing_smt_from_events; updated 3 pre-existing Phase 08 parity-lock test fixtures for the widened event schema
 - [Phase 09-02]: compute_smt_cisd extended to three-way (w/ SMT / expired SMT / no SMT) plus w/ SMT & survived / w/ SMT & broke diagnostic sub-buckets that never filter the aggregate w/ SMT population; new compute_smt_role/compute_smt_block_size/compute_smt_in_block registered as standalone analyses flowing through the generic manifest dispatch
 - [Phase 09-03]: build_smt_invalidation_report.py enforces D-09a via build_non_smt_drift (non-zero exit on any non-smt_* rate/n drift); README documents the corrected SMT rates as a deliberate methodology change including the one verdict flip (4H ES Bearish: NOT CONFIRMED -> CONFIRMED)
+- [Phase ?]: [Phase 10-01] Sweep-anchoring frozen: sweep_depth_atr/swept_level measured at the CISD bar t against the nearest prior swing extreme as-of-t (roll_min_prior_swing_low/roll_max_prior_swing_high), not the specific triggering sweep_idx within SWEEP_TOLERANCE
+- [Phase ?]: [Phase 10-01] mid0-priority FVG union frozen: where both a mid0 and mid1 FVG exist at the same CISD bar, fvg_gap_width/fvg_size_atr take the mid0 (CISD-bar) gap, a single flat population for Plan 02's compute_fvg_size
+- [Phase ?]: [Phase 10-01] wick_distance_atr's prev_high/prev_low derived locally from high/low.shift(1) instead of a prev_high/prev_low column; vol_per_range/rvol/volume_zscore degrade to NaN when volume column absent -- fixed a regression that broke 17 pre-existing behavior-lock tests
 
 ### Pending Todos
 
@@ -125,7 +129,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-12T11:30:34.086Z
+Last session: 2026-07-12T14:46:40.075Z
 Stopped at: Phase 10 context gathered
 Resume file: .planning/phases/10-new-conditioning-features-magnitude-session-volume-anomaly/10-CONTEXT.md
 
