@@ -164,7 +164,9 @@ Each task was committed atomically (Task 1 produced no commit — `output/` is g
 
 ## Issues Encountered
 
-None. The pre-existing evidence for Task 1's completion (preserved before-fix manifests, regenerated manifests with the correct bucket sets, four new PNGs) was verified present and consistent before Tasks 2-3 began; no re-run was needed.
+None during Tasks 1-3. The pre-existing evidence for Task 1's completion (preserved before-fix manifests, regenerated manifests with the correct bucket sets, four new PNGs) was verified present and consistent before Tasks 2-3 began; no re-run was needed.
+
+**Phase-close regression gate finding (orchestrator-fixed, commit `be55ffc`):** the phase's regression gate (running prior-phase-referenced test files, including `tests/test_characterization.py`) failed on `test_smt_cisd_rates`. That test locks a separate, full-dataset (unsliced) direct-pipeline `w/ SMT` rate+n per timeframe/instrument/direction — independent of the discovery-slice numbers `scripts/build_validation.py` and this plan's README table track (the file's own header comment already documents this scope difference predates Phase 9). None of the three phase 9 plans listed `tests/test_characterization.py` in `files_modified`, so Plan 09-01's invalidation-honesty fix left its `_SMT_EXPECTED` dict stale. The orchestrator recomputed the correct full-dataset post-fix values (`prepare_pair(..., with_swing_smt=True)` + `compute_smt_cisd` against the full `nq_1m`/`es_1m` data) and updated the locked dict — every combo's `n` dropped, consistent with the fix's intended effect, confirming this was a stale fixture, not a computation bug. Full regression gate (10 files, 186 tests) passes clean after the fix.
 
 ## User Setup Required
 
