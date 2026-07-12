@@ -33,6 +33,16 @@ SMT_LOOKBACK = 20
 FVG_HOLD_LOOKAHEAD = 10
 SWEEP_TOLERANCE = 5
 SWEEP_SWING_LOOKBACK = 20
+
+# RTH_OPEN_START_MIN / RTH_OPEN_END_MIN / RTH_END_MIN: minute-of-day (ET)
+# boundaries for the 3-bucket session_tag (rth_open / rth / overnight,
+# D-01/D-02a/D-03). Frozen — never nudge these to improve a rate; that would
+# be silent multiple-comparisons through the back door. The DateTime_ET
+# index is tz-naive ET wall-clock, so this is a plain minute-of-day slice
+# with no timezone conversion or DST math.
+RTH_OPEN_START_MIN = 570   # 09:30 ET
+RTH_OPEN_END_MIN   = 630   # 10:30 ET
+RTH_END_MIN        = 960   # 16:00 ET
 _SMT_PKG_PATH = Path(os.environ.get("SMT_PKG_PATH", "/mnt/e/backup/code/Finance/Misc/SMT"))
 
 # OOS_START: 70th-percentile date of the shared NQ∩ES daily calendar.
@@ -370,6 +380,23 @@ def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
         np.nan,
     )
 
+    # ── Session tag (Phase 10 Plan 01, D-01/D-02a/D-03) ─────────────────────
+    # A bar property, not CISD-gated — every bar gets exactly one of the
+    # three tags, no NaN. idx_ax is the tz-naive ET wall-clock index, so this
+    # is a plain minute-of-day slice with no timezone conversion or DST math.
+    # TF-scoping to 15min/1H (D-02) is enforced in the registry/dispatch
+    # layer (Plan 03), NOT here — compute_session stays TF-agnostic per
+    # D-14's preferred mechanism, so session_tag is populated on every frame.
+    minute_of_day = idx_ax.hour.to_numpy() * 60 + idx_ax.minute.to_numpy()
+    session_tag = np.select(
+        [
+            (minute_of_day >= RTH_OPEN_START_MIN) & (minute_of_day < RTH_OPEN_END_MIN),
+            (minute_of_day >= RTH_OPEN_END_MIN) & (minute_of_day < RTH_END_MIN),
+        ],
+        ["rth_open", "rth"],
+        default="overnight",
+    )
+
     # ── FVG hold classification ──────────────────────────────────────────────
     # `_classify_fvg_hold` returns "none" when the FVG_HOLD_LOOKAHEAD window
     # doesn't fit, else checks `any(...)` over the future window against a
@@ -510,6 +537,7 @@ def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
     annotated["sweep_depth_atr"]   = sweep_depth_atr
     annotated["fvg_gap_width"]     = fvg_gap_width
     annotated["fvg_size_atr"]      = fvg_size_atr
+    annotated["session_tag"]       = session_tag
 
     return annotated
 
@@ -825,6 +853,9 @@ __all__ = [
     "FVG_HOLD_LOOKAHEAD",
     "SWEEP_TOLERANCE",
     "SWEEP_SWING_LOOKBACK",
+    "RTH_OPEN_START_MIN",
+    "RTH_OPEN_END_MIN",
+    "RTH_END_MIN",
     "_SMT_PKG_PATH",
     "OOS_START",
     "MIN_N",
