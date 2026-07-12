@@ -39,6 +39,12 @@ from cisd_charts import (
     chart_sssf_swing,
     chart_candle1_followthrough,
     chart_post_cisd_context,
+    chart_wick_distance,
+    chart_sweep_depth,
+    chart_fvg_size,
+    chart_effort_result,
+    chart_rvol,
+    chart_volume_zscore,
 )
 
 
@@ -1090,6 +1096,12 @@ ANALYSES = {
     "sssf_swing":   ("SSSF Swing",                           compute_sssf_swing,   chart_sssf_swing),
     "candle1_followthrough": ("Candle[1] Follow-Through",    compute_candle1_followthrough, chart_candle1_followthrough),
     "post_cisd_context":    ("Post-CISD Context",            compute_post_cisd_context,     chart_post_cisd_context),
+    "wick_distance":  ("Wick Distance vs ATR(14)",           compute_wick_distance,  chart_wick_distance),
+    "sweep_depth":    ("Sweep Penetration Depth vs ATR(14)", compute_sweep_depth,    chart_sweep_depth),
+    "fvg_size":       ("FVG Size vs ATR(14)",                compute_fvg_size,       chart_fvg_size),
+    "effort_result":  ("Effort-vs-Result (Volume/Range)",    compute_effort_result,  chart_effort_result),
+    "rvol":           ("RVOL (Slot-Normalized)",             compute_rvol,           chart_rvol),
+    "volume_zscore":  ("Volume Z-Score (Slot-Normalized)",   compute_volume_zscore,  chart_volume_zscore),
 }
 
 
@@ -1132,6 +1144,12 @@ ANALYSIS_META: dict[str, _AnalysisMeta] = {
     "sssf_swing":           _AnalysisMeta(per_tf_height=5,  standalone=True,  standalone_height=5,  filename="SSSF_Swing_All_Timeframes.png"),
     "candle1_followthrough": _AnalysisMeta(per_tf_height=8,  standalone=True,  standalone_height=8,  filename="Candle1_Followthrough_All_Timeframes.png"),
     "post_cisd_context":    _AnalysisMeta(per_tf_height=6,  standalone=True,  standalone_height=6,  filename="PostCISD_Context_All_Timeframes.png"),
+    "wick_distance":        _AnalysisMeta(per_tf_height=6,  standalone=True,  standalone_height=6,  filename="WickDistance_All_Timeframes.png"),
+    "sweep_depth":          _AnalysisMeta(per_tf_height=4,  standalone=True,  standalone_height=4,  filename="SweepDepth_All_Timeframes.png"),
+    "fvg_size":             _AnalysisMeta(per_tf_height=4,  standalone=True,  standalone_height=4,  filename="FVGSize_All_Timeframes.png"),
+    "effort_result":        _AnalysisMeta(per_tf_height=6,  standalone=True,  standalone_height=6,  filename="EffortResult_All_Timeframes.png"),
+    "rvol":                 _AnalysisMeta(per_tf_height=6,  standalone=True,  standalone_height=6,  filename="RVOL_All_Timeframes.png"),
+    "volume_zscore":        _AnalysisMeta(per_tf_height=6,  standalone=True,  standalone_height=6,  filename="VolumeZScore_All_Timeframes.png"),
 }
 
 

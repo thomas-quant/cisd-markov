@@ -449,5 +449,4 @@ def test_new_analyses_registered_and_dispatch_generically():
     prepared = prepare(df)
     rows = build_manifest_rows(keys, prepared, prepared, "1H", "discovery")
     analyses_seen = {r["analysis"] for r in rows}
-    labels = {ANALYSES[k][0] for k in keys}
-    assert labels <= analyses_seen
+    assert set(keys) <= analyses_seen

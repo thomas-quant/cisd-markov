@@ -201,6 +201,107 @@ def chart_volume(ax, data_nq, data_es):
     _style_ax(ax, "Volume Ratio  (CISD candle vs previous)")
 
 
+def chart_wick_distance(ax, data_nq, data_es):
+    bucket_labels = ["<-1x ATR (deep within wick)", "-1x-0 ATR (within wick)",
+                     "0-1x ATR (past wick)", ">1x ATR (far past wick)"]
+    alphas = [0.4, 0.55, 0.85, 1.0]
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for lbl, alpha in zip(bucket_labels, alphas):
+                d = data[ct][lbl]
+                rows.append((f"{instr} {ct.capitalize()} {lbl}  (n={d['total']:,})",
+                             pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+    bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55)
+            for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "Wick Distance vs ATR(14)  (signed, edge at 0)")
+
+
+def chart_sweep_depth(ax, data_nq, data_es):
+    bucket_labels = ["<0.5x ATR", "0.5x-1x ATR", "1x-1.5x ATR", ">1.5x ATR"]
+    alphas = [1.0, 0.75, 0.55, 0.4]
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for lbl, alpha in zip(bucket_labels, alphas):
+                d = data[ct][lbl]
+                rows.append((f"{instr} {ct.capitalize()} {lbl}  (n={d['total']:,})",
+                             pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+    bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55)
+            for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "Sweep Penetration Depth vs ATR(14)")
+
+
+def chart_fvg_size(ax, data_nq, data_es):
+    bucket_labels = ["<0.5x ATR", "0.5x-1x ATR", "1x-1.5x ATR", ">1.5x ATR"]
+    alphas = [1.0, 0.75, 0.55, 0.4]
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for lbl, alpha in zip(bucket_labels, alphas):
+                d = data[ct][lbl]
+                rows.append((f"{instr} {ct.capitalize()} {lbl}  (n={d['total']:,})",
+                             pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+    bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55)
+            for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "FVG Size vs ATR(14)  (mid0-priority)")
+
+
+def chart_effort_result(ax, data_nq, data_es):
+    bucket_labels = ["<150", "150-550", "550-1500", ">1500"]
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for lbl in bucket_labels:
+                d = data[ct][lbl]
+                rows.append((f"{instr} {ct.capitalize()} {lbl}  (n={d['total']:,})",
+                             pv(d["runs"], d["total"]), COLORS[instr][ct]))
+    bars = [ax.barh(r[0], r[1], color=r[2], height=0.55) for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "Effort-vs-Result  (volume / range, baseline-free)")
+
+
+def chart_rvol(ax, data_nq, data_es):
+    bucket_labels = ["<0.7x slot", "0.7x-1x slot", "1x-1.5x slot (elevated)", ">1.5x slot (spike)"]
+    alphas = [0.55, 0.75, 0.85, 1.0]
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for lbl, alpha in zip(bucket_labels, alphas):
+                d = data[ct][lbl]
+                rows.append((f"{instr} {ct.capitalize()} {lbl}  (n={d['total']:,})",
+                             pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+    bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55)
+            for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "RVOL  (same-time-of-day-slot trailing relative volume)")
+
+
+def chart_volume_zscore(ax, data_nq, data_es):
+    bucket_labels = ["<-0.5 sigma", "-0.5-0.5 sigma", "0.5-1.5 sigma", ">1.5 sigma (spike)"]
+    alphas = [0.55, 0.4, 0.75, 1.0]
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for lbl, alpha in zip(bucket_labels, alphas):
+                d = data[ct][lbl]
+                rows.append((f"{instr} {ct.capitalize()} {lbl}  (n={d['total']:,})",
+                             pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+    bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55)
+            for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "Volume Z-Score  (same-time-of-day-slot trailing baseline)")
+
+
 def chart_candle_size(ax, data_nq, data_es):
     all_labels = [lbl for _, _, lbl in
                   [(0, 0.5, "<0.5x ATR"), (0.5, 1.0, "0.5x-1x ATR"),
@@ -513,7 +614,9 @@ def build_csv_rows(keys: list, df_nq: pd.DataFrame, df_es: pd.DataFrame) -> pd.D
                             for state, d in state_map.items():
                                 add(label, instr, ct, f"{bucket}_{mode}_{state}", d["total"], d["runs"])
 
-            elif key in ("sweep", "sssf_swing", "candle1_followthrough", "post_cisd_context"):
+            elif key in ("sweep", "sssf_swing", "candle1_followthrough", "post_cisd_context",
+                         "wick_distance", "sweep_depth", "fvg_size",
+                         "effort_result", "rvol", "volume_zscore"):
                 for ct in ("bullish", "bearish"):
                     for tag, d in data[ct].items():
                         add(label, instr, ct, tag, d["total"], d["runs"])
@@ -659,6 +762,14 @@ __all__ = [
     "chart_sssf_swing",
     "chart_candle1_followthrough",
     "chart_post_cisd_context",
+    # New RES-07 symbols (Phase 10 Plan 02: magnitude)
+    "chart_wick_distance",
+    "chart_sweep_depth",
+    "chart_fvg_size",
+    # New RES-07 symbols (Phase 10 Plan 02: volume anomaly)
+    "chart_effort_result",
+    "chart_rvol",
+    "chart_volume_zscore",
     # Figure builders
     "build_csv_rows",
     "build_figure",
