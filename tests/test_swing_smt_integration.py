@@ -20,12 +20,26 @@ def test_annotate_swing_smt_uses_left_window_and_sets_role():
                 "created_ts": index[1],
                 "sweeping_asset": "NQ",
                 "failing_asset": "ES",
+                "reference_price": 100.0,
+                "invalidation_asset": "ES",
+                "invalidation_direction": "above",
+                "invalidation_level": 9999.0,
+                "broken_ts": pd.NaT,
+                "status": "active",
+                "reference_timestamp": index[1],
             },
             {
                 "signal_type": "Bearish Swing SMT",
                 "created_ts": index[0],
                 "sweeping_asset": "ES",
                 "failing_asset": "NQ",
+                "reference_price": 100.0,
+                "invalidation_asset": "NQ",
+                "invalidation_direction": "below",
+                "invalidation_level": 0.0,
+                "broken_ts": pd.NaT,
+                "status": "active",
+                "reference_timestamp": index[0],
             },
         ]
     )
@@ -109,6 +123,13 @@ def test_prepare_pair_applies_vectorized_swing_smt_annotations(monkeypatch):
                     "created_ts": index[2],
                     "sweeping_asset": "NQ",
                     "failing_asset": "ES",
+                    "reference_price": 100.0,
+                    "invalidation_asset": "ES",
+                    "invalidation_direction": "above",
+                    "invalidation_level": 9999.0,
+                    "broken_ts": pd.NaT,
+                    "status": "active",
+                    "reference_timestamp": index[2],
                 }
             ]
         ),
@@ -170,7 +191,11 @@ def test_prepare_pair_aligns_misaligned_resampled_frames(monkeypatch):
         seen["nq_index"] = df_nq.index
         seen["es_index"] = df_es.index
         return pd.DataFrame(
-            columns=["signal_type", "created_ts", "sweeping_asset", "failing_asset"]
+            columns=[
+                "signal_type", "created_ts", "sweeping_asset", "failing_asset",
+                "reference_price", "invalidation_asset", "invalidation_direction",
+                "invalidation_level", "broken_ts", "status", "reference_timestamp",
+            ]
         )
 
     monkeypatch.setattr(cisd_analysis, "_scan_swing_smt_events", fake_scan)
