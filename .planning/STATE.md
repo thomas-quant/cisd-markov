@@ -5,8 +5,8 @@ milestone_name: Rigorous Validation & Post-CISD Modeling
 current_phase: 9
 current_phase_name: SMT Geometry & Invalidation Honesty
 status: verifying
-stopped_at: Completed 08-02-PLAN.md — vectorized _annotate_cisd_research (behavior-preserving); ready for Plan 08-03 (vectorize SMT annotation + authoritative 3-manifest bit-equality proof)
-last_updated: "2026-07-11T20:58:17.015Z"
+stopped_at: Phase 9 context gathered
+last_updated: "2026-07-12T07:51:49.382Z"
 last_activity: 2026-07-11
 last_activity_desc: Phase 08 complete, transitioned to Phase 9
 progress:
@@ -119,9 +119,9 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-11T19:30:02.569Z
-Stopped at: Completed 08-02-PLAN.md — vectorized _annotate_cisd_research (behavior-preserving); ready for Plan 08-03 (vectorize SMT annotation + authoritative 3-manifest bit-equality proof)
-Resume file: .planning/phases/07-corrected-re-validation-of-the-post-cisd-studies/07-CONTEXT.md
+Last session: 2026-07-12T07:51:49.341Z
+Stopped at: Phase 9 context gathered
+Resume file: .planning/phases/09-smt-geometry-invalidation-honesty/09-CONTEXT.md
 
 ## Operator Next Steps
 
