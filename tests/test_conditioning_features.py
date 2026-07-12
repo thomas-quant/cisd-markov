@@ -475,6 +475,37 @@ def test_compute_session_registered_in_analyses_and_all():
     assert "compute_session" in cisd_barriers.__all__
 
 
+# ── Phase 10 Plan 03, Task 2: applies_to field + figure-dispatch scoping ───
+
+def test_analysis_meta_applies_to_scope():
+    from cisd_barriers import ANALYSIS_META
+
+    assert ANALYSIS_META["session"].applies_to == ("1H", "15min")
+    assert all(m.applies_to is None for k, m in ANALYSIS_META.items() if k != "session")
+
+
+def test_applies_to_helper_scopes_session_to_intraday():
+    from cisd_barriers import ANALYSIS_META
+    from cisd_charts import _applies_to
+
+    session_meta = ANALYSIS_META["session"]
+    assert _applies_to(session_meta, "Daily") is False
+    assert _applies_to(session_meta, "4H") is False
+    assert _applies_to(session_meta, "1H") is True
+    assert _applies_to(session_meta, "15min") is True
+
+    # Non-session (applies_to is None) always applies.
+    wick_distance_meta = ANALYSIS_META["wick_distance"]
+    assert _applies_to(wick_distance_meta, "Daily") is True
+    assert _applies_to(None, "Daily") is True
+
+
+def test_import_cisd_analysis_still_works_with_trailing_default():
+    # All existing 4-field constructor calls (19 pre-existing rows + 6
+    # Plan-02 rows) must still be valid with applies_to's trailing default.
+    import cisd_analysis  # noqa: F401
+
+
 def test_new_analyses_registered_and_dispatch_generically():
     from cisd_barriers import ANALYSES, ANALYSIS_META
     from cisd_data import prepare

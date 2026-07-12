@@ -1161,6 +1161,7 @@ class _AnalysisMeta(NamedTuple):
     standalone:       bool        # True → gets its own all-TF figure
     standalone_height: int | None # subplot height hint for build_standalone_figure; None if not standalone
     filename:         str | None  # output PNG filename for standalone figures; None if not standalone
+    applies_to:       tuple[str, ...] | None = None  # None = all timeframes (D-14); trailing-defaulted so all pre-existing rows stay valid unchanged
 
 
 ANALYSIS_META: dict[str, _AnalysisMeta] = {
@@ -1191,6 +1192,10 @@ ANALYSIS_META: dict[str, _AnalysisMeta] = {
     "effort_result":        _AnalysisMeta(per_tf_height=6,  standalone=True,  standalone_height=6,  filename="EffortResult_All_Timeframes.png"),
     "rvol":                 _AnalysisMeta(per_tf_height=6,  standalone=True,  standalone_height=6,  filename="RVOL_All_Timeframes.png"),
     "volume_zscore":        _AnalysisMeta(per_tf_height=6,  standalone=True,  standalone_height=6,  filename="VolumeZScore_All_Timeframes.png"),
+    # D-02: session is economically meaningless on Daily/4H bars (a session
+    # tag on a multi-session bar spans multiple sessions) -- registered on
+    # 15min/1H only via applies_to (D-14).
+    "session":              _AnalysisMeta(per_tf_height=4,  standalone=True,  standalone_height=5,  filename="Session_All_Timeframes.png", applies_to=("1H", "15min")),
 }
 
 
