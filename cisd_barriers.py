@@ -406,8 +406,13 @@ def compute_smt_cisd(df: pd.DataFrame) -> dict:
 def compute_smt_role(df: pd.DataFrame) -> dict:
     """
     Barrier run rate split by Swing SMT role (swept vs failed-to-sweep),
-    over the valid w/ SMT population only (D-08). Rows tagged "no SMT" or
-    "expired SMT" carry swing_smt_role == "none" and are excluded.
+    over the valid w/ SMT population only (D-08).
+
+    swing_smt_role is populated for the whole matched population ("w/ SMT"
+    and "expired SMT" alike) independent of validity; this function filters
+    on swing_smt_tag == "w/ SMT" specifically, not on role, to get the
+    valid-only population. Only unmatched ("no SMT") rows carry
+    swing_smt_role == "none".
     """
     if "swing_smt_role" not in df.columns:
         raise ValueError("df must contain swing_smt_role column")
