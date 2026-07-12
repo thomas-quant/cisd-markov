@@ -248,7 +248,65 @@ def test_prepare_pair_swing_smt_columns_exist_when_scanner_runs():
     expected_columns = {"has_swing_smt", "swing_smt_tag", "swing_smt_match_ts", "swing_smt_role"}
     assert expected_columns <= set(df_nq.columns)
     assert expected_columns <= set(df_es.columns)
-    assert set(df_nq["swing_smt_tag"].unique()) <= {"w/ SMT", "no SMT"}
+    # Three-way tag vocabulary: "w/ SMT", "expired SMT", "no SMT". This
+    # synthetic monotonic fixture only ever produces "w/ SMT"/"no SMT"
+    # matches, so the "expired SMT" path is covered separately (through a
+    # mocked scanner) by test_prepare_pair_annotates_expired_swing_smt_tag.
+    assert set(df_nq["swing_smt_tag"].unique()) <= {"w/ SMT", "expired SMT", "no SMT"}
+
+
+def test_prepare_pair_annotates_expired_swing_smt_tag(monkeypatch):
+    """An SMT event whose broken_ts falls at-or-before the CISD bar must
+    surface as swing_smt_tag == "expired SMT" through the full prepare_pair
+    integration path, not just the lower-level
+    _annotate_swing_smt_from_events unit tests in test_smt_invalidation.py."""
+    # bar1 (index[1]) is bearish, bar2 (index[2]) closes above bar1's close
+    # with a bullish body -> cisd_type[2] == "bullish" (prepare()'s
+    # reversal rule: prev_direction == "bearish" and close > prev_close).
+    index = pd.date_range("2026-01-01 09:30", periods=6, freq="15min")
+    minute = pd.DataFrame(
+        {
+            "open":   [10, 11, 9,   12,   12, 13],
+            "high":   [11.5, 11.5, 13, 13, 13, 14],
+            "low":    [9.5, 8.5, 8.5, 11, 11, 12],
+            "close":  [11, 9, 12, 12.5, 12, 13.5],
+            "volume": [10, 10, 10, 10, 10, 10],
+        },
+        index=index,
+    )
+
+    monkeypatch.setattr(
+        cisd_analysis,
+        "_scan_swing_smt_events",
+        lambda df_nq, df_es: pd.DataFrame(
+            [
+                {
+                    "signal_type": "Bullish Swing SMT",
+                    # created_ts == t-2 relative to the cisd_type[2] bar --
+                    # inside the left-window match range.
+                    "created_ts": index[0],
+                    "sweeping_asset": "NQ",
+                    "failing_asset": "ES",
+                    "reference_price": 100.0,
+                    "invalidation_asset": "ES",
+                    "invalidation_direction": "above",
+                    "invalidation_level": 9999.0,
+                    # broken_ts == t (index[2], the CISD bar itself) -- per
+                    # D-01/D-02, still_valid requires broken_ts > row_ts, so
+                    # this is expired exactly at the match.
+                    "broken_ts": index[2],
+                    "status": "invalidated",
+                    "reference_timestamp": index[0],
+                }
+            ]
+        ),
+    )
+
+    df_nq, df_es = cisd_analysis.prepare_pair(minute, minute, "15min", with_swing_smt=True)
+
+    assert df_nq.loc[index[2], "cisd_type"] == "bullish"
+    assert df_nq.loc[index[2], "swing_smt_tag"] == "expired SMT"
+    assert "expired SMT" in set(df_nq["swing_smt_tag"].unique())
 
 
 def test_compute_smt_cisd_splits_runs_by_swing_smt_tag():
