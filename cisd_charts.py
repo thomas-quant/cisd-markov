@@ -639,6 +639,13 @@ def build_csv_rows(keys: list, df_nq: pd.DataFrame, df_es: pd.DataFrame) -> pd.D
     return pd.DataFrame(rows)
 
 
+def _applies_to(meta, tf_label: str) -> bool:
+    """D-14 TF-scoping guard: True if `meta` (an ANALYSIS_META entry, or
+    None) applies to `tf_label`. None meta or None applies_to means "all
+    timeframes" (the default for every pre-existing analysis)."""
+    return meta is None or meta.applies_to is None or tf_label in meta.applies_to
+
+
 def build_figure(tf_label: str, df_nq: pd.DataFrame, df_es: pd.DataFrame, keys: list) -> plt.Figure:
     """One figure per timeframe — all analyses as subplots, NQ & ES compared in each."""
     from cisd_barriers import ANALYSES, ANALYSIS_META  # lazy import to avoid circular dependency
@@ -677,6 +684,12 @@ def build_figure(tf_label: str, df_nq: pd.DataFrame, df_es: pd.DataFrame, keys: 
     )
 
     for i, key in enumerate(keys):
+        # D-14 TF-scoping guard: session is standalone so it normally never
+        # reaches build_figure, but this guard keeps the mechanism correct
+        # and reusable for any future non-standalone TF-scoped analysis.
+        if not _applies_to(ANALYSIS_META.get(key), tf_label):
+            axes_flat[i].set_visible(False)
+            continue
         _, compute_fn, chart_fn = ANALYSES[key]
         d_nq = compute_fn(df_nq)
         d_es = compute_fn(df_es)
@@ -730,6 +743,12 @@ def build_standalone_figure(key: str, prepared: dict) -> plt.Figure:
 
     for i, tf_label in enumerate(tf_labels):
         ax = axes_flat[i]
+        # D-14 TF-scoping guard: off-scope timeframes (e.g. Daily/4H for
+        # session, D-02) render nothing -- the subplot is set invisible and
+        # skipped before compute/chart is called.
+        if not _applies_to(meta, tf_label):
+            ax.set_visible(False)
+            continue
         d_nq = compute_fn(prepared["NQ"][tf_label])
         d_es = compute_fn(prepared["ES"][tf_label])
         chart_fn(ax, d_nq, d_es)
@@ -757,6 +776,7 @@ __all__ = [
     "_bar_label",
     "_style_ax",
     "_standalone_lookahead_caption",
+    "_applies_to",
     # Chart functions
     "chart_basic",
     "chart_mc",
