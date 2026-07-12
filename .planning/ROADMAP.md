@@ -152,7 +152,7 @@ Full phase details in [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
   3. CISD volume-anomaly measures — rolling RVOL / z-score (distinct from the existing negligible 1-bar ratio), effort-vs-result (volume ÷ range/body), and optional cross-asset NQ-vs-ES volume divergence on normalized terms — are computed and validated; the OHLCV-only limitation (no signed/delta order flow) is stated explicitly.
   4. Every new bucket carries n, Wilson CI, the FDR-corrected verdict, and a walk-forward robustness verdict; non-confirming features are published as not-confirmed / below-n rather than dropped.
 
-**Plans**: 2/4 plans executed
+**Plans**: 3/4 plans executed
 
 **Wave 1**
 
@@ -164,7 +164,7 @@ Full phase details in [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
 
 **Wave 3** *(blocked on Wave 2 — shares cisd_barriers.py / cisd_charts.py)*
 
-- [ ] 10-03-PLAN.md — Session analysis + the D-14 TF-scoping mechanism (ANALYSIS_META `applies_to` allow-list; session validated on 15min/1H only) (RES-07)
+- [x] 10-03-PLAN.md — Session analysis + the D-14 TF-scoping mechanism (ANALYSIS_META `applies_to` allow-list; session validated on 15min/1H only) (RES-07)
 
 **Wave 4** *(blocked on Waves 2-3 — regen runs the full registry)*
 
