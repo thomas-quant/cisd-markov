@@ -5,15 +5,15 @@ milestone_name: Rigorous Validation & Post-CISD Modeling
 current_phase: 10
 current_phase_name: New Conditioning Features — Magnitude, Session & Volume Anomaly
 status: executing
-stopped_at: Phase 10 context gathered
-last_updated: "2026-07-12T15:20:04.203Z"
+stopped_at: Completed 10-03-PLAN.md (session analysis + D-14 TF-scoping)
+last_updated: "2026-07-12T16:05:00.000Z"
 last_activity: 2026-07-12
-last_activity_desc: Phase 10 execution started
+last_activity_desc: Phase 10 Plan 03 executed (session analysis + applies_to TF-scoping mechanism)
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 15
-  completed_plans: 13
+  completed_plans: 14
   percent: 67
 ---
 
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-10)
 ## Current Position
 
 Phase: 10 (New Conditioning Features — Magnitude, Session & Volume Anomaly) — EXECUTING
-Plan: 3 of 4
-Status: Ready to execute
-Last activity: 2026-07-12 — Phase 10 execution started
+Plan: 4 of 4
+Status: Ready to execute 10-04-PLAN.md
+Last activity: 2026-07-12 — Phase 10 Plan 03 executed (session analysis + applies_to TF-scoping mechanism)
 
 Progress: [███░░░░░░░] 33% (2 of 6 phases complete)
 
@@ -68,6 +68,7 @@ Progress: [███░░░░░░░] 33% (2 of 6 phases complete)
 | Phase 09 P03 | 68min | 3 tasks | 5 files |
 | Phase 10 P01 | 50min | 3 tasks | 2 files |
 | Phase 10 P02 | 30min | 3 tasks | 3 files |
+| Phase 10 P03 | 20min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -95,6 +96,7 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 10-01] mid0-priority FVG union frozen: where both a mid0 and mid1 FVG exist at the same CISD bar, fvg_gap_width/fvg_size_atr take the mid0 (CISD-bar) gap, a single flat population for Plan 02's compute_fvg_size
 - [Phase ?]: [Phase 10-01] wick_distance_atr's prev_high/prev_low derived locally from high/low.shift(1) instead of a prev_high/prev_low column; vol_per_range/rvol/volume_zscore degrade to NaN when volume column absent -- fixed a regression that broke 17 pre-existing behavior-lock tests
 - [Phase ?]: D-06 reconciliation: compute_wick_distance uses lo < ratio <= hi (not the codebase's usual lo <= ratio < hi) so wick_distance_atr==0 lands in 'within wick', matching compute_wick's strict boundary -- a structural identity, verified on synthetic random-walk data.
+- [Phase 10-03]: D-14 TF-scoping implemented via a trailing-defaulted ANALYSIS_META.applies_to field (None = all timeframes) so all 25 pre-existing rows stay unaffected; only session sets applies_to=("1H","15min"); the same _applies_to(meta, tf_label) predicate is reused at all three consumer sites (build_figure, build_standalone_figure, scripts/build_validation.py's two all_keys sites) -- compute_session itself remains TF-agnostic per D-14's preferred mechanism.
 
 ### Pending Todos
 
@@ -131,12 +133,11 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-12T15:17:32.128Z
-Stopped at: Phase 10 context gathered
-Resume file: .planning/phases/10-new-conditioning-features-magnitude-session-volume-anomaly/10-CONTEXT.md
+Last session: 2026-07-12T16:05:00.000Z
+Stopped at: Completed 10-03-PLAN.md (session analysis + D-14 TF-scoping)
+Resume file: .planning/phases/10-new-conditioning-features-magnitude-session-volume-anomaly/10-04-PLAN.md
 
 ## Operator Next Steps
 
-- Execute Phase 8 (performance / vectorization): /gsd-execute-phase 8 (Wave 1 behavior-lock first)
-- Then Phases 9 (SMT geometry) and 10 (conditioning features) — independent, either order
+- Execute Phase 10 Plan 04 (graceful column tolerance, byte-stability drift gate, end-to-end manifest regen, refreshed golden fixtures, README writeup): /gsd-execute-phase 10
 - Phase 11 (conditional model) last, gated on corrected evidence from Phases 7/9/10
