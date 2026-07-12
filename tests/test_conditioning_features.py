@@ -252,3 +252,202 @@ def test_volume_columns_present_and_float_dtype():
     for col in ("vol_per_range", "rvol", "volume_zscore"):
         assert col in out.columns
         assert out[col].dtype == float
+
+
+# ── Phase 10 Plan 02, Task 1: compute_wick_distance / compute_sweep_depth /
+#    compute_fvg_size (magnitude compute functions) ─────────────────────────
+
+def test_wick_distance_population_all_cisds_and_nan_atr_skipped():
+    """Population is ALL CISDs; a row whose wick_distance_atr is NaN (e.g.
+    ATR not yet warmed up) is skipped, not counted in any bucket."""
+    from cisd_barriers import compute_wick_distance
+
+    n = 20
+    idx = pd.date_range("2026-01-01", periods=n, freq="1h")
+    cisd_types = [None] * n
+    cisd_types[2] = "bullish"    # NaN wick_distance_atr -> excluded
+    cisd_types[16] = "bearish"   # real value -> counted
+    df = pd.DataFrame({
+        "open": [100.0] * n, "high": [101.0] * n, "low": [99.0] * n, "close": [100.0] * n,
+        "cisd_type": cisd_types,
+        "wick_distance_atr": [np.nan] * n,
+    }, index=idx)
+    df.loc[df.index[16], "wick_distance_atr"] = 0.8  # positive -> "past wick" bin
+
+    out = compute_wick_distance(df)
+    total = sum(d["total"] for ct in out for d in out[ct].values())
+    assert total == 1
+    assert out["bearish"]["0-1x ATR (past wick)"]["total"] == 1
+
+
+def test_wick_distance_reconciles_with_compute_wick():
+    """The signed 0-edge bins recover compute_wick's past_wick/within_wick
+    split exactly (D-06) — this is a structural identity: wick_distance_atr
+    is (close - prev_high)/ATR (bullish) / (prev_low - close)/ATR (bearish),
+    so its sign decomposes the same close-vs-prior-wick comparison compute_wick
+    already makes, as long as ratio == 0 (close exactly at the prior wick) is
+    classified "within" on both sides (compute_wick uses strict `>`/`<`)."""
+    from cisd_data import prepare
+    from cisd_barriers import compute_wick, compute_wick_distance
+
+    rng = np.random.default_rng(7)
+    n = 120
+    opens, highs, lows, closes = [], [], [], []
+    price = 100.0
+    for i in range(n):
+        if i < 20:
+            # Strict monotonic uptrend warm-up: guarantees no CISD fires
+            # before ATR(14) warms up (rolling(14) needs 14 full rows).
+            o = price
+            c = price + 1.0
+        else:
+            o = price
+            c = price + rng.normal(0, 1.5)
+        h = max(o, c) + abs(rng.normal(0, 0.5)) + 0.1
+        l = min(o, c) - abs(rng.normal(0, 0.5)) - 0.1
+        opens.append(o); highs.append(h); lows.append(l); closes.append(c)
+        price = c
+
+    idx = pd.date_range("2026-01-01", periods=n, freq="1h")
+    df = pd.DataFrame({
+        "open": opens, "high": highs, "low": lows, "close": closes,
+        "volume": [1000.0] * n,
+    }, index=idx)
+
+    out = prepare(df)
+    wick_stats = compute_wick(out)
+    wd_stats = compute_wick_distance(out)
+
+    total_events = 0
+    for ct in ("bullish", "bearish"):
+        past_total = wick_stats[ct]["past_wick"]["total"]
+        within_total = wick_stats[ct]["within_wick"]["total"]
+        total_events += past_total + within_total
+
+        nonneg_total = (wd_stats[ct]["0-1x ATR (past wick)"]["total"]
+                        + wd_stats[ct][">1x ATR (far past wick)"]["total"])
+        neg_total = (wd_stats[ct]["<-1x ATR (deep within wick)"]["total"]
+                     + wd_stats[ct]["-1x-0 ATR (within wick)"]["total"])
+
+        assert nonneg_total == past_total
+        assert neg_total == within_total
+
+    assert total_events > 0  # sanity: the synthetic series actually produced CISDs
+
+
+def test_sweep_depth_and_fvg_size_gate_on_nan_ratio():
+    """compute_sweep_depth / compute_fvg_size trust the annotation's NaN
+    gating (D-05) — rows with a NaN ratio contribute to no bucket, and
+    rows with a non-CISD cisd_type are excluded regardless of ratio."""
+    from cisd_barriers import compute_sweep_depth, compute_fvg_size
+
+    n = 6
+    idx = pd.date_range("2026-01-01", periods=n, freq="1h")
+    df = pd.DataFrame({
+        "open": [100.0] * n, "high": [101.0] * n, "low": [99.0] * n, "close": [100.0] * n,
+        "cisd_type": ["bullish", "bearish", None, "bullish", "bearish", None],
+        "sweep_depth_atr": [0.8, np.nan, 999.0, 1.2, np.nan, np.nan],
+        "fvg_size_atr":    [np.nan, 0.3, 999.0, np.nan, 1.8, np.nan],
+    }, index=idx)
+
+    sweep_stats = compute_sweep_depth(df)
+    fvg_stats = compute_fvg_size(df)
+
+    sweep_total = sum(d["total"] for ct in sweep_stats for d in sweep_stats[ct].values())
+    fvg_total = sum(d["total"] for ct in fvg_stats for d in fvg_stats[ct].values())
+
+    assert sweep_total == 2   # rows 0, 3 (row 2 has a ratio but no cisd_type)
+    assert fvg_total == 2     # rows 1, 4
+
+
+def test_magnitude_compute_functions_in_all():
+    import cisd_barriers
+    for name in ("compute_wick_distance", "compute_sweep_depth", "compute_fvg_size"):
+        assert name in cisd_barriers.__all__
+
+
+# ── Phase 10 Plan 02, Task 2: compute_effort_result / compute_rvol /
+#    compute_volume_zscore (volume-anomaly compute functions, frozen bins) ──
+
+def test_volume_anomaly_compute_functions_flat_shape_and_bin_boundaries():
+    """Frozen bins (discovery-slice percentiles, outcome-blind, 2026-07-12):
+      vol_per_range: [81, 156, 268, 552, 968, 1500, 5192]
+      rvol:          [0.49, 0.66, 0.74, 0.90, 1.07, 1.21, 1.65]
+      volume_zscore: [-1.07, -0.69, -0.54, -0.23, 0.17, 0.48, 1.48]
+    """
+    from cisd_barriers import compute_effort_result, compute_rvol, compute_volume_zscore
+
+    n = 6
+    idx = pd.date_range("2026-01-01", periods=n, freq="1h")
+    df = pd.DataFrame({
+        "open": [100.0] * n, "high": [101.0] * n, "low": [99.0] * n, "close": [100.0] * n,
+        "cisd_type":      ["bullish", "bearish", None,    "bullish", "bearish", "bullish"],
+        "vol_per_range":  [100.0,    np.nan,    999999.0, 2000.0,   np.nan,    np.nan],
+        "rvol":           [np.nan,   0.5,       np.nan,   np.nan,   1.0,       np.nan],
+        "volume_zscore":  [np.nan,   np.nan,    np.nan,   -1.2,     np.nan,    2.0],
+    }, index=idx)
+
+    effort = compute_effort_result(df)
+    rvol = compute_rvol(df)
+    zscore = compute_volume_zscore(df)
+
+    effort_total = sum(d["total"] for ct in effort for d in effort[ct].values())
+    rvol_total = sum(d["total"] for ct in rvol for d in rvol[ct].values())
+    zscore_total = sum(d["total"] for ct in zscore for d in zscore[ct].values())
+
+    assert effort_total == 2   # rows 0, 3 (row 2 excluded: cisd_type is None)
+    assert rvol_total == 2     # rows 1, 4
+    assert zscore_total == 2   # rows 3, 5
+
+    assert effort["bullish"]["<150"]["total"] == 1          # row 0: 100
+    assert effort["bullish"][">1500"]["total"] == 1          # row 3: 2000
+    assert rvol["bearish"]["<0.7x slot"]["total"] == 1        # row 1: 0.5
+    assert rvol["bearish"]["1x-1.5x slot (elevated)"]["total"] == 1  # row 4: 1.0 boundary
+    assert zscore["bullish"]["<-0.5 sigma"]["total"] == 1     # row 3: -1.2
+    assert zscore["bullish"][">1.5 sigma (spike)"]["total"] == 1  # row 5: 2.0
+
+
+def test_volume_anomaly_compute_functions_in_all():
+    import cisd_barriers
+    for name in ("compute_effort_result", "compute_rvol", "compute_volume_zscore"):
+        assert name in cisd_barriers.__all__
+
+
+# ── Phase 10 Plan 02, Task 3: registry wiring for all six new analyses ─────
+
+def test_new_analyses_registered_and_dispatch_generically():
+    from cisd_barriers import ANALYSES, ANALYSIS_META
+    from cisd_data import prepare
+    from scripts.build_validation import build_manifest_rows
+
+    keys = ["wick_distance", "sweep_depth", "fvg_size",
+            "effort_result", "rvol", "volume_zscore"]
+    for key in keys:
+        assert key in ANALYSES
+        assert key in ANALYSIS_META
+        assert ANALYSIS_META[key].standalone is True
+        assert ANALYSIS_META[key].filename
+
+    rng = np.random.default_rng(3)
+    n = 60
+    opens, highs, lows, closes = [], [], [], []
+    price = 100.0
+    for i in range(n):
+        step = 1.0 if i < 20 else rng.normal(0, 1.5)
+        o = price
+        c = price + step
+        h = max(o, c) + abs(rng.normal(0, 0.5)) + 0.1
+        l = min(o, c) - abs(rng.normal(0, 0.5)) - 0.1
+        opens.append(o); highs.append(h); lows.append(l); closes.append(c)
+        price = c
+    idx = pd.date_range("2026-01-01", periods=n, freq="1h")
+    df = pd.DataFrame({
+        "open": opens, "high": highs, "low": lows, "close": closes,
+        "volume": np.linspace(500, 1500, n),
+    }, index=idx)
+
+    prepared = prepare(df)
+    rows = build_manifest_rows(keys, prepared, prepared, "1H", "discovery")
+    analyses_seen = {r["analysis"] for r in rows}
+    labels = {ANALYSES[k][0] for k in keys}
+    assert labels <= analyses_seen
