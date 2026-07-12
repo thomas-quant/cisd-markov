@@ -302,6 +302,21 @@ def chart_volume_zscore(ax, data_nq, data_es):
     _style_ax(ax, "Volume Z-Score  (same-time-of-day-slot trailing baseline)")
 
 
+def chart_session(ax, data_nq, data_es):
+    rows = []
+    for instr, data in (("NQ", data_nq), ("ES", data_es)):
+        for ct in ("bullish", "bearish"):
+            for tag, alpha in (("rth_open", 1.0), ("rth", 0.75), ("overnight", 0.45)):
+                d = data[ct][tag]
+                rows.append((f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})",
+                             pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+    bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55)
+            for r in rows]
+    for b in bars:
+        _bar_label(ax, b)
+    _style_ax(ax, "Session / Time-of-Day (RTH Open / RTH / Overnight)")
+
+
 def chart_candle_size(ax, data_nq, data_es):
     all_labels = [lbl for _, _, lbl in
                   [(0, 0.5, "<0.5x ATR"), (0.5, 1.0, "0.5x-1x ATR"),
@@ -616,7 +631,7 @@ def build_csv_rows(keys: list, df_nq: pd.DataFrame, df_es: pd.DataFrame) -> pd.D
 
             elif key in ("sweep", "sssf_swing", "candle1_followthrough", "post_cisd_context",
                          "wick_distance", "sweep_depth", "fvg_size",
-                         "effort_result", "rvol", "volume_zscore"):
+                         "effort_result", "rvol", "volume_zscore", "session"):
                 for ct in ("bullish", "bearish"):
                     for tag, d in data[ct].items():
                         add(label, instr, ct, tag, d["total"], d["runs"])
@@ -770,6 +785,8 @@ __all__ = [
     "chart_effort_result",
     "chart_rvol",
     "chart_volume_zscore",
+    # New RES-07 symbols (Phase 10 Plan 03: session / time-of-day)
+    "chart_session",
     # Figure builders
     "build_csv_rows",
     "build_figure",
