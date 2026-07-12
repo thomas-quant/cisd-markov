@@ -355,26 +355,150 @@ def compute_size_cross(df: pd.DataFrame) -> dict:
 
 
 def compute_smt_cisd(df: pd.DataFrame) -> dict:
-    """Barrier run rate split by whether a matching Swing SMT co-occurs."""
+    """
+    Barrier run rate split by whether a matching Swing SMT co-occurs.
+    Three-way tag split: w/ SMT (valid at t) / expired SMT (matched but
+    already dead by t) / no SMT (D-03). Additionally reports two
+    diagnostic sub-buckets, "w/ SMT & survived" and "w/ SMT & broke",
+    split by smt_broke_in_window (D-06/D-07) — the aggregate "w/ SMT"
+    bucket is NEVER filtered on survival; the sub-buckets are reported
+    alongside it, not instead of it.
+    """
     if "swing_smt_tag" not in df.columns:
         raise ValueError("df must contain swing_smt_tag column")
 
     stats = {
-        "bullish": {"w/ SMT": {"total": 0, "runs": 0}, "no SMT": {"total": 0, "runs": 0}},
-        "bearish": {"w/ SMT": {"total": 0, "runs": 0}, "no SMT": {"total": 0, "runs": 0}},
+        ct: {
+            "w/ SMT":            {"total": 0, "runs": 0},
+            "expired SMT":       {"total": 0, "runs": 0},
+            "no SMT":            {"total": 0, "runs": 0},
+            "w/ SMT & survived": {"total": 0, "runs": 0},
+            "w/ SMT & broke":    {"total": 0, "runs": 0},
+        }
+        for ct in ("bullish", "bearish")
     }
 
-    ct_arr  = df["cisd_type"].to_numpy(dtype=object)
-    tag_arr = df["swing_smt_tag"].to_numpy(dtype=object)
+    has_broke_col = "smt_broke_in_window" in df.columns
+    ct_arr    = df["cisd_type"].to_numpy(dtype=object)
+    tag_arr   = df["swing_smt_tag"].to_numpy(dtype=object)
+    broke_arr = df["smt_broke_in_window"].to_numpy(dtype=bool) if has_broke_col else None
     event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
     for pos in event_pos:
         ct  = ct_arr[pos]
         tag = tag_arr[pos]
         if ct not in stats or tag not in stats[ct]:
             continue
+        run = barrier_hit(df, pos, df.iloc[pos], ct)
         stats[ct][tag]["total"] += 1
-        if barrier_hit(df, pos, df.iloc[pos], ct):
+        if run:
             stats[ct][tag]["runs"] += 1
+        if tag == "w/ SMT" and has_broke_col:
+            sub = "w/ SMT & broke" if broke_arr[pos] else "w/ SMT & survived"
+            stats[ct][sub]["total"] += 1
+            if run:
+                stats[ct][sub]["runs"] += 1
+    return stats
+
+
+def compute_smt_role(df: pd.DataFrame) -> dict:
+    """
+    Barrier run rate split by Swing SMT role (swept vs failed-to-sweep),
+    over the valid w/ SMT population only (D-08). Rows tagged "no SMT" or
+    "expired SMT" carry swing_smt_role == "none" and are excluded.
+    """
+    if "swing_smt_role" not in df.columns:
+        raise ValueError("df must contain swing_smt_role column")
+    if "swing_smt_tag" not in df.columns:
+        raise ValueError("df must contain swing_smt_tag column")
+
+    stats = {
+        ct: {"swept": {"total": 0, "runs": 0}, "failed_to_sweep": {"total": 0, "runs": 0}}
+        for ct in ("bullish", "bearish")
+    }
+
+    ct_arr    = df["cisd_type"].to_numpy(dtype=object)
+    tag_arr   = df["swing_smt_tag"].to_numpy(dtype=object)
+    role_arr  = df["swing_smt_role"].to_numpy(dtype=object)
+    event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    for pos in event_pos:
+        if tag_arr[pos] != "w/ SMT":
+            continue
+        ct   = ct_arr[pos]
+        role = role_arr[pos]
+        if ct not in stats or role not in stats[ct]:
+            continue
+        stats[ct][role]["total"] += 1
+        if barrier_hit(df, pos, df.iloc[pos], ct):
+            stats[ct][role]["runs"] += 1
+    return stats
+
+
+def compute_smt_block_size(df: pd.DataFrame) -> dict:
+    """
+    Barrier run rate segmented by SMT block size (reference-bar range) as
+    a multiple of ATR(14), over the matched-SMT population only (D-04).
+    Rows with no matched SMT carry smt_block_size_atr == NaN and are
+    excluded (D-05a); reuses compute_candle_size's bucket convention.
+    """
+    if "smt_block_size_atr" not in df.columns:
+        raise ValueError("df must contain smt_block_size_atr column")
+
+    BINS = [
+        (0,    0.5,  "<0.5x ATR"),
+        (0.5,  1.0,  "0.5x-1x ATR"),
+        (1.0,  1.5,  "1x-1.5x ATR"),
+        (1.5,  1e18, ">1.5x ATR"),
+    ]
+    ct_arr    = df["cisd_type"].to_numpy(dtype=object)
+    ratio_arr = df["smt_block_size_atr"].to_numpy(dtype=float)
+    event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    stats = {ct: {lbl: {"total": 0, "runs": 0} for _, _, lbl in BINS}
+             for ct in ("bullish", "bearish")}
+    for pos in event_pos:
+        ratio = ratio_arr[pos]
+        if pd.isna(ratio):
+            continue
+        ct = ct_arr[pos]
+        for lo, hi, lbl in BINS:
+            if lo <= ratio < hi:
+                stats[ct][lbl]["total"] += 1
+                if barrier_hit(df, pos, df.iloc[pos], ct):
+                    stats[ct][lbl]["runs"] += 1
+                break
+    return stats
+
+
+def compute_smt_in_block(df: pd.DataFrame) -> dict:
+    """
+    Barrier run rate split by whether the CISD body sits fully inside the
+    matched SMT block, over the matched-SMT population only (D-05). Rows
+    with no matched SMT default cisd_in_smt_block to False but are
+    excluded entirely (not counted as cisd_out_block) since they carry no
+    matched SMT at all.
+    """
+    if "cisd_in_smt_block" not in df.columns:
+        raise ValueError("df must contain cisd_in_smt_block column")
+    if "swing_smt_tag" not in df.columns:
+        raise ValueError("df must contain swing_smt_tag column")
+
+    stats = {
+        ct: {"cisd_in_block": {"total": 0, "runs": 0}, "cisd_out_block": {"total": 0, "runs": 0}}
+        for ct in ("bullish", "bearish")
+    }
+
+    ct_arr       = df["cisd_type"].to_numpy(dtype=object)
+    tag_arr      = df["swing_smt_tag"].to_numpy(dtype=object)
+    in_block_arr = df["cisd_in_smt_block"].to_numpy(dtype=bool)
+    event_pos    = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    for pos in event_pos:
+        tag = tag_arr[pos]
+        if tag not in ("w/ SMT", "expired SMT"):
+            continue
+        ct  = ct_arr[pos]
+        lbl = "cisd_in_block" if in_block_arr[pos] else "cisd_out_block"
+        stats[ct][lbl]["total"] += 1
+        if barrier_hit(df, pos, df.iloc[pos], ct):
+            stats[ct][lbl]["runs"] += 1
     return stats
 
 
@@ -755,6 +879,9 @@ __all__ = [
     "compute_candle_size",
     "compute_size_cross",
     "compute_smt_cisd",
+    "compute_smt_role",
+    "compute_smt_block_size",
+    "compute_smt_in_block",
     "compute_cisd_fvg",
     "compute_fvg_hold",
     "compute_cisd_fvg_interaction",
