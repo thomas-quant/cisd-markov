@@ -227,34 +227,41 @@ def test_wick_daily_es_bearish_within(es_frames):
 # been updated since the README was written; sample sizes are 2-3x larger and
 # rates have shifted.  Full README-vs-actual discrepancy table is in SUMMARY.
 #
+# Phase 9 (v2.0) deliberately changed these numbers: an SMT already invalidated
+# by the CISD bar t (broken_ts <= t) was previously mis-credited as "w/ SMT";
+# it is now reclassified into a separate "expired SMT" bucket, so every combo's
+# n drops (see .planning/phases/09-smt-geometry-invalidation-honesty/ and the
+# README "SMT Invalidation Honesty (v2.0)" section for the discovery-slice
+# version of this same fix). Recaptured 2026-07-12 against the corrected code.
+#
 # Actual captured values:
-#   NQ Daily:  Bull=63.5 n=63,  Bear=60.3 n=58
-#   NQ 4H:     Bull=56.2 n=292, Bear=51.4 n=315
-#   NQ 1H:     Bull=64.3 n=984, Bear=56.0 n=1143
-#   NQ 15min:  Bull=64.7 n=3761, Bear=61.9 n=4020
-#   ES Daily:  Bull=57.6 n=66,  Bear=52.3 n=65
-#   ES 4H:     Bull=60.9 n=281, Bear=53.2 n=312
-#   ES 1H:     Bull=64.3 n=942, Bear=56.8 n=1086
-#   ES 15min:  Bull=64.0 n=3558, Bear=61.3 n=3779
+#   NQ Daily:  Bull=68.0 n=50,  Bear=61.1 n=36
+#   NQ 4H:     Bull=57.7 n=213, Bear=51.3 n=230
+#   NQ 1H:     Bull=60.6 n=675, Bear=55.2 n=774
+#   NQ 15min:  Bull=64.7 n=2603, Bear=61.3 n=2772
+#   ES Daily:  Bull=60.4 n=53,  Bear=51.1 n=45
+#   ES 4H:     Bull=64.5 n=203, Bear=52.0 n=227
+#   ES 1H:     Bull=60.8 n=641, Bear=55.8 n=733
+#   ES 15min:  Bull=63.9 n=2494, Bear=60.7 n=2633
 
 _SMT_EXPECTED = {
     # (timeframe, instrument, direction): (rate_1dp, n)
-    ("Daily",  "NQ", "bullish"): (63.5, 63),
-    ("Daily",  "NQ", "bearish"): (60.3, 58),
-    ("Daily",  "ES", "bullish"): (57.6, 66),
-    ("Daily",  "ES", "bearish"): (52.3, 65),
-    ("4H",     "NQ", "bullish"): (56.2, 292),
-    ("4H",     "NQ", "bearish"): (51.4, 315),
-    ("4H",     "ES", "bullish"): (60.9, 281),
-    ("4H",     "ES", "bearish"): (53.2, 312),
-    ("1H",     "NQ", "bullish"): (64.3, 984),
-    ("1H",     "NQ", "bearish"): (56.0, 1143),
-    ("1H",     "ES", "bullish"): (64.3, 942),
-    ("1H",     "ES", "bearish"): (56.8, 1086),
-    ("15min",  "NQ", "bullish"): (64.7, 3761),
-    ("15min",  "NQ", "bearish"): (61.9, 4020),
-    ("15min",  "ES", "bullish"): (64.0, 3558),
-    ("15min",  "ES", "bearish"): (61.3, 3779),
+    ("Daily",  "NQ", "bullish"): (68.0, 50),
+    ("Daily",  "NQ", "bearish"): (61.1, 36),
+    ("Daily",  "ES", "bullish"): (60.4, 53),
+    ("Daily",  "ES", "bearish"): (51.1, 45),
+    ("4H",     "NQ", "bullish"): (57.7, 213),
+    ("4H",     "NQ", "bearish"): (51.3, 230),
+    ("4H",     "ES", "bullish"): (64.5, 203),
+    ("4H",     "ES", "bearish"): (52.0, 227),
+    ("1H",     "NQ", "bullish"): (60.6, 675),
+    ("1H",     "NQ", "bearish"): (55.2, 774),
+    ("1H",     "ES", "bullish"): (60.8, 641),
+    ("1H",     "ES", "bearish"): (55.8, 733),
+    ("15min",  "NQ", "bullish"): (64.7, 2603),
+    ("15min",  "NQ", "bearish"): (61.3, 2772),
+    ("15min",  "ES", "bullish"): (63.9, 2494),
+    ("15min",  "ES", "bearish"): (60.7, 2633),
 }
 
 
