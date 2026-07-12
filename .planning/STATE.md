@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Rigorous Validation & Post-CISD Modeling
-current_phase: 9
-current_phase_name: SMT Geometry & Invalidation Honesty
-status: verifying
+current_phase: 09
+current_phase_name: smt-geometry-invalidation-honesty
+status: executing
 stopped_at: Phase 9 context gathered
-last_updated: "2026-07-12T07:51:49.382Z"
-last_activity: 2026-07-11
-last_activity_desc: Phase 08 complete, transitioned to Phase 9
+last_updated: "2026-07-12T08:56:10.562Z"
+last_activity: 2026-07-12
+last_activity_desc: Phase 09 execution started
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 8
-  completed_plans: 8
+  total_plans: 11
+  completed_plans: 9
   percent: 50
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** A reported edge can be trusted — every published rate is sample-size gated, carries a confidence interval, and is confirmed out-of-sample.
-**Current focus:** Phase 08 — performance-vectorize-the-enrichment-validation-hot-path
+**Current focus:** Phase 09 — smt-geometry-invalidation-honesty
 
 ## Current Position
 
-Phase: 9 — SMT Geometry & Invalidation Honesty
-Plan: Not started
-Status: Phase 08 execution complete — both hot spots vectorized, SC2 bit-equality PASS, SC3/SC4 met; pending phase verification
-Last activity: 2026-07-11 — Phase 08 complete, transitioned to Phase 9
+Phase: 09 (smt-geometry-invalidation-honesty) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-07-12 — Phase 09 execution started
 
 Progress: [███░░░░░░░] 33% (2 of 6 phases complete)
 
@@ -63,6 +63,7 @@ Progress: [███░░░░░░░] 33% (2 of 6 phases complete)
 | Phase 06 P02 | 13min | 3 tasks | 5 files |
 | Phase 08 P01 | 35min | 2 tasks | 6 files |
 | Phase 08 P02 | 55min | 1 tasks | 1 files |
+| Phase 09 P01 | 15min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,7 @@ Recent decisions affecting current work:
 - [Phase 08]: Adopted Phase 7's baseline timing (07-03-SUMMARY.md: ~24min parallel / ~60min sequential) as the SC3 'before' record; Plan 08-03 must measure 'after' comparably
 - [Phase 08]: Deferred the live CISD_PERF_CHAR=1 characterization pass to Plan 08-03's authoritative before/after proof, avoiding a redundant ~24min regeneration in this behavior-lock plan
 - [Phase 08]: Fully vectorized the sweep computation via a two-stage rolling reduction (per-bar trigger + rolling-any) instead of a bounded per-window loop, and left the four private enrichment helpers (_compute_three_bar_swings, _has_directional_fvg, _classify_fvg_hold, _has_directional_sweep) untouched since they are independently unit-tested and exported.
+- [Phase 09-01]: D-01/D-02/D-03/D-03a validity fix (broken_ts vs t, never status, latest-match-only) + smt_broke_in_window (D-06) + smt_block_size_atr/cisd_in_smt_block geometry (D-04/D-05/D-05a) implemented vectorized in _annotate_swing_smt_from_events; updated 3 pre-existing Phase 08 parity-lock test fixtures for the widened event schema
 
 ### Pending Todos
 
@@ -119,7 +121,7 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-12T07:51:49.341Z
+Last session: 2026-07-12T08:55:56.159Z
 Stopped at: Phase 9 context gathered
 Resume file: .planning/phases/09-smt-geometry-invalidation-honesty/09-CONTEXT.md
 
