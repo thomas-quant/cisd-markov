@@ -39,7 +39,7 @@ Full phase details in [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
 - [x] **Phase 7: Corrected Re-Validation of the Post-CISD Studies** - Regenerate the manifest end-to-end under the corrected methodology for `post_cisd_context` / `candle1_followthrough`, add the `failed_gap_against` reversal barrier, and issue the go/no-go verdict for modeling (completed 2026-07-11)
 - [x] **Phase 8: Performance — Vectorize the Enrichment & Validation Hot Path** - Vectorize the row-by-row annotation loops (SMT event tagging + CISD research annotation) and remove redundant re-computation so the end-to-end manifest regen is fast; strictly behavior-preserving — no published number moves (completed 2026-07-11)
 - [x] **Phase 9: SMT Geometry & Invalidation Honesty** - Carry the SMT price/lifecycle fields the scanner already returns; fix the already-invalidated-SMT tagging bug; add SMT role, magnitude, and CISD-in-block containment features plus a survived-vs-broke-in-window split, all through the validation harness (completed 2026-07-12)
-- [ ] **Phase 10: New Conditioning Features — Magnitude, Session & Volume Anomaly** - Add continuous magnitude versions of the binary flags, session/time-of-day tags, and CISD volume-anomaly measures; validate each through the harness
+- [x] **Phase 10: New Conditioning Features — Magnitude, Session & Volume Anomaly** - Add continuous magnitude versions of the binary flags, session/time-of-day tags, and CISD volume-anomaly measures; validate each through the harness (completed 2026-07-12)
 - [ ] **Phase 11: Conditional Post-CISD Model** - Gated on the corrected evidence from Phases 7/9/10, either build and validate a model over whichever feature families cleared the bar, or ship a documented "no model warranted" conclusion
 
 ## Phase Details
@@ -152,7 +152,7 @@ Full phase details in [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
   3. CISD volume-anomaly measures — rolling RVOL / z-score (distinct from the existing negligible 1-bar ratio), effort-vs-result (volume ÷ range/body), and optional cross-asset NQ-vs-ES volume divergence on normalized terms — are computed and validated; the OHLCV-only limitation (no signed/delta order flow) is stated explicitly.
   4. Every new bucket carries n, Wilson CI, the FDR-corrected verdict, and a walk-forward robustness verdict; non-confirming features are published as not-confirmed / below-n rather than dropped.
 
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans complete
 
 **Wave 1**
 
@@ -168,7 +168,7 @@ Full phase details in [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
 
 **Wave 4** *(blocked on Waves 2-3 — regen runs the full registry)*
 
-- [ ] 10-04-PLAN.md — Graceful column tolerance, byte-stability drift gate (D-12), end-to-end manifest regen (SC4), refreshed golden fixtures, and the D-11/D-13 README writeup (RES-07)
+- [x] 10-04-PLAN.md — Graceful column tolerance, byte-stability drift gate (D-12), end-to-end manifest regen (SC4), refreshed golden fixtures, and the D-11/D-13 README writeup (RES-07)
 
 ### Phase 11: Conditional Post-CISD Model
 
@@ -195,5 +195,5 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11. Phase 7 requ
 | 7. Corrected Re-Validation of Post-CISD Studies | v2.0 | 3/3 | Complete    | 2026-07-11 |
 | 8. Performance — Vectorize Enrichment & Validation Hot Path | v2.0 | 3/3 | Complete    | 2026-07-11 |
 | 9. SMT Geometry & Invalidation Honesty | v2.0 | 3/3 | Complete    | 2026-07-12 |
-| 10. New Conditioning Features (Magnitude, Session, Volume Anomaly) | v2.0 | 2/4 | In Progress|  |
+| 10. New Conditioning Features (Magnitude, Session, Volume Anomaly) | v2.0 | 4/4 | Complete   | 2026-07-12 |
 | 11. Conditional Post-CISD Model | v2.0 | 0/TBD | Not started | - |
