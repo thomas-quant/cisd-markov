@@ -43,6 +43,12 @@ SWEEP_SWING_LOOKBACK = 20
 RTH_OPEN_START_MIN = 570   # 09:30 ET
 RTH_OPEN_END_MIN   = 630   # 10:30 ET
 RTH_END_MIN        = 960   # 16:00 ET
+
+# RVOL_SLOT_K: trailing same-time-of-day-slot window (in slot occurrences)
+# for rvol / volume_zscore (D-08). ~20 slot occurrences ~= 20 trading days.
+# Frozen — never tuned; a warm-up period where the baseline is undefined is
+# tolerated (those bars fall below-n and are naturally excluded downstream).
+RVOL_SLOT_K = 20
 _SMT_PKG_PATH = Path(os.environ.get("SMT_PKG_PATH", "/mnt/e/backup/code/Finance/Misc/SMT"))
 
 # OOS_START: 70th-percentile date of the shared NQ∩ES daily calendar.
@@ -397,6 +403,41 @@ def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
         default="overnight",
     )
 
+    # ── Volume-anomaly conditioning columns (Phase 10 Plan 01, D-07/D-08) ──
+    # vol_per_range: within-bar effort/result ratio (D-07, baseline-free
+    # anchor) — no lookback window, no intraday seasonality. High value =
+    # high-volume-goes-nowhere (churn/absorption).
+    vol_arr = annotated["volume"].to_numpy(dtype=float)
+    rng = high - low
+    safe_rng = np.where(rng > 0, rng, np.nan)
+    vol_per_range = np.where(rng > 0, vol_arr / safe_rng, np.nan)
+
+    # rvol / volume_zscore: same-time-of-day-slot trailing baseline (D-08),
+    # NOT a naive trailing window — intraday volume has a large time-of-day
+    # profile, so grouping by minute-of-day (reused from the session_tag
+    # block above) removes it. shift(1) inside each slot group excludes the
+    # current bar (no lookahead — the baseline is strictly trailing within
+    # its own slot). On a Daily frame every bar shares one slot, so this
+    # degenerates to a single plain trailing window (correct — no intraday
+    # profile there). min_periods=RVOL_SLOT_K leaves the warm-up NaN
+    # (those bars fall below-n and are naturally excluded downstream).
+    slot = pd.Series(minute_of_day, index=idx_ax)
+    vol_s = pd.Series(vol_arr, index=idx_ax)
+    slot_mean = vol_s.groupby(slot).transform(
+        lambda s: s.shift(1).rolling(RVOL_SLOT_K, min_periods=RVOL_SLOT_K).mean()
+    )
+    slot_std = vol_s.groupby(slot).transform(
+        lambda s: s.shift(1).rolling(RVOL_SLOT_K, min_periods=RVOL_SLOT_K).std()
+    )
+    slot_mean_arr = slot_mean.to_numpy()
+    slot_std_arr  = slot_std.to_numpy()
+    safe_slot_mean = np.where(slot_mean_arr > 0, slot_mean_arr, np.nan)
+    safe_slot_std  = np.where(slot_std_arr > 0, slot_std_arr, np.nan)
+    rvol = np.where(slot_mean_arr > 0, vol_arr / safe_slot_mean, np.nan)
+    volume_zscore = np.where(
+        slot_std_arr > 0, (vol_arr - slot_mean_arr) / safe_slot_std, np.nan,
+    )
+
     # ── FVG hold classification ──────────────────────────────────────────────
     # `_classify_fvg_hold` returns "none" when the FVG_HOLD_LOOKAHEAD window
     # doesn't fit, else checks `any(...)` over the future window against a
@@ -538,6 +579,9 @@ def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
     annotated["fvg_gap_width"]     = fvg_gap_width
     annotated["fvg_size_atr"]      = fvg_size_atr
     annotated["session_tag"]       = session_tag
+    annotated["vol_per_range"]     = vol_per_range
+    annotated["rvol"]              = rvol
+    annotated["volume_zscore"]     = volume_zscore
 
     return annotated
 
@@ -856,6 +900,7 @@ __all__ = [
     "RTH_OPEN_START_MIN",
     "RTH_OPEN_END_MIN",
     "RTH_END_MIN",
+    "RVOL_SLOT_K",
     "_SMT_PKG_PATH",
     "OOS_START",
     "MIN_N",
