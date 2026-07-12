@@ -38,7 +38,7 @@ Full phase details in [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
 - [x] **Phase 6: Harder Evidence Bar — Multiple-Comparisons Correction & Walk-Forward Validation** - Extend the harness with FDR correction across the bucket grid and rolling walk-forward windows, as additive output that leaves existing numbers untouched (completed 2026-07-10)
 - [x] **Phase 7: Corrected Re-Validation of the Post-CISD Studies** - Regenerate the manifest end-to-end under the corrected methodology for `post_cisd_context` / `candle1_followthrough`, add the `failed_gap_against` reversal barrier, and issue the go/no-go verdict for modeling (completed 2026-07-11)
 - [x] **Phase 8: Performance — Vectorize the Enrichment & Validation Hot Path** - Vectorize the row-by-row annotation loops (SMT event tagging + CISD research annotation) and remove redundant re-computation so the end-to-end manifest regen is fast; strictly behavior-preserving — no published number moves (completed 2026-07-11)
-- [ ] **Phase 9: SMT Geometry & Invalidation Honesty** - Carry the SMT price/lifecycle fields the scanner already returns; fix the already-invalidated-SMT tagging bug; add SMT role, magnitude, and CISD-in-block containment features plus a survived-vs-broke-in-window split, all through the validation harness
+- [x] **Phase 9: SMT Geometry & Invalidation Honesty** - Carry the SMT price/lifecycle fields the scanner already returns; fix the already-invalidated-SMT tagging bug; add SMT role, magnitude, and CISD-in-block containment features plus a survived-vs-broke-in-window split, all through the validation harness (completed 2026-07-12)
 - [ ] **Phase 10: New Conditioning Features — Magnitude, Session & Volume Anomaly** - Add continuous magnitude versions of the binary flags, session/time-of-day tags, and CISD volume-anomaly measures; validate each through the harness
 - [ ] **Phase 11: Conditional Post-CISD Model** - Gated on the corrected evidence from Phases 7/9/10, either build and validate a model over whichever feature families cleared the bar, or ship a documented "no model warranted" conclusion
 
@@ -126,7 +126,7 @@ Full phase details in [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
   3. New features `smt_block_size_atr` (SMT magnitude, `block_high − block_low` normalized by ATR) and `cisd_in_smt_block` (whether the CISD body lies within the SMT block zone) are computed same-timeframe and split through the barrier model.
   4. The `w/ SMT` bucket additionally reports a survived-vs-broke-in-window diagnostic split (the population is never filtered on survival — that would be hindsight); and every new bucket carries n, Wilson CI, the FDR-corrected verdict, and a walk-forward robustness verdict.
 
-**Plans**: 2/3 plans executed
+**Plans**: 3/3 plans complete
 
 **Wave 1**
 
@@ -138,7 +138,7 @@ Full phase details in [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
 
 **Wave 3** *(blocked on Waves 1-2 — regen depends on the fixed/extended code)*
 
-- [ ] 09-03-PLAN.md — Regenerate manifests + before/after methodology report + README "SMT Invalidation Honesty (v2.0)" writeup (operator-run heavy regen) (RES-06)
+- [x] 09-03-PLAN.md — Regenerate manifests + before/after methodology report + README "SMT Invalidation Honesty (v2.0)" writeup (operator-run heavy regen) (RES-06)
 
 ### Phase 10: New Conditioning Features — Magnitude, Session & Volume Anomaly
 
@@ -178,6 +178,6 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11. Phase 7 requ
 | 6. Harder Evidence Bar (MHT + Walk-Forward) | v2.0 | 2/2 | Complete    | 2026-07-10 |
 | 7. Corrected Re-Validation of Post-CISD Studies | v2.0 | 3/3 | Complete    | 2026-07-11 |
 | 8. Performance — Vectorize Enrichment & Validation Hot Path | v2.0 | 3/3 | Complete    | 2026-07-11 |
-| 9. SMT Geometry & Invalidation Honesty | v2.0 | 2/3 | In Progress|  |
+| 9. SMT Geometry & Invalidation Honesty | v2.0 | 3/3 | Complete   | 2026-07-12 |
 | 10. New Conditioning Features (Magnitude, Session, Volume Anomaly) | v2.0 | 0/TBD | Not started | - |
 | 11. Conditional Post-CISD Model | v2.0 | 0/TBD | Not started | - |
