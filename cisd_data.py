@@ -463,8 +463,23 @@ def _annotate_swing_smt_from_events(df: pd.DataFrame, events: pd.DataFrame, inst
     side="right") - 1` against each CISD bar's timestamp lands on exactly the
     same "last event in ascending-created_ts, then original-order,
     iteration" winner the original loop's unconditional overwrite produced.
+
+    Widened (Phase 09 Plan 01, see
+    `.planning/phases/09-smt-geometry-invalidation-honesty/09-01-PLAN.md`):
+    the matched SMT's lifecycle fields are carried through, the matched
+    SMT's validity at the CISD bar `t` is checked (`broken_ts` NaT or
+    strictly greater than `t`) and used to split the tag into a three-way
+    `"w/ SMT"` / `"expired SMT"` / `"no SMT"` (D-01/D-02/D-03/D-03a — the
+    validity check NEVER reads `status`, and only the single latest-created
+    matched SMT is checked, matching the existing selection rule), and the
+    survived-vs-broke-in-window horizon flag `smt_broke_in_window` is
+    computed (D-06).
     """
-    required_event_columns = ("signal_type", "created_ts", "sweeping_asset", "failing_asset")
+    required_event_columns = (
+        "signal_type", "created_ts", "sweeping_asset", "failing_asset",
+        "reference_price", "invalidation_asset", "invalidation_direction",
+        "invalidation_level", "broken_ts", "status", "reference_timestamp",
+    )
     if "cisd_type" not in df.columns:
         raise ValueError("df must contain cisd_type column")
 
@@ -477,6 +492,14 @@ def _annotate_swing_smt_from_events(df: pd.DataFrame, events: pd.DataFrame, inst
     annotated["swing_smt_tag"] = "no SMT"
     annotated["swing_smt_match_ts"] = pd.NaT
     annotated["swing_smt_role"] = "none"
+    annotated["smt_reference_price"] = np.nan
+    annotated["smt_invalidation_level"] = np.nan
+    annotated["smt_broken_ts"] = pd.NaT
+    annotated["smt_status"] = "none"
+    annotated["smt_reference_timestamp"] = pd.NaT
+    annotated["smt_invalidation_asset"] = "none"
+    annotated["smt_invalidation_direction"] = "none"
+    annotated["smt_broke_in_window"] = False
 
     if annotated.empty or events.empty:
         return annotated
@@ -499,11 +522,21 @@ def _annotate_swing_smt_from_events(df: pd.DataFrame, events: pd.DataFrame, inst
     ts_arr = idx_ax.to_numpy()
     lower_pos = np.maximum(np.arange(n) - 2, 0)
     lower_ts_arr = ts_arr[lower_pos]
+    upper_pos = np.minimum(np.arange(n) + 2, n - 1)
+    upper_ts_arr = ts_arr[upper_pos]
 
     has_swing_smt = np.zeros(n, dtype=bool)
     swing_smt_tag = np.full(n, "no SMT", dtype=object)
     swing_smt_match_ts = np.full(n, np.datetime64("NaT"), dtype="datetime64[ns]")
     swing_smt_role = np.full(n, "none", dtype=object)
+    smt_reference_price = np.full(n, np.nan, dtype=float)
+    smt_invalidation_level = np.full(n, np.nan, dtype=float)
+    smt_broken_ts = np.full(n, np.datetime64("NaT"), dtype="datetime64[ns]")
+    smt_status = np.full(n, "none", dtype=object)
+    smt_reference_timestamp = np.full(n, np.datetime64("NaT"), dtype="datetime64[ns]")
+    smt_invalidation_asset = np.full(n, "none", dtype=object)
+    smt_invalidation_direction = np.full(n, "none", dtype=object)
+    smt_broke_in_window = np.zeros(n, dtype=bool)
 
     for direction in ("bullish", "bearish"):
         dir_events = filtered.loc[filtered["_direction"] == direction]
@@ -517,6 +550,13 @@ def _annotate_swing_smt_from_events(df: pd.DataFrame, events: pd.DataFrame, inst
         event_ts       = dir_events["created_ts"].to_numpy()
         event_sweeping = dir_events["sweeping_asset"].to_numpy()
         event_failing  = dir_events["failing_asset"].to_numpy()
+        event_reference_price = dir_events["reference_price"].to_numpy(dtype=float)
+        event_invalidation_asset = dir_events["invalidation_asset"].to_numpy(dtype=object)
+        event_invalidation_direction = dir_events["invalidation_direction"].to_numpy(dtype=object)
+        event_invalidation_level = dir_events["invalidation_level"].to_numpy(dtype=float)
+        event_broken_ts = pd.to_datetime(dir_events["broken_ts"]).to_numpy(dtype="datetime64[ns]")
+        event_status = dir_events["status"].to_numpy(dtype=object)
+        event_reference_ts = pd.to_datetime(dir_events["reference_timestamp"]).to_numpy(dtype="datetime64[ns]")
 
         row_mask = ct_arr == direction
         if not row_mask.any():
@@ -540,22 +580,61 @@ def _annotate_swing_smt_from_events(df: pd.DataFrame, events: pd.DataFrame, inst
 
         match_positions      = row_positions[in_window]
         matched_candidate_pos = safe_pos[in_window]
+        matched_row_ts   = row_ts[in_window]
+        matched_upper_ts = upper_ts_arr[match_positions]
         matched_ts       = event_ts[matched_candidate_pos]
         matched_sweeping = event_sweeping[matched_candidate_pos]
         matched_failing  = event_failing[matched_candidate_pos]
+        matched_reference_price = event_reference_price[matched_candidate_pos]
+        matched_invalidation_asset = event_invalidation_asset[matched_candidate_pos]
+        matched_invalidation_direction = event_invalidation_direction[matched_candidate_pos]
+        matched_invalidation_level = event_invalidation_level[matched_candidate_pos]
+        matched_broken_ts = event_broken_ts[matched_candidate_pos]
+        matched_status = event_status[matched_candidate_pos]
+        matched_reference_ts = event_reference_ts[matched_candidate_pos]
+
+        # D-01/D-02: validity is broken_ts vs t only, never status. Checked
+        # only on the single latest-created matched SMT (D-03a) — no
+        # re-search for an earlier still-valid same-direction event.
+        still_valid = pd.isna(matched_broken_ts) | (matched_broken_ts > matched_row_ts)
 
         has_swing_smt[match_positions] = True
-        swing_smt_tag[match_positions] = "w/ SMT"
+        swing_smt_tag[match_positions] = np.where(still_valid, "w/ SMT", "expired SMT")
         swing_smt_match_ts[match_positions] = matched_ts
         swing_smt_role[match_positions] = np.where(
             matched_sweeping == instrument, "swept",
             np.where(matched_failing == instrument, "failed_to_sweep", "none"),
+        )
+        smt_reference_price[match_positions] = matched_reference_price
+        smt_invalidation_level[match_positions] = matched_invalidation_level
+        smt_broken_ts[match_positions] = matched_broken_ts
+        smt_status[match_positions] = matched_status
+        smt_reference_timestamp[match_positions] = matched_reference_ts
+        smt_invalidation_asset[match_positions] = matched_invalidation_asset
+        smt_invalidation_direction[match_positions] = matched_invalidation_direction
+
+        # D-06: broke-in-window horizon flag, meaningful only for still-valid
+        # ("w/ SMT") matches — expired rows have broken_ts <= t so are never
+        # "broke in window" by construction.
+        smt_broke_in_window[match_positions] = (
+            still_valid
+            & pd.notna(matched_broken_ts)
+            & (matched_broken_ts > matched_row_ts)
+            & (matched_broken_ts <= matched_upper_ts)
         )
 
     annotated["has_swing_smt"]      = has_swing_smt
     annotated["swing_smt_tag"]      = swing_smt_tag
     annotated["swing_smt_match_ts"] = swing_smt_match_ts
     annotated["swing_smt_role"]     = swing_smt_role
+    annotated["smt_reference_price"] = smt_reference_price
+    annotated["smt_invalidation_level"] = smt_invalidation_level
+    annotated["smt_broken_ts"] = smt_broken_ts
+    annotated["smt_status"] = smt_status
+    annotated["smt_reference_timestamp"] = smt_reference_timestamp
+    annotated["smt_invalidation_asset"] = smt_invalidation_asset
+    annotated["smt_invalidation_direction"] = smt_invalidation_direction
+    annotated["smt_broke_in_window"] = smt_broke_in_window
 
     return annotated
 
