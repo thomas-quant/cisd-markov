@@ -208,3 +208,61 @@ def test_compute_smt_in_block_raises_without_swing_smt_tag():
     df = _base_df(3, [None, "bullish", None], in_block=[False, True, False])
     with pytest.raises(ValueError, match="swing_smt_tag"):
         compute_smt_in_block(df)
+
+
+# ── Task 3: registry wiring — manifest-shape smoke test (SC4) ──────────────
+
+def test_new_analyses_emit_manifest_rows_via_generic_dispatch():
+    """
+    smt_role / smt_block_size / smt_in_block / smt_cisd must flow through
+    scripts.build_validation.build_manifest_rows's generic {dir: {tag:
+    {total, runs}}} dispatch with zero harness changes, inheriting n +
+    Wilson CI (and, at the manifest-build-script level, BH-FDR + walk-
+    forward) for free.
+    """
+    from scripts.build_validation import build_manifest_rows
+
+    n = 8
+    cisd_types = [None, "bullish", "bullish", "bullish", "bearish", "bullish", None, None]
+    tags       = ["no SMT", "w/ SMT", "w/ SMT", "expired SMT", "w/ SMT", "w/ SMT", "no SMT", "no SMT"]
+    roles      = ["none",   "swept",  "failed_to_sweep", "none", "swept", "failed_to_sweep", "none", "none"]
+    broke      = [False,    True,     False,    False,    False,    True,     False, False]
+    ratios     = [np.nan,   0.3,      0.7,      1.2,      0.4,      2.0,      np.nan, np.nan]
+    in_block   = [False,    True,     False,    True,     True,     False,    False, False]
+
+    nq = _base_df(
+        n, cisd_types, tags=tags, roles=roles, broke=broke,
+        block_ratio=ratios, in_block=in_block,
+    )
+    es = _base_df(
+        n, cisd_types, tags=tags, roles=roles, broke=broke,
+        block_ratio=ratios, in_block=in_block,
+    )
+
+    rows = build_manifest_rows(
+        ["smt_role", "smt_block_size", "smt_in_block", "smt_cisd"],
+        nq, es, "15min", "discovery",
+    )
+
+    assert rows, "expected manifest rows for the new analyses"
+
+    by_analysis_bucket = {(r["analysis"], r["bucket"]) for r in rows}
+    expected = {
+        ("smt_role", "swept"),
+        ("smt_role", "failed_to_sweep"),
+        ("smt_block_size", "<0.5x ATR"),
+        ("smt_block_size", "0.5x-1x ATR"),
+        ("smt_block_size", "1x-1.5x ATR"),
+        ("smt_block_size", ">1.5x ATR"),
+        ("smt_in_block", "cisd_in_block"),
+        ("smt_in_block", "cisd_out_block"),
+        ("smt_cisd", "w/ SMT"),
+        ("smt_cisd", "expired SMT"),
+        ("smt_cisd", "no SMT"),
+        ("smt_cisd", "w/ SMT & survived"),
+        ("smt_cisd", "w/ SMT & broke"),
+    }
+    assert expected <= by_analysis_bucket
+
+    for row in rows:
+        assert "n" in row and "ci_low" in row and "ci_high" in row
