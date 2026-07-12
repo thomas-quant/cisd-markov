@@ -27,13 +27,15 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cisd_data import (
-    _annotate_cisd_research,
-    RTH_OPEN_START_MIN,
-    RTH_OPEN_END_MIN,
-    RTH_END_MIN,
-    RVOL_SLOT_K,
-)
+from cisd_data import _annotate_cisd_research
+
+# NOTE: RTH_OPEN_START_MIN/RTH_OPEN_END_MIN/RTH_END_MIN (Task 2) and
+# RVOL_SLOT_K (Task 3) are imported locally inside the tests that need them,
+# not at module level — this plan implements the three column families
+# (magnitude / session / volume) across three sequential commits, and a
+# module-level import of a not-yet-defined constant would break collection
+# of the earlier task's already-passing tests (`-k` selection still needs
+# the module to import cleanly).
 
 
 # ── Fixture helper ───────────────────────────────────────────────────────────
@@ -153,6 +155,7 @@ def test_magnitude_columns_present_and_float_dtype():
 # ── Task 2: session_tag frozen minute-of-day boundaries ─────────────────────
 
 def test_frozen_session_constants():
+    from cisd_data import RTH_OPEN_START_MIN, RTH_OPEN_END_MIN, RTH_END_MIN
     assert RTH_OPEN_START_MIN == 570
     assert RTH_OPEN_END_MIN == 630
     assert RTH_END_MIN == 960
@@ -201,6 +204,7 @@ def test_vol_per_range_matches_volume_over_range_and_nan_when_flat():
 # ── Task 3: rvol / volume_zscore same-time-of-day-slot trailing baseline ───
 
 def test_rvol_and_zscore_slot_baseline_trailing_and_warmup_nan():
+    from cisd_data import RVOL_SLOT_K
     K = RVOL_SLOT_K
     n = K + 5
     # Same clock time every day -> single time-of-day slot (degenerates to a

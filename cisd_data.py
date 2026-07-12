@@ -302,6 +302,74 @@ def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
     bear_fvg_mid1 = low > right_high_mid1
     has_dir_fvg_mid1 = np.where(is_bullish, bull_fvg_mid1, np.where(is_bearish, bear_fvg_mid1, False))
 
+    # ── Magnitude conditioning columns (Phase 10 Plan 01, D-04/D-05/D-06a) ──
+    # ATR(14) computed once here, identical to compute_candle_size's
+    # (high-low).rolling(14).mean() convention (D-04) — do not invent a
+    # true-range variant. Reused by every magnitude column below.
+    atr = (annotated["high"] - annotated["low"]).rolling(14).mean()
+    atr_arr = atr.to_numpy(dtype=float)
+    atr_valid = np.isfinite(atr_arr) & (atr_arr > 0)
+    safe_atr = np.where(atr_valid, atr_arr, np.nan)
+    prev_high_arr = annotated["prev_high"].to_numpy(dtype=float)
+    prev_low_arr  = annotated["prev_low"].to_numpy(dtype=float)
+
+    # wick_distance_atr: signed, ALL CISDs (D-05/D-06). Positive = closed past
+    # the prior bar's wick; negative/zero = closed within it. This single
+    # feature subsumes the binary compute_wick past/within split — the bin
+    # edge at exactly 0 (Plan 02) recovers that split.
+    wick_distance_bull = (close - prev_high_arr) / safe_atr
+    wick_distance_bear = (prev_low_arr - close) / safe_atr
+    wick_distance_atr = np.where(
+        is_bullish, wick_distance_bull,
+        np.where(is_bearish, wick_distance_bear, np.nan),
+    )
+
+    # swept_level / sweep_depth_atr: gated on has_dir_sweep (D-05/D-06a).
+    # roll_min_prior_swing_low / roll_max_prior_swing_high (computed above,
+    # sweep block) ARE the nearest prior directional swing level as of each
+    # bar — reused here rather than re-derived. Anchoring convention (frozen,
+    # planner's call under D-06a): the depth is measured at the CISD bar t
+    # against the nearest prior swing extreme as-of-t (not the specific
+    # sweep_idx within the trailing SWEEP_TOLERANCE window) — swings move
+    # slowly relative to the 5-bar tolerance window, so this equals the
+    # triggered level in the overwhelming majority of cases while staying
+    # fully vectorized.
+    swept_level = np.where(
+        is_bullish, roll_min_prior_swing_low,
+        np.where(is_bearish, roll_max_prior_swing_high, np.nan),
+    )
+    swept_level = np.where(has_dir_sweep & np.isfinite(swept_level), swept_level, np.nan)
+
+    sweep_depth_bull = (swept_level - low) / safe_atr
+    sweep_depth_bear = (high - swept_level) / safe_atr
+    sweep_depth_atr = np.where(
+        has_dir_sweep & atr_valid & np.isfinite(swept_level),
+        np.where(is_bullish, sweep_depth_bull, np.where(is_bearish, sweep_depth_bear, np.nan)),
+        np.nan,
+    )
+
+    # fvg_gap_width / fvg_size_atr: gated on has_dir_fvg_mid0/mid1 (D-05/
+    # D-06a). Reuses the gap-boundary arrays already computed in the FVG
+    # mid0/mid1 detection block above. mid0-priority union (frozen, planner's
+    # resolution of the mid0-vs-mid1 open question in PATTERNS): where both a
+    # mid0 and mid1 FVG exist, the CISD-bar (mid0) FVG takes precedence — a
+    # single flat population keeps the compute layer flat and hits the
+    # generic manifest dispatch with zero harness change.
+    mid0_gap_bull = right_low_mid0 - left_high_mid0
+    mid0_gap_bear = left_low_mid0 - right_high_mid0
+    mid0_gap = np.where(is_bullish, mid0_gap_bull, np.where(is_bearish, mid0_gap_bear, np.nan))
+
+    mid1_gap_bull = right_low_mid1 - high
+    mid1_gap_bear = low - right_high_mid1
+    mid1_gap = np.where(is_bullish, mid1_gap_bull, np.where(is_bearish, mid1_gap_bear, np.nan))
+
+    fvg_gap_width = np.where(has_dir_fvg_mid0, mid0_gap, np.where(has_dir_fvg_mid1, mid1_gap, np.nan))
+    fvg_size_atr = np.where(
+        atr_valid & np.isfinite(fvg_gap_width),
+        fvg_gap_width / safe_atr,
+        np.nan,
+    )
+
     # ── FVG hold classification ──────────────────────────────────────────────
     # `_classify_fvg_hold` returns "none" when the FVG_HOLD_LOOKAHEAD window
     # doesn't fit, else checks `any(...)` over the future window against a
@@ -435,6 +503,13 @@ def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
     annotated["candle1_failed_followthrough"]   = candle1_failed_followthrough.astype(bool)
     annotated["candle2_gap_dir"]                = candle2_gap_dir
     annotated["candle2_past_candle1_wick"]      = candle2_past_candle1_wick.astype(bool)
+
+    # ── Magnitude conditioning columns (Phase 10 Plan 01) ────────────────────
+    annotated["wick_distance_atr"] = wick_distance_atr
+    annotated["swept_level"]       = swept_level
+    annotated["sweep_depth_atr"]   = sweep_depth_atr
+    annotated["fvg_gap_width"]     = fvg_gap_width
+    annotated["fvg_size_atr"]      = fvg_size_atr
 
     return annotated
 
