@@ -44,13 +44,13 @@ A reported edge can be trusted: every published rate is sample-size gated, carri
 - ✓ Explicit reversal barrier for `failed_gap_against` (`barrier_outcome_forward`) reporting continuation/reversal/neither distinctly (RES-04) — Validated in Phase 7
 - ✓ Validation manifest regenerated end-to-end under the corrected methodology; `post_cisd_context` and `candle1_followthrough` now carry real, FDR-corrected, walk-forward-confirmed rates with a published per-tag go/no-go verdict (RES-05) — Validated in Phase 7
 - ✓ SMT geometry & invalidation honesty — scanner's lifecycle fields carried, the already-invalidated-SMT tagging bug fixed with a three-way split (`w/ SMT` / `expired SMT` / `no SMT`), role/magnitude (`smt_block_size_atr`)/CISD-in-block (`cisd_in_smt_block`)/survived-vs-broke added and validated through the full harness (n + Wilson CI + BH-FDR + walk-forward); the resulting change to published SMT rates is documented as a deliberate before/after methodology change with a script-enforced zero-drift guarantee for every other analysis (RES-06) — Validated in Phase 9
+- ✓ New conditioning features — three families added as additive standalone analyses through the full corrected harness (n + Wilson CI + BH-FDR + walk-forward): magnitude (signed `wick_distance` with an edge at 0, `sweep_depth`, `fvg_size`), session/time-of-day (`rth_open`/`rth`/`overnight`, intraday-only via a reusable `ANALYSIS_META.applies_to` allow-list), and CISD volume anomaly (`effort_result`, slot-normalized `rvol`/`volume_zscore`, frozen K=20). All 408 new buckets published with corrected + walk-forward verdicts (non-confirming/below-n included, never dropped); existing base rates held byte-stable by a drift gate (D-12) and moved BH verdicts documented as correct-not-drift (D-13). Strongest confirmed+robust: `wick_distance`, `fvg_size`, `session`; cross-asset volume divergence deferred (D-09) (RES-07) — Validated in Phase 10
 
 ### Active
 
 - [ ] Multiple-comparisons / data-snooping correction applied across the validation harness's full bucket grid (MHT-01).
 - [ ] Walk-forward / rolling-window validation supplementing the single sacred discovery/OOS split (WF-01).
 - [x] Vectorized enrichment/validation hot path so the end-to-end regen is fast, behavior-preserving (PERF-01). — Validated in Phase 8: both annotation loops vectorized + redundant recompute removed; all 3 manifests bit-identical to pre-change golden; suite 21m14s→6m35s.
-- [ ] New conditioning features — continuous magnitudes of the binary flags, session/time-of-day, and CISD volume anomalies, all validated (RES-07).
 - [ ] A small model over the qualifying feature families, built only once at least one family clears the corrected evidence bar (ML-01).
 
 ### Out of Scope
@@ -94,4 +94,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-12 after Phase 9 complete — SMT invalidation-honesty bug fixed and geometry/role features validated through the full harness (RES-06); next: Phase 10 (new conditioning features) or Phase 11 (conditional post-CISD model)*
+*Last updated: 2026-07-13 after Phase 10 complete — three conditioning-feature families (magnitude / session / volume anomaly) added and validated through the full corrected harness (RES-07); wick_distance, fvg_size, and session are the strongest confirmed+robust inputs. Next: Phase 11 (conditional post-CISD model, ML-01) — gated on this corrected feature evidence. Note: Phase 10 discovered the golden fixtures were never refreshed after Phase 9 (test_perf_characterization is opt-in via CISD_PERF_CHAR=1); Phase 10 refreshed them.*
