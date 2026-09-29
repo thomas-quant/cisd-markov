@@ -1,3 +1,18 @@
+[project]
+name = "cisd-markov"
+version = "0.1.0"
+requires-python = ">=3.12"
+# Pins mirror requirements.txt
+dependencies = [
+    "pandas==3.0.2",
+    "numpy==2.4.4",
+    "matplotlib==3.10.8",
+    "pyarrow==23.0.1",
+]
+
+[dependency-groups]
+dev = ["pytest==9.0.2"]
+
 [tool.pytest.ini_options]
 # Anchor pytest rootdir at the repo root so conftest.py is always loaded,
 # and add "." to sys.path so tests can import cisd_analysis and scripts.*
