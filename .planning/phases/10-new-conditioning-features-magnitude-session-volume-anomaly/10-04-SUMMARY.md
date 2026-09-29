@@ -54,6 +54,8 @@ key-decisions:
 
 ## Feature go/no-go evidence (Phase 11 gate consumes this)
 
+> **⚠ RETRACTED / REOPENED 2026-09-29 (quick task 260929-mkg).** The verdicts below were earned against the 0.5 coin-flip null, which mostly measures where the CISD close sits between its own stop and target. `fvg_size` also read bars t+1/t+2 inside its scoring window (retracted), and 1H `session` buckets were mislabeled. Corrected evidence: `geo_*` columns and README → *Corrected Null & Leakage Fixes*. Do not feed the verdicts below into the Phase 11 gate.
+
 408 new discovery buckets, all published. Discovery BH-FDR corrected + walk-forward robustness:
 
 | feature | ✓ confirmed | ✗ not-conf | below-n | wf-robust | wf-fragile | verdict |
