@@ -15,7 +15,7 @@ REPO_ROOT = SCRIPT_DIR.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from cisd_analysis import INSTRUMENTS, TIMEFRAMES, load_1m, prepare_pair, MAX_CONSEC, _count_consecutive
+from cisd_analysis import ANALYSIS_META, INSTRUMENTS, TIMEFRAMES, load_1m, prepare_pair, MAX_CONSEC, _count_consecutive
 
 FORWARD_RETURNS_LOOKAHEAD = 7
 PERCENTILE_LEVELS = [5, 25, 50, 75, 95]
@@ -33,6 +33,21 @@ DEFAULT_STATE = {
     # (and its tests) stay untouched -- additive-only, mirrors fvg/structure.
     "session": {"session": "all"},
 }
+
+
+# Confirm-then-enter entry offset per family (quick task 260929-mkg). The FVG
+# family's flags need bar t+1 (mid0) / t+2 (mid1, no_fvg) and the structure
+# family's CISD-bar swing needs bar t+1, so their fans are anchored at
+# close[t+2] / close[t+1] instead of the CISD close (which let the filter read
+# the first bars of the path it was fanning). The FVG hold *state* is judged
+# over the next FVG_HOLD_LOOKAHEAD bars and overlaps any horizon — it is
+# labelled descriptive-only in the UI, not fixable by shifting entry.
+FAMILY_ENTRY_OFFSET = {"fvg": 2, "structure": 1}
+
+
+def forward_return_column(family: str, horizon: int) -> str:
+    offset = FAMILY_ENTRY_OFFSET.get(family, 0)
+    return f"forward_return_pct_{horizon}" if offset == 0 else f"forward_return_pct_k{offset}_{horizon}"
 
 
 def core_combo_key(state: dict[str, str]) -> str:
@@ -158,6 +173,14 @@ def build_forward_return_rows(prepared: pd.DataFrame, instrument: str) -> pd.Dat
         raw_return = (future_close / rows["close"] - 1.0) * 100.0
         rows[f"forward_return_pct_{horizon}"] = np.where(rows["cisd_type"] == "bearish", -raw_return, raw_return)
 
+    for offset in sorted(set(FAMILY_ENTRY_OFFSET.values())):
+        entry_close = prepared["close"].shift(-offset).reindex(rows.index)
+        for horizon in FORWARD_HORIZONS:
+            future_close = prepared["close"].shift(-(offset + horizon)).reindex(rows.index)
+            raw_return = (future_close / entry_close - 1.0) * 100.0
+            rows[f"forward_return_pct_k{offset}_{horizon}"] = np.where(
+                rows["cisd_type"] == "bearish", -raw_return, raw_return)
+
     rows["forward_return_pct"] = rows[f"forward_return_pct_{FORWARD_RETURNS_LOOKAHEAD}"]
     return rows.copy()
 
@@ -192,21 +215,23 @@ def apply_family_filters(rows: pd.DataFrame, family: str, state: dict[str, str])
     raise ValueError(f"unknown family: {family}")
 
 
-def _complete_forward_path_mask(rows: pd.DataFrame) -> pd.Series:
-    required_columns = [f"forward_return_pct_{horizon}" for horizon in FORWARD_HORIZONS]
+def _complete_forward_path_mask(rows: pd.DataFrame, family: str = "core") -> pd.Series:
+    required_columns = [forward_return_column(family, horizon) for horizon in FORWARD_HORIZONS]
+    if not set(required_columns) <= set(rows.columns):
+        required_columns = [f"forward_return_pct_{horizon}" for horizon in FORWARD_HORIZONS]
     return rows[required_columns].notna().all(axis=1)
 
 
 def aggregate_family_payload(rows: pd.DataFrame, family: str, state: dict[str, str]) -> dict[str, object]:
     filtered = apply_family_filters(rows, family, state)
-    filtered = filtered[_complete_forward_path_mask(filtered)]
+    filtered = filtered[_complete_forward_path_mask(filtered, family)]
     if filtered.empty:
         return {"n": 0, "data": None}
 
-    horizon_payloads = [
-        percentile_payload(filtered[f"forward_return_pct_{horizon}"])
-        for horizon in FORWARD_HORIZONS
-    ]
+    columns = [forward_return_column(family, horizon) for horizon in FORWARD_HORIZONS]
+    if not set(columns) <= set(filtered.columns):
+        columns = [f"forward_return_pct_{horizon}" for horizon in FORWARD_HORIZONS]
+    horizon_payloads = [percentile_payload(filtered[column]) for column in columns]
     payload = {}
     for level in PERCENTILE_LEVELS:
         payload[str(level)] = [
@@ -283,7 +308,7 @@ def build_config() -> dict[str, object]:
                         ],
                     },
                     "fvg_state": {
-                        "label": "State",
+                        "label": "State (judged over the next 10 bars — descriptive only, overlaps the fan)",
                         "values": [
                             {"value": "all", "label": "All"},
                             {"value": "held", "label": "held"},
@@ -394,6 +419,7 @@ def build_dataset() -> dict[str, object]:
         print(f"[warn] SMT scan unavailable ({exc!r}); SMT cases will be empty.")
         with_smt = False
 
+    session_tfs = ANALYSIS_META["session"].applies_to or ()
     for tf_label, tf_rule in TIMEFRAMES.items():
         df_nq, df_es = prepare_pair(dfs_1m["NQ"], dfs_1m["ES"], tf_rule, with_swing_smt=with_smt)
         rows_by_instrument = {
@@ -415,7 +441,11 @@ def build_dataset() -> dict[str, object]:
                     direction_rows = instrument_rows[instrument_rows["cisd_type"] == direction]
                     combos: dict[str, dict[str, object]] = {}
                     for state in _iter_family_states(family, config):
-                        combos[COMBO_KEY_BUILDERS[family](state)] = aggregate_family_payload(direction_rows, family, state)
+                        key = COMBO_KEY_BUILDERS[family](state)
+                        if family == "session" and state["session"] != "all" and tf_label not in session_tfs:
+                            combos[key] = {"n": 0, "data": None}  # D-02 / WR-01: intraday only
+                            continue
+                        combos[key] = aggregate_family_payload(direction_rows, family, state)
                     family_payload["charts"][instrument][direction] = combos
             timeframe_payload["families"][family] = family_payload
 

@@ -247,15 +247,46 @@ def test_annotate_cisd_research_tags_directional_sweeps_and_swing_positions():
     assert not annotated.loc[df.index[8], "prev_bar_is_dir_swing"]
 
 
+def _confirm_then_enter_df():
+    """Bullish CISD at 1 (mid0 FVG, CISD-bar swing) stays inside its range on
+    bars 2-3 and hits target on bar 4 — a miss under barrier_hit (t+1..t+2),
+    a hit once scored from close[t+1] or close[t+2]. Bearish CISD at 5
+    (prev-bar swing, no FVG) touches its target on bar 6, i.e. before any
+    confirm-then-enter entry, so it is excluded from k>=1 frames."""
+    index = pd.date_range("2026-01-05 09:30", periods=10, freq="15min")
+    return pd.DataFrame(
+        {
+            "open":  [10, 9, 10, 10, 11, 12, 11, 10.5, 10.5, 10.5],
+            "high":  [10.5, 12, 11.5, 11.8, 12.5, 13, 12, 11, 11, 11],
+            "low":   [9.5, 8, 9, 9.5, 10, 10, 9.5, 10.2, 10.2, 10.2],
+            "close": [10, 11, 10, 11, 12, 10.5, 10.5, 10.5, 10.5, 10.5],
+            "cisd_type": [None, "bullish", None, None, None, "bearish", None, None, None, None],
+            "has_dir_fvg_mid0":      [False, True] + [False] * 8,
+            "has_dir_fvg_mid1":      [False] * 10,
+            "prev_bar_is_dir_swing": [False] * 5 + [True] + [False] * 4,
+            "cisd_bar_is_dir_swing": [False, True] + [False] * 8,
+        },
+        index=index,
+    )
+
+
 def test_compute_cisd_fvg_splits_mid_buckets_and_baseline():
-    stats = cisd_analysis.compute_cisd_fvg(_annotated_barrier_df())
+    # Quick task 260929-mkg: scored confirm-then-enter from close[t+2].
+    stats = cisd_analysis.compute_cisd_fvg(_confirm_then_enter_df())
 
     assert stats["bullish"]["mid0_fvg"]["total"] == 1
     assert stats["bullish"]["mid0_fvg"]["runs"] == 1
-    assert stats["bullish"]["mid1_fvg"]["total"] == 1
-    assert stats["bullish"]["mid1_fvg"]["runs"] == 0
-    assert stats["bearish"]["no_fvg"]["total"] == 1
-    assert stats["bearish"]["no_fvg"]["runs"] == 1
+    assert stats["bullish"]["mid1_fvg"]["total"] == 0
+    assert stats["bullish"]["no_fvg"]["total"] == 0
+    # resolved (target touched on t+1) before entry -> excluded, not a loss
+    assert stats["bearish"]["no_fvg"]["total"] == 0
+
+
+def test_compute_cisd_fvg_excludes_setups_resolved_before_entry():
+    # Legacy fixture: every event touches target or stop by t+2 (or runs out
+    # of bars), so none of them is enterable at close[t+2].
+    stats = cisd_analysis.compute_cisd_fvg(_annotated_barrier_df())
+    assert all(cell["total"] == 0 for ct in stats for cell in stats[ct].values())
 
 
 def test_compute_fvg_hold_counts_hold_rate_by_bucket_and_failure_mode():
@@ -286,12 +317,13 @@ def test_compute_sweep_splits_binary_tag():
 
 
 def test_compute_sssf_swing_splits_prev_current_and_neither():
-    stats = cisd_analysis.compute_sssf_swing(_annotated_barrier_df())
+    # Quick task 260929-mkg: scored confirm-then-enter from close[t+1].
+    stats = cisd_analysis.compute_sssf_swing(_confirm_then_enter_df())
 
-    assert stats["bullish"]["prev_bar_is_swing"]["total"] == 1
-    assert stats["bullish"]["prev_bar_is_swing"]["runs"] == 1
-    assert stats["bullish"]["neither"]["total"] == 1
-    assert stats["bearish"]["cisd_bar_is_swing"]["total"] == 1
+    assert stats["bullish"]["cisd_bar_is_swing"]["total"] == 1
+    assert stats["bullish"]["cisd_bar_is_swing"]["runs"] == 1
+    assert stats["bullish"]["prev_bar_is_swing"]["total"] == 0
+    assert stats["bearish"]["prev_bar_is_swing"]["total"] == 0   # resolved on t+1
 
 
 def test_build_csv_rows_supports_new_research_keys():

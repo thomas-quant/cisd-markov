@@ -5,6 +5,16 @@ they are absent the entire module is skipped so CI stays green.  The SMT
 section has an additional skip gate on the local SMT package.
 
 Tolerance: ±0.05 pp (one decimal rounding matches without masking real drift).
+
+RE-PINNED 2026-09-29 (quick task 260929-mkg): the original DateTime_ET
+parquet snapshot was replaced by a UTC vendor history and no copy survives.
+load_1m now converts UTC -> ET and pins DATA_START..DATA_END (2020-08-31 ..
+2025-11-21), which reproduces the frozen OOS/fold derivation exactly, but the
+bars differ slightly: n moves by <= 0.3% (intraday) / 1.5% (Daily) and rates by
+<= 0.2 pp intraday, up to ~0.8 pp on Daily cells and 3.7 pp on the n=72 ES Daily
+bear 2c within-wick cell. Values below (2dp) are from the new snapshot; the
+"captured" comments further down are the OLD snapshot's, kept for provenance.
+None of these analyses is changed by the leakage / null fixes.
 Expected values were captured from the current codebase and cross-checked
 against the README §1/§2/§3/§4/§8 tables — every non-SMT value agreed to
 within 0.05 pp of the README 1-decimal figure.
@@ -69,22 +79,22 @@ def es_frames(es_1m: pd.DataFrame) -> dict[str, pd.DataFrame]:
 
 _BASIC_EXPECTED = {
     # (timeframe, instrument, direction): (rate_1dp, n)
-    ("Daily",  "NQ", "bullish"): (60.4, 414),
-    ("Daily",  "NQ", "bearish"): (53.7, 395),
-    ("Daily",  "ES", "bullish"): (59.9, 421),
-    ("Daily",  "ES", "bearish"): (50.2, 412),
-    ("4H",     "NQ", "bullish"): (55.9, 2093),
-    ("4H",     "NQ", "bearish"): (50.3, 2085),
-    ("4H",     "ES", "bullish"): (58.1, 2080),
-    ("4H",     "ES", "bearish"): (51.8, 2070),
-    ("1H",     "NQ", "bullish"): (61.9, 7807),
-    ("1H",     "NQ", "bearish"): (57.5, 7786),
-    ("1H",     "ES", "bullish"): (63.0, 7472),
-    ("1H",     "ES", "bearish"): (58.4, 7398),
-    ("15min",  "NQ", "bullish"): (62.2, 30817),
-    ("15min",  "NQ", "bearish"): (59.0, 30645),
-    ("15min",  "ES", "bullish"): (62.2, 28859),
-    ("15min",  "ES", "bearish"): (59.6, 28611),
+    ("Daily",  "NQ", "bullish"): (60.73, 410),
+    ("Daily",  "NQ", "bearish"): (54.45, 393),
+    ("Daily",  "ES", "bullish"): (59.25, 427),
+    ("Daily",  "ES", "bearish"): (50.61, 413),
+    ("4H",     "NQ", "bullish"): (55.92, 2094),
+    ("4H",     "NQ", "bearish"): (50.14, 2086),
+    ("4H",     "ES", "bullish"): (58.07, 2082),
+    ("4H",     "ES", "bearish"): (51.62, 2073),
+    ("1H",     "NQ", "bullish"): (61.87, 7820),
+    ("1H",     "NQ", "bearish"): (57.44, 7793),
+    ("1H",     "ES", "bullish"): (62.93, 7476),
+    ("1H",     "ES", "bearish"): (58.34, 7406),
+    ("15min",  "NQ", "bullish"): (62.2, 30838),
+    ("15min",  "NQ", "bearish"): (58.96, 30667),
+    ("15min",  "ES", "bullish"): (62.19, 28873),
+    ("15min",  "ES", "bearish"): (59.64, 28628),
 }
 
 
@@ -118,22 +128,22 @@ def test_basic_baseline_rates(nq_frames, es_frames):
 # All within ±0.05 pp of the README 1-decimal figures.
 
 _SIG_EXPECTED = {
-    ("Daily",  "NQ", "bullish"): (68.2, 497),
-    ("Daily",  "NQ", "bearish"): (63.7, 353),
-    ("Daily",  "ES", "bullish"): (68.5, 495),
-    ("Daily",  "ES", "bearish"): (63.0, 351),
-    ("4H",     "NQ", "bullish"): (61.6, 2333),
-    ("4H",     "NQ", "bearish"): (59.1, 1842),
-    ("4H",     "ES", "bullish"): (63.3, 2267),
-    ("4H",     "ES", "bearish"): (60.4, 1797),
-    ("1H",     "NQ", "bullish"): (66.5, 8093),
-    ("1H",     "NQ", "bearish"): (63.8, 6622),
-    ("1H",     "ES", "bullish"): (67.6, 7966),
-    ("1H",     "ES", "bearish"): (65.0, 6545),
-    ("15min",  "NQ", "bullish"): (67.6, 30597),
-    ("15min",  "NQ", "bearish"): (66.1, 27184),
-    ("15min",  "ES", "bullish"): (68.5, 29187),
-    ("15min",  "ES", "bearish"): (67.3, 26208),
+    ("Daily",  "NQ", "bullish"): (68.86, 501),
+    ("Daily",  "NQ", "bearish"): (63.35, 352),
+    ("Daily",  "ES", "bullish"): (67.94, 499),
+    ("Daily",  "ES", "bearish"): (62.68, 351),
+    ("4H",     "NQ", "bullish"): (61.59, 2338),
+    ("4H",     "NQ", "bearish"): (58.97, 1840),
+    ("4H",     "ES", "bullish"): (63.13, 2270),
+    ("4H",     "ES", "bearish"): (60.37, 1799),
+    ("1H",     "NQ", "bullish"): (66.54, 8102),
+    ("1H",     "NQ", "bearish"): (63.79, 6622),
+    ("1H",     "ES", "bullish"): (67.63, 7973),
+    ("1H",     "ES", "bearish"): (64.99, 6556),
+    ("15min",  "NQ", "bullish"): (67.6, 30609),
+    ("15min",  "NQ", "bearish"): (66.1, 27191),
+    ("15min",  "ES", "bullish"): (68.46, 29211),
+    ("15min",  "ES", "bearish"): (67.36, 26222),
 }
 
 
@@ -173,14 +183,14 @@ def test_significance_rates(nq_frames, es_frames):
 _COMBINED_EXPECTED = {
     # (timeframe, instrument, direction, consec_n, wick_grp): (rate_1dp,)
     # Rates are 1dp-rounded actual values (captured from current code).
-    ("Daily",  "NQ", "bearish", 2, "past_wick"):   (78.8,),
+    ("Daily",  "NQ", "bearish", 2, "past_wick"):   (78.79,),
     # ES Daily Bear 2c past: actual=80.6452 (rounds to 80.6); README says 80.7 — rounding discrepancy
-    ("Daily",  "ES", "bearish", 2, "past_wick"):   (80.6,),
+    ("Daily",  "ES", "bearish", 2, "past_wick"):   (81.25,),
     # ES Daily Bear 2c within: actual=38.0282; README says 36.7 (wrong instrument — that is NQ)
-    ("Daily",  "ES", "bearish", 2, "within_wick"): (38.0,),
-    ("4H",     "ES", "bullish", 3, "past_wick"):   (77.7,),
-    ("1H",     "ES", "bullish", 3, "past_wick"):   (75.8,),
-    ("15min",  "NQ", "bullish", 3, "past_wick"):   (74.7,),
+    ("Daily",  "ES", "bearish", 2, "within_wick"): (41.67,),
+    ("4H",     "ES", "bullish", 3, "past_wick"):   (77.1,),
+    ("1H",     "ES", "bullish", 3, "past_wick"):   (75.43,),
+    ("15min",  "NQ", "bullish", 3, "past_wick"):   (74.67,),
 }
 
 
@@ -211,13 +221,13 @@ def test_wick_daily_es_bearish_within(es_frames):
     bucket = result["bearish"]["within_wick"]
     actual_n = bucket["total"]
     actual_rate = cisd_analysis.pv(bucket["runs"], actual_n)
-    assert actual_n == 276, (
+    assert actual_n == 277, (
         f"§2 Wick n mismatch: ES Daily bearish within_wick: "
-        f"expected n=276, got n={actual_n}"
+        f"expected n=277, got n={actual_n}"
     )
-    assert actual_rate == pytest.approx(39.5, abs=0.05), (
+    assert actual_rate == pytest.approx(40.07, abs=0.05), (
         f"§2 Wick rate mismatch: ES Daily bearish within_wick: "
-        f"expected 39.5%, got {actual_rate:.4f}%"
+        f"expected 40.07%, got {actual_rate:.4f}%"
     )
 
 

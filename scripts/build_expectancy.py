@@ -36,7 +36,7 @@ REPO_ROOT = SCRIPT_DIR.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from cisd_analysis import INSTRUMENTS, TIMEFRAMES, load_1m, prepare_pair
+from cisd_analysis import ANALYSIS_META, INSTRUMENTS, TIMEFRAMES, load_1m, prepare_pair
 
 HORIZON = 7  # max forward bars, parity with build_forward_returns.py
 HORIZONS = list(range(1, HORIZON + 1))
@@ -85,6 +85,21 @@ CASES = [
 ]
 
 
+# Confirm-then-enter entry offset per case (quick task 260929-mkg). A case
+# whose flag is only known at the close of bar t+k enters at close[t+k]; the
+# FVG flags need bar t+1 (mid0) / t+2 (mid1, and "no FVG" needs both), the
+# CISD-bar swing needs bar t+1. Scoring those from the CISD close read the
+# stop-free future (a bullish mid0 FVG cannot be stopped on bar t+1).
+CASE_ENTRY_OFFSET = {
+    "fvg_any": 2, "fvg_mid0": 2, "fvg_mid1": 2, "fvg_none": 2,
+    "cisd_swing": 1,
+}
+ENTRY_OFFSETS = sorted({0, *CASE_ENTRY_OFFSET.values()})
+
+# D-02 / review WR-01: session tags are meaningless on multi-session bars.
+SESSION_CASES = ("session_rth_open", "session_rth", "session_overnight")
+
+
 def resolve_data_root() -> Path:
     """Mirror build_forward_returns.resolve_data_root for worktree support."""
     local_data_root = REPO_ROOT / "data"
@@ -97,11 +112,15 @@ def resolve_data_root() -> Path:
     return local_data_root
 
 
-def build_event_r_multiples(prepared: pd.DataFrame, instrument: str) -> pd.DataFrame:
+def build_event_r_multiples(prepared: pd.DataFrame, instrument: str, entry_offset: int = 0) -> pd.DataFrame:
     """One row per CISD event with a complete HORIZON-bar window and risk > 0.
 
     Columns: instrument, ts, cisd_type, risk, stop_bar (1..HORIZON or 0 if never
     stopped within the window), r_1..r_HORIZON, plus the carried case flags.
+
+    entry_offset k > 0 (confirm-then-enter): entry at close[t+k], horizons
+    counted from bar t+k, and events whose invalidation was breached on bars
+    t+1..t+k are dropped (never enterable). ts stays the CISD bar.
     """
     frame = prepared
     high = frame["high"].to_numpy(dtype=float)
@@ -123,27 +142,27 @@ def build_event_r_multiples(prepared: pd.DataFrame, instrument: str) -> pd.DataF
     for i in event_pos:
         # Need close[i+HORIZON] to exist for a full fan (matches the stopless
         # builder's complete-path convention; drops events near the data end).
-        if i + HORIZON >= n:
+        k0 = entry_offset
+        if i + k0 + HORIZON >= n:
             continue
         direction = cisd[i]
-        entry = close[i]
-        if direction == "bullish":
-            inval = low[i]
-            risk = entry - inval
-        else:
-            inval = high[i]
-            risk = inval - entry
+        inval = low[i] if direction == "bullish" else high[i]
+        if k0 and ((low[i + 1:i + k0 + 1] <= inval).any() if direction == "bullish"
+                   else (high[i + 1:i + k0 + 1] >= inval).any()):
+            continue  # invalidated before the confirming bar closed
+        entry = close[i + k0]
+        risk = entry - inval if direction == "bullish" else inval - entry
         if risk <= 0:  # degenerate: close sits on the invalidation extreme
             continue
 
         stop_bar = 0
         for k in range(1, HORIZON + 1):
             if direction == "bullish":
-                if low[i + k] <= inval:
+                if low[i + k0 + k] <= inval:
                     stop_bar = k
                     break
             else:
-                if high[i + k] >= inval:
+                if high[i + k0 + k] >= inval:
                     stop_bar = k
                     break
 
@@ -158,7 +177,7 @@ def build_event_r_multiples(prepared: pd.DataFrame, instrument: str) -> pd.DataF
             if stop_bar and stop_bar <= h:
                 rec[f"r_{h}"] = -1.0
             else:
-                term = close[i + h]
+                term = close[i + k0 + h]
                 rec[f"r_{h}"] = (term - entry) / risk if direction == "bullish" else (entry - term) / risk
         for col in CASE_FLAG_DEFAULTS:
             rec[col] = flags[col][i]
@@ -220,13 +239,26 @@ def summarize_horizon(slice_df: pd.DataFrame, horizon: int) -> dict[str, float]:
     return out
 
 
-def build_long_table(events_by_inst: dict[str, pd.DataFrame], tf_label: str) -> list[dict]:
-    """Tidy rows for (instrument, tf, direction, case, horizon)."""
+def build_long_table(
+    events_by_inst: dict[str, pd.DataFrame],
+    tf_label: str,
+    events_by_offset: dict[int, dict[str, pd.DataFrame]] | None = None,
+) -> list[dict]:
+    """Tidy rows for (instrument, tf, direction, case, horizon).
+
+    events_by_offset maps entry offset -> {instrument: events}; each case is
+    read from the table matching CASE_ENTRY_OFFSET (default offset 0 =
+    events_by_inst). Session cases are emitted on intraday timeframes only.
+    """
     rows = []
+    session_tfs = ANALYSIS_META["session"].applies_to or ()
     for instrument, events in events_by_inst.items():
-        masks = case_masks(events)
         for case_key, case_label in CASES:
-            case_slice = events[masks[case_key]]
+            if case_key in SESSION_CASES and tf_label not in session_tfs:
+                continue
+            offset = CASE_ENTRY_OFFSET.get(case_key, 0)
+            source = events if not (events_by_offset and offset) else events_by_offset[offset][instrument]
+            case_slice = source[case_masks(source)[case_key]]
             for direction in ("both", "bullish", "bearish"):
                 if direction == "both":
                     dslice = case_slice
@@ -243,6 +275,7 @@ def build_long_table(events_by_inst: dict[str, pd.DataFrame], tf_label: str) -> 
                             "direction": direction,
                             "case": case_key,
                             "case_label": case_label,
+                            "entry_offset": offset,
                             "horizon": h,
                             **stats,
                         }
@@ -272,6 +305,10 @@ def render_markdown(df: pd.DataFrame, smt_available: bool) -> str:
         "- `stop_rate` = % of trades whose invalidation was breached within the window.\n"
         "- `win_rate` = % of trades with R > 0 at the horizon.\n"
         "- Events without a full forward window (data end) or with zero risk are excluded.\n"
+        "- FVG cases enter at close[t+2] and the CISD-bar swing case at close[t+1] "
+        "(the bar that confirms the flag); events invalidated before entry are dropped. "
+        "Earlier versions scored these from the CISD close and read the future.\n"
+        "- Session cases are intraday-only (1H/15min).\n"
         f"- SMT cases: {'included' if smt_available else 'UNAVAILABLE this run (SMT scan skipped)'}."
     )
     lines.append("")
@@ -328,11 +365,13 @@ def build() -> pd.DataFrame:
     all_rows: list[dict] = []
     for tf_label, tf_rule in TIMEFRAMES.items():
         df_nq, df_es = prepare_pair(dfs_1m["NQ"], dfs_1m["ES"], tf_rule, with_swing_smt=with_smt)
-        events_by_inst = {
-            "NQ": build_event_r_multiples(df_nq, "NQ"),
-            "ES": build_event_r_multiples(df_es, "ES"),
+        events_by_offset = {
+            k: {"NQ": build_event_r_multiples(df_nq, "NQ", k),
+                "ES": build_event_r_multiples(df_es, "ES", k)}
+            for k in ENTRY_OFFSETS
         }
-        all_rows.extend(build_long_table(events_by_inst, tf_label))
+        events_by_inst = events_by_offset[0]
+        all_rows.extend(build_long_table(events_by_inst, tf_label, events_by_offset))
         print(f"[ok] {tf_label}: NQ={len(events_by_inst['NQ'])} ES={len(events_by_inst['ES'])} events")
 
     df = pd.DataFrame(all_rows)

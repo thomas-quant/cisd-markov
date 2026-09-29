@@ -69,6 +69,8 @@ _NEW_FEATURES_REPORT_COLS = [
     "analysis", "timeframe", "instrument", "direction", "bucket",
     "rate", "n", "ci_low", "ci_high", "min_n_pass",
     "bh_significant", "corrected_pass",
+    # Corridor-position null (quick task 260929-mkg) — the verdict columns.
+    "geo_n", "geo_expected_rate", "geo_lift", "geo_verdict",
 ]
 
 
