@@ -49,6 +49,14 @@ RTH_END_MIN        = 960   # 16:00 ET
 # Frozen — never tuned; a warm-up period where the baseline is undefined is
 # tolerated (those bars fall below-n and are naturally excluded downstream).
 RVOL_SLOT_K = 20
+
+# ATR_REGIME_LOOKBACK: trailing window (bars) of the median ATR(14) that
+# atr_regime is normalised by. atr_regime = ATR(14) as of bar t-1 / median of
+# that series over the prior ATR_REGIME_LOOKBACK bars — lagged one bar so the
+# CISD candle's own range never feeds the regime (it would co-vary with the
+# candle_size / size_cross buckets). Frozen; it only stratifies the corridor
+# baseline (cisd_barriers.attach_geo_baseline), it is never a tested bucket.
+ATR_REGIME_LOOKBACK = 100
 _SMT_PKG_PATH = Path(os.environ.get("SMT_PKG_PATH", "/mnt/e/backup/code/Finance/Misc/SMT"))
 
 # OOS_START: 70th-percentile date of the shared NQ∩ES daily calendar.
@@ -81,11 +89,15 @@ WALK_FORWARD_FOLDS = ("2021-05-25", "2022-02-16", "2022-11-09", "2023-08-04")
 # and WALK_FORWARD_FOLDS and recording the decision.
 DATA_START = "2020-08-31"
 DATA_END   = "2025-11-21"
+# HOLDOUT_END: last session of the fresh holdout (bars after DATA_END, never
+# used by discovery, walk-forward or the old OOS slice). Frozen at the last
+# bar of the 2026-07 vendor history; only build_validation.py --holdout loads it.
+HOLDOUT_END = "2026-07-17"
 
 
 # ── Data Loading & Resampling ─────────────────────────────────────────────────
 
-def load_1m(path: Path) -> pd.DataFrame:
+def load_1m(path: Path, end: str = DATA_END) -> pd.DataFrame:
     df = pd.read_parquet(path)
     if "DateTime_ET" in df.columns:
         df = df.set_index("DateTime_ET")
@@ -95,7 +107,7 @@ def load_1m(path: Path) -> pd.DataFrame:
     else:
         raise ValueError(f"{path}: expected a 'DateTime_ET' or 'datetime_utc' column")
     df = df.sort_index()
-    df = df.loc[pd.Timestamp(DATA_START):pd.Timestamp(DATA_END) + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1)]
+    df = df.loc[pd.Timestamp(DATA_START):pd.Timestamp(end) + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1)]
     df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
     df.columns = [c.lower() for c in df.columns]
     return df
@@ -637,6 +649,12 @@ def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
     annotated["rvol"]              = rvol
     annotated["volume_zscore"]     = volume_zscore
 
+    # ── Volatility regime for the corridor baseline (not a tested bucket) ────
+    atr_prev = atr.shift(1)
+    annotated["atr_regime"] = (
+        atr_prev / atr_prev.rolling(ATR_REGIME_LOOKBACK).median()
+    ).to_numpy(dtype=float)
+
     return annotated
 
 
@@ -955,6 +973,7 @@ __all__ = [
     "RTH_OPEN_END_MIN",
     "RTH_END_MIN",
     "RVOL_SLOT_K",
+    "ATR_REGIME_LOOKBACK",
     "_SMT_PKG_PATH",
     "OOS_START",
     "MIN_N",
@@ -962,6 +981,7 @@ __all__ = [
     "WALK_FORWARD_FOLDS",
     "DATA_START",
     "DATA_END",
+    "HOLDOUT_END",
     # Data loading & resampling
     "load_1m",
     "_normalize_resample_rule",

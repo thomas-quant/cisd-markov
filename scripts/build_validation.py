@@ -15,7 +15,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from cisd_analysis import (
     ANALYSES, ANALYSIS_META, INSTRUMENTS, MAX_CONSEC, TIMEFRAMES, OOS_START, MIN_N, CI_LEVEL,
-    WALK_FORWARD_FOLDS, attach_geo_baseline, is_diagnostic,
+    WALK_FORWARD_FOLDS, DATA_END, HOLDOUT_END, attach_geo_baseline, is_diagnostic,
     load_1m, resample_ohlcv, prepare_pair, _load_scan_smts_historical,
 )
 
@@ -35,6 +35,15 @@ _OOS_BANNER = """
 ║  This run will operate on the held-out test set.            ║
 ║  This is a sacred evaluation — treat it as a final exam,    ║
 ║  not a sandbox. Results will be added to the manifest.      ║
+╚══════════════════════════════════════════════════════════════╝
+"""
+
+
+_HOLDOUT_BANNER = f"""
+╔══════════════════════════════════════════════════════════════╗
+║  ⚠  YOU ARE SPENDING THE FRESH HOLDOUT  ⚠                  ║
+║  Bars after DATA_END ({DATA_END}) through {HOLDOUT_END}.     ║
+║  Run it once, after the discovery verdicts are committed.   ║
 ╚══════════════════════════════════════════════════════════════╝
 """
 
@@ -190,35 +199,84 @@ def bh_correct(pvalues: list[float], fdr: float = 1 - CI_LEVEL) -> list[dict]:
     return results
 
 
+# GEO_MIN_EFFECT: smallest |lift| (rate points) the user cares about. A
+# non-significant bucket is only called "within-3pp" when its 90% CI of lift
+# sits inside +/-GEO_MIN_EFFECT (TOST equivalence at alpha=0.05, per bucket,
+# uncorrected); otherwise it is "inconclusive". geo_mde is the lift detectable
+# with 80% power at two-sided alpha=0.05 (uncorrected) at the bucket's SE.
+GEO_MIN_EFFECT = 0.03
+_Z_TOST  = 1.6448536269514722   # one-sided 95%
+_Z_MDE   = 1.959963984540054 + 0.8416212335729143
+
+POOLED = "NQ+ES"   # instrument label of the pooled headline rows
+
+
 def geo_stats(cell: dict | None) -> dict[str, object]:
     """Corridor-position null (quick task 260929-mkg) for one bucket cell.
 
-    H0: the bucket's hits equal the sum of its events' corridor-position
-    baselines (cisd_barriers.attach_geo_baseline). Under H0 with independent
-    events the hit count is Poisson-binomial with mean E = sum(p_i) and
-    variance V = sum(p_i(1-p_i)), so z = (hits - E) / sqrt(V). Lift is
-    observed rate minus expected rate over the events that carry a baseline.
-    Independence is assumed (overlapping windows / NQ-ES duplication are NOT
-    corrected here), so z overstates evidence — see README caveats.
+    H0: the bucket's hits equal the sum of its events' corridor/ATR-regime
+    baselines (cisd_barriers.attach_geo_baseline), E = sum(p_i). Events are
+    NOT independent (overlapping windows, same-day clustering, NQ/ES
+    co-movement in pooled rows), so the variance is cluster-robust over
+    cisd_barriers.geo_cluster_ids clusters (session day intraday, session week
+    Daily/4H): V_cl = G/(G-1) * sum_c (sum_{i in c} (hit_i - p_i))^2. The test
+    uses V = max(V_cl, V_iid) with V_iid = sum p_i(1-p_i) — never credits
+    negative within-cluster correlation. geo_deff = V_cl / V_iid (design
+    effect), geo_n_eff = geo_n * V_iid / V, geo_se = sqrt(V) / geo_n.
+    geo_z_iid keeps the old independence z for provenance only.
 
     Returns NaN fields when the cell carries no baseline (non-barrier
     outcomes such as fvg_hold / reversal counts, or significance's own event set).
     """
     blank = {"geo_n": 0, "geo_expected_rate": math.nan, "geo_lift": math.nan,
-             "geo_z": math.nan, "geo_p_value": math.nan}
+             "geo_clusters": 0, "geo_deff": math.nan, "geo_n_eff": math.nan,
+             "geo_se": math.nan, "geo_z": math.nan, "geo_z_iid": math.nan,
+             "geo_p_value": math.nan, "geo_mde": math.nan, "geo_equiv": False}
     if not cell or not cell.get("geo_n"):
         return blank
     n, hits = cell["geo_n"], cell["geo_runs"]
-    expected, var = cell["expected"], cell["expected_var"]
+    expected, var_iid = cell["expected"], cell["expected_var"]
+    resid = list(cell.get("clusters", {}).values())
+    g = len(resid)
     lift = hits / n - expected / n
-    if var > 0:
-        z = (hits - expected) / math.sqrt(var)
-        p = math.erfc(abs(z) / math.sqrt(2))
-    else:
-        z, p = math.nan, math.nan
-    return {"geo_n": n, "geo_expected_rate": round(expected / n, 6),
-            "geo_lift": round(lift, 6), "geo_z": round(z, 4) if z == z else z,
-            "geo_p_value": round(p, 6) if p == p else p}
+    var_cl = g / (g - 1) * sum(r * r for r in resid) if g >= 2 else math.nan
+    out = dict(blank, geo_n=n, geo_expected_rate=round(expected / n, 6),
+               geo_lift=round(lift, 6), geo_clusters=g)
+    if not (var_iid > 0 and var_cl == var_cl):
+        return out
+    var = max(var_cl, var_iid)
+    se = math.sqrt(var) / n
+    z = (hits - expected) / math.sqrt(var)
+    z_iid = (hits - expected) / math.sqrt(var_iid)
+    out.update(
+        geo_deff=round(var_cl / var_iid, 4),
+        geo_n_eff=round(n * var_iid / var, 1),
+        geo_se=round(se, 6),
+        geo_z=round(z, 4),
+        geo_z_iid=round(z_iid, 4),
+        geo_p_value=round(math.erfc(abs(z) / math.sqrt(2)), 6),
+        geo_mde=round(_Z_MDE * se, 6),
+        geo_equiv=abs(lift) + _Z_TOST * se < GEO_MIN_EFFECT,
+    )
+    return out
+
+
+def pool_cells(cells: list[dict | None]) -> dict | None:
+    """Merge per-instrument cells into one pooled NQ+ES cell. Cluster ids are
+    shared calendar ids, so same-day NQ and ES events land in one cluster."""
+    cells = [c for c in cells if c]
+    if not cells:
+        return None
+    out: dict = {}
+    for c in cells:
+        for key, val in c.items():
+            if key == "clusters":
+                merged = out.setdefault("clusters", {})
+                for cid, r in val.items():
+                    merged[cid] = merged.get(cid, 0.0) + r
+            else:
+                out[key] = out.get(key, 0) + val
+    return out
 
 
 # ── Manifest ─────────────────────────────────────────────────────────────────
@@ -257,9 +315,12 @@ def build_manifest_rows(
             return df
 
     frames = (("NQ", _with_geo(df_nq)), ("ES", _with_geo(df_es)))
+    pool: dict[tuple[str, str, str], list[tuple[int, int, dict | None]]] = {}
 
     def emit(analysis: str, instrument: str, direction: str, bucket: str, n: int, k: int,
              cell: dict | None = None) -> None:
+        if instrument != POOLED:
+            pool.setdefault((analysis, direction, bucket), []).append((n, k, cell))
         if k > n:
             print(f"[warn] {analysis}/{instrument}/{direction}/{bucket}: k={k} > n={n}; skipping")
             return
@@ -352,6 +413,15 @@ def build_manifest_rows(
                     for tag, d in data[ct].items():
                         emit(key, instrument, ct, tag, d["total"], d["runs"], d)
 
+    # Pooled NQ+ES headline rows: one test per bucket, NQ and ES events on the
+    # same day in one cluster. Only buckets present for both instruments.
+    for (analysis, direction, bucket), parts in pool.items():
+        if len(parts) != 2:
+            continue
+        emit(analysis, POOLED, direction, bucket,
+             sum(p[0] for p in parts), sum(p[1] for p in parts),
+             pool_cells([p[2] for p in parts]))
+
     return rows
 
 
@@ -372,6 +442,9 @@ def apply_bh_correction(rows: list[dict[str, object]]) -> None:
                            evidence bar: a bucket must clear BOTH the
                            sample-size gate AND FDR significance)
 
+    Pooled NQ+ES rows are outside this legacy family, so its numbers do not
+    move when pooled rows are added.
+
     Rows outside the family (n < 1) get bh_rank="", bh_q_value="",
     bh_significant=False, corrected_pass=False.
 
@@ -379,7 +452,8 @@ def apply_bh_correction(rows: list[dict[str, object]]) -> None:
     removes any pre-existing key (additive-only, per D-03 / roadmap success
     criterion 3).
     """
-    family_indices = [i for i, row in enumerate(rows) if row.get("n", 0) >= 1]
+    family_indices = [i for i, row in enumerate(rows)
+                      if row.get("n", 0) >= 1 and row.get("instrument") != POOLED]
     family_pvalues = [rows[i]["p_value"] for i in family_indices]
     corrected = bh_correct(family_pvalues)
 
@@ -397,22 +471,35 @@ def apply_bh_correction(rows: list[dict[str, object]]) -> None:
         row["corrected_pass"] = bool(row["min_n_pass"]) and result["bh_significant"]
 
 
+def geo_family_verdict(row: dict[str, object], bh_significant: bool) -> str:
+    """Verdict for one row of the geo family (see apply_geo_bh_correction)."""
+    n_eff = row.get("geo_n_eff")
+    if not (isinstance(n_eff, float) and math.isfinite(n_eff)) or not n_gate(n_eff):
+        return "below-n"
+    if bh_significant:
+        return "above-baseline" if row["geo_lift"] > 0 else "below-baseline"
+    return f"within-{round(GEO_MIN_EFFECT * 100)}pp" if row.get("geo_equiv") else "inconclusive"
+
+
 def apply_geo_bh_correction(rows: list[dict[str, object]]) -> None:
-    """BH-FDR over the corridor-position null (quick task 260929-mkg),
+    """BH-FDR over the corridor/ATR-regime null (quick task 260929-mkg),
     discovery-stage only, one global family like apply_bh_correction.
 
-    Family = non-diagnostic rows with a finite geo_p_value. Adds
-    geo_bh_q_value, geo_bh_significant, geo_corrected_pass (geo_n >= MIN_N
-    and BH-significant) and geo_verdict: "above-baseline" / "below-baseline"
-    (corrected pass, by sign of geo_lift), "not-significant", "below-n",
-    "diagnostic" (outcome-leaking bucket, never tested) or "no-baseline".
-    "not-significant" is a statement about this sample, not evidence of no
-    effect.
+    Family = pooled NQ+ES, non-diagnostic rows with a finite geo_p_value —
+    one hypothesis per bucket, so NQ and ES never count as two confirmations.
+    Per-instrument rows keep their clustered geo stats as description and get
+    geo_verdict "per-instrument". Adds geo_bh_q_value, geo_bh_significant,
+    geo_corrected_pass (geo_n_eff >= MIN_N and BH-significant) and
+    geo_verdict: "above-baseline" / "below-baseline" (corrected pass, by sign
+    of geo_lift), "within-3pp" (not significant and TOST-equivalent to zero
+    within GEO_MIN_EFFECT), "inconclusive" (neither), "below-n" (geo_n_eff <
+    MIN_N), "diagnostic" (outcome-leaking bucket, never tested),
+    "no-baseline" or "per-instrument".
     """
     family = [
         i for i, row in enumerate(rows)
-        if not row.get("diagnostic") and isinstance(row.get("geo_p_value"), float)
-        and math.isfinite(row["geo_p_value"])
+        if row.get("instrument") == POOLED and not row.get("diagnostic")
+        and isinstance(row.get("geo_p_value"), float) and math.isfinite(row["geo_p_value"])
     ]
     corrected = bh_correct([rows[i]["geo_p_value"] for i in family])
 
@@ -420,20 +507,19 @@ def apply_geo_bh_correction(rows: list[dict[str, object]]) -> None:
         row["geo_bh_q_value"] = ""
         row["geo_bh_significant"] = False
         row["geo_corrected_pass"] = False
-        row["geo_verdict"] = "diagnostic" if row.get("diagnostic") else "no-baseline"
+        if row.get("diagnostic"):
+            row["geo_verdict"] = "diagnostic"
+        elif row.get("instrument") != POOLED:
+            row["geo_verdict"] = "per-instrument"
+        else:
+            row["geo_verdict"] = "no-baseline"
 
     for idx, result in zip(family, corrected):
         row = rows[idx]
         row["geo_bh_q_value"] = result["bh_q_value"]
         row["geo_bh_significant"] = result["bh_significant"]
-        passed = n_gate(int(row["geo_n"])) and result["bh_significant"]
-        row["geo_corrected_pass"] = passed
-        if not n_gate(int(row["geo_n"])):
-            row["geo_verdict"] = "below-n"
-        elif passed:
-            row["geo_verdict"] = "above-baseline" if row["geo_lift"] > 0 else "below-baseline"
-        else:
-            row["geo_verdict"] = "not-significant"
+        row["geo_verdict"] = geo_family_verdict(row, result["bh_significant"])
+        row["geo_corrected_pass"] = row["geo_verdict"] in ("above-baseline", "below-baseline")
 
 
 # ── Slicing ───────────────────────────────────────────────────────────────────
@@ -450,6 +536,12 @@ def slice_df(df: pd.DataFrame, oos: bool = False) -> pd.DataFrame:
     if oos:
         return df[df.index >= boundary].copy()
     return df[df.index < boundary].copy()
+
+
+def slice_holdout(df: pd.DataFrame) -> pd.DataFrame:
+    """Return the fresh holdout: bars after DATA_END (the frame must have been
+    built from load_1m(..., end=HOLDOUT_END) so it extends past DATA_END)."""
+    return df[df.index >= pd.Timestamp(DATA_END) + pd.Timedelta(days=1)].copy()
 
 
 def slice_fold(
@@ -571,7 +663,7 @@ def evaluate_geo_fold(
     train_lift: float, train_n: float, test_lift: float, test_n: float, diagnostic: bool,
 ) -> str:
     """Walk-forward fold verdict on the corridor-position null (quick task
-    260929-mkg): "pass" iff both halves carry >= MIN_N baselined events and
+    260929-mkg): "pass" iff both halves carry effective n (geo_n_eff) >= MIN_N and
     the train and test lifts have the same non-zero sign; "diagnostic" for
     outcome-leaking buckets; "no-baseline" when either lift is undefined."""
     if diagnostic:
@@ -579,7 +671,7 @@ def evaluate_geo_fold(
     if not (isinstance(train_lift, float) and isinstance(test_lift, float)) \
             or math.isnan(train_lift) or math.isnan(test_lift):
         return "no-baseline"
-    if train_n < MIN_N or test_n < MIN_N:
+    if not (train_n >= MIN_N and test_n >= MIN_N):   # NaN n_eff counts as below-n
         return "below-n"
     if train_lift != 0 and test_lift != 0 and (train_lift > 0) == (test_lift > 0):
         return "pass"
@@ -675,10 +767,12 @@ def build_walkforward_rows(
                 "diagnostic":     te["diagnostic"],
                 "train_geo_lift": tr["geo_lift"],
                 "train_geo_n":    tr["geo_n"],
+                "train_geo_n_eff": tr["geo_n_eff"],
                 "test_geo_lift":  te["geo_lift"],
                 "test_geo_n":     te["geo_n"],
+                "test_geo_n_eff": te["geo_n_eff"],
                 "geo_fold_verdict": evaluate_geo_fold(
-                    tr["geo_lift"], tr["geo_n"], te["geo_lift"], te["geo_n"], te["diagnostic"]),
+                    tr["geo_lift"], tr["geo_n_eff"], te["geo_lift"], te["geo_n_eff"], te["diagnostic"]),
             })
 
     by_bucket: dict[tuple, list[int]] = {}
@@ -714,6 +808,16 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Evaluate on the OOS (out-of-sample) slice. Default: discovery"
             " (train) slice. Ignored if --walk-forward is also passed."
+        ),
+    )
+    parser.add_argument(
+        "--holdout",
+        action="store_true",
+        help=(
+            "Evaluate on the fresh holdout (bars after DATA_END through"
+            " HOLDOUT_END); writes output/validation_manifest_holdout.csv."
+            " Features are built on the full history so trailing windows are"
+            " warm; the corridor baseline is estimated within the holdout."
         ),
     )
     parser.add_argument(
@@ -777,13 +881,19 @@ def main() -> None:
         )
         return
 
+    if args.oos and args.holdout:
+        print("[error] --oos and --holdout are separate slices; pass one.")
+        sys.exit(1)
     if args.oos:
         print(_OOS_BANNER)
+    if args.holdout:
+        print(_HOLDOUT_BANNER)
 
-    slice_label = "oos" if args.oos else "discovery"
-    print(f"Slice: {slice_label}  (OOS_START={OOS_START}, MIN_N={MIN_N}, CI_LEVEL={CI_LEVEL})")
+    slice_label = "holdout" if args.holdout else "oos" if args.oos else "discovery"
+    print(f"Slice: {slice_label}  (OOS_START={OOS_START}, DATA_END={DATA_END}, MIN_N={MIN_N}, CI_LEVEL={CI_LEVEL})")
 
-    dfs_1m = {inst: load_1m(path) for inst, path in INSTRUMENTS.items()}
+    end = HOLDOUT_END if args.holdout else DATA_END
+    dfs_1m = {inst: load_1m(path, end=end) for inst, path in INSTRUMENTS.items()}
 
     # Try to include SMT tagging; fall back gracefully only if the external
     # scanner package is absent or unimportable.  Any other exception
@@ -806,8 +916,11 @@ def main() -> None:
         tf_keys = [k for k in all_keys
                    if (ANALYSIS_META[k].applies_to is None) or (tf_label in ANALYSIS_META[k].applies_to)]
         df_nq, df_es = prepare_pair(dfs_1m["NQ"], dfs_1m["ES"], tf_rule, with_swing_smt=with_smt)
-        nq_sl = slice_df(df_nq, oos=args.oos)
-        es_sl = slice_df(df_es, oos=args.oos)
+        if args.holdout:
+            nq_sl, es_sl = slice_holdout(df_nq), slice_holdout(df_es)
+        else:
+            nq_sl = slice_df(df_nq, oos=args.oos)
+            es_sl = slice_df(df_es, oos=args.oos)
         for inst, sl in (("NQ", nq_sl), ("ES", es_sl)):
             slice_rows.append({
                 "timeframe":  tf_label,
@@ -822,9 +935,10 @@ def main() -> None:
             build_manifest_rows(tf_keys, nq_sl, es_sl, tf_label, slice_label)
         )
 
-    SLICES_PATH.parent.mkdir(exist_ok=True)
-    pd.DataFrame(slice_rows).to_csv(SLICES_PATH, index=False)
-    print(f"Slice report → {SLICES_PATH}")
+    slices_path = SLICES_PATH.with_name(f"validation_slices_{slice_label}.csv") if args.holdout else SLICES_PATH
+    slices_path.parent.mkdir(exist_ok=True)
+    pd.DataFrame(slice_rows).to_csv(slices_path, index=False)
+    print(f"Slice report → {slices_path}")
 
     # D-03: the BH correction fires at the discovery-manifest stage only —
     # OOS rows carry p_value but never bh_*/corrected_pass columns.

@@ -25,6 +25,7 @@ import cisd_analysis
 from cisd_analysis import (
     attach_geo_baseline, barrier_hit, barrier_hit_after, compute_basic, is_diagnostic, prepare,
 )
+from cisd_barriers import geo_cluster_ids
 from scripts import build_validation as bv
 from scripts.build_reconcile_findings import determine_geo_verdict
 
@@ -132,9 +133,14 @@ def test_barrier_hit_after_is_none_when_window_runs_off_the_data():
 
 # ── Corridor-position baseline ────────────────────────────────────────────────
 
-def test_geo_baseline_k0_is_the_direction_x_corridor_bin_hit_rate():
+def test_geo_baseline_k0_is_the_direction_x_regime_x_corridor_bin_hit_rate():
     df = attach_geo_baseline(prepare(_random_walk(2000, seed=11)))
     ev = np.flatnonzero(df["cisd_type"].notna().to_numpy())
+    reg = df["atr_regime"].to_numpy(dtype=float)
+    ref = reg[ev][np.isfinite(reg[ev])]
+    lo, hi = np.quantile(ref, [1 / 3, 2 / 3])
+    regime = np.where(~np.isfinite(reg), -1, np.where(reg < lo, 0, np.where(reg < hi, 1, 2)))
+    assert set(regime[ev]) == {-1, 0, 1, 2}   # warm-up stratum + three terciles
     recs = []
     for pos in ev:
         row, ct = df.iloc[pos], df["cisd_type"].iloc[pos]
@@ -142,9 +148,9 @@ def test_geo_baseline_k0_is_the_direction_x_corridor_bin_hit_rate():
         if not rng > 0:
             continue
         clv = (row["close"] - row["low"]) / rng if ct == "bullish" else (row["high"] - row["close"]) / rng
-        recs.append((pos, ct, min(int(np.floor(clv * 10)), 9), barrier_hit(df, pos, row, ct)))
-    t = pd.DataFrame(recs, columns=["pos", "ct", "bin", "hit"])
-    t["expected"] = t.groupby(["ct", "bin"])["hit"].transform("mean")
+        recs.append((pos, ct, regime[pos], min(int(np.floor(clv * 10)), 9), barrier_hit(df, pos, row, ct)))
+    t = pd.DataFrame(recs, columns=["pos", "ct", "regime", "bin", "hit"])
+    t["expected"] = t.groupby(["ct", "regime", "bin"])["hit"].transform("mean")
     np.testing.assert_allclose(df["geo_p_k0"].to_numpy()[t["pos"]], t["expected"].to_numpy())
 
 
@@ -159,13 +165,67 @@ def test_geo_expected_hits_sum_to_observed_over_the_whole_population():
         assert cell["expected"] == pytest.approx(cell["geo_runs"])
 
 
-def test_geo_stats_z_lift_and_p_value():
-    stats = bv.geo_stats({"geo_n": 100, "geo_runs": 60, "expected": 50.0, "expected_var": 25.0})
+def test_geo_stats_uses_cluster_robust_variance():
+    # Two clusters carrying +5 residual each: V_cl = 2/(2-1) * (25 + 25) = 100
+    # > V_iid = 25, so z = 10 / 10 = 1, design effect 4, effective n 100/4.
+    cell = {"geo_n": 100, "geo_runs": 60, "expected": 50.0, "expected_var": 25.0,
+            "clusters": {1: 5.0, 2: 5.0}}
+    stats = bv.geo_stats(cell)
     assert stats["geo_expected_rate"] == pytest.approx(0.5)
     assert stats["geo_lift"] == pytest.approx(0.1)
-    assert stats["geo_z"] == pytest.approx(2.0)
-    assert stats["geo_p_value"] == pytest.approx(math.erfc(2 / math.sqrt(2)), abs=1e-6)
+    assert stats["geo_clusters"] == 2
+    assert stats["geo_deff"] == pytest.approx(4.0)
+    assert stats["geo_n_eff"] == pytest.approx(25.0)
+    assert stats["geo_z"] == pytest.approx(1.0)
+    assert stats["geo_z_iid"] == pytest.approx(2.0)
+    assert stats["geo_se"] == pytest.approx(0.1)
+    assert stats["geo_p_value"] == pytest.approx(math.erfc(1 / math.sqrt(2)), abs=1e-6)
     assert math.isnan(bv.geo_stats(None)["geo_p_value"])
+
+
+def test_geo_stats_never_credits_negative_within_cluster_correlation():
+    # V_cl below V_iid: the test falls back to V_iid (z = 2, n_eff = n).
+    cell = {"geo_n": 100, "geo_runs": 60, "expected": 50.0, "expected_var": 25.0,
+            "clusters": {i: 10.0 / 50 for i in range(50)}}
+    stats = bv.geo_stats(cell)
+    assert stats["geo_deff"] < 1
+    assert stats["geo_z"] == pytest.approx(2.0)
+    assert stats["geo_n_eff"] == pytest.approx(100.0)
+
+
+def test_geo_stats_equivalence_and_mde():
+    # 2000 independent clusters, lift 0.5pp, SE = sqrt(500)/2000 ~= 1.12pp:
+    # 90% CI = 0.5 +/- 1.84pp sits inside +/-3pp -> equivalent; MDE ~= 3.1pp.
+    cell = {"geo_n": 2000, "geo_runs": 1010, "expected": 1000.0, "expected_var": 500.0,
+            "clusters": {i: (0.5 if i % 2 else -0.5) + 0.005 for i in range(2000)}}
+    stats = bv.geo_stats(cell)
+    assert stats["geo_equiv"] is True
+    assert stats["geo_mde"] == pytest.approx(2.8016 * stats["geo_se"], rel=1e-3)
+    wide = dict(cell, geo_n=100, geo_runs=51, expected=50.0, expected_var=25.0,
+                clusters={i: (0.5 if i % 2 else -0.5) + 0.01 for i in range(100)})
+    assert bv.geo_stats(wide)["geo_equiv"] is False   # SE 5pp: cannot exclude 3pp
+
+
+def test_geo_cluster_ids_session_day_intraday_and_week_for_daily():
+    idx = pd.DatetimeIndex(["2026-01-05 17:45", "2026-01-05 18:00", "2026-01-06 09:30",
+                            "2026-01-06 17:45", "2026-01-06 18:00"])
+    ids = geo_cluster_ids(idx.append(pd.DatetimeIndex(["2026-01-06 18:15"])))
+    # 18:00 ET opens the next session day
+    assert ids[0] != ids[1] and ids[1] == ids[2] == ids[3] and ids[4] == ids[5] != ids[3]
+    daily = pd.date_range("2026-01-04", periods=9, freq="D")   # Sun 4th .. Mon 12th
+    wk = geo_cluster_ids(daily)
+    # Sunday session joins the following week; Mon-Sat share one week id
+    assert len(set(wk[:7])) == 1 and wk[7] != wk[6] and wk[7] == wk[8]
+
+
+def test_atr_regime_ignores_the_cisd_bar_itself():
+    df = _random_walk(400, seed=3)
+    base = prepare(df)["atr_regime"]
+    bumped = df.copy()
+    bumped.iloc[300, bumped.columns.get_loc("high")] += 50.0
+    after = prepare(bumped)["atr_regime"]
+    assert np.isfinite(base.iloc[300]) and after.iloc[300] == base.iloc[300]
+    assert after.iloc[301] != base.iloc[301]
 
 
 def test_manifest_rows_carry_geo_and_diagnostic_columns():
@@ -179,22 +239,43 @@ def test_manifest_rows_carry_geo_and_diagnostic_columns():
     assert hold and all(math.isnan(r["geo_p_value"]) for r in hold)   # not a barrier outcome
 
 
-def test_apply_geo_bh_correction_excludes_diagnostics_and_labels_direction():
-    def row(p, lift, n=200, diagnostic=False):
-        return {"geo_p_value": p, "geo_lift": lift, "geo_n": n, "diagnostic": diagnostic}
-    rows = [row(1e-6, 0.1), row(1e-6, -0.1), row(0.9, 0.01), row(1e-6, 0.2, n=10),
-            row(1e-9, 0.3, diagnostic=True), row(math.nan, math.nan, n=0)]
+def test_manifest_emits_pooled_rows_outside_the_legacy_family():
+    df = prepare(_random_walk(1500, seed=2))
+    rows = bv.build_manifest_rows(["basic", "wick"], df, df, "15min", "discovery")
+    by = {(r["analysis"], r["instrument"], r["direction"], r["bucket"]): r for r in rows}
+    for (a, inst, d, b), r in by.items():
+        if inst != bv.POOLED:
+            continue
+        nq = by[(a, "NQ", d, b)]
+        assert r["n"] == 2 * nq["n"] and r["geo_n"] == 2 * nq["geo_n"]
+        # identical NQ/ES events share clusters: pooled residuals double, so
+        # the cluster variance quadruples while V_iid only doubles
+        assert r["geo_deff"] == pytest.approx(2 * nq["geo_deff"], rel=1e-3)
+    bv.apply_bh_correction(rows)
+    assert all(r["bh_rank"] == "" for r in rows if r["instrument"] == bv.POOLED)
+
+
+def test_apply_geo_bh_correction_family_is_pooled_rows_only():
+    def row(p, lift, n_eff=200.0, diagnostic=False, equiv=False, inst=bv.POOLED):
+        return {"instrument": inst, "geo_p_value": p, "geo_lift": lift, "geo_n_eff": n_eff,
+                "geo_equiv": equiv, "diagnostic": diagnostic}
+    rows = [row(1e-6, 0.1), row(1e-6, -0.1), row(0.9, 0.01), row(0.9, 0.001, equiv=True),
+            row(1e-6, 0.2, n_eff=10.0), row(1e-9, 0.3, diagnostic=True),
+            row(math.nan, math.nan, n_eff=math.nan), row(1e-9, 0.3, inst="NQ")]
     bv.apply_geo_bh_correction(rows)
     assert [r["geo_verdict"] for r in rows] == [
-        "above-baseline", "below-baseline", "not-significant", "below-n", "diagnostic", "no-baseline",
+        "above-baseline", "below-baseline", "inconclusive", "within-3pp", "below-n",
+        "diagnostic", "no-baseline", "per-instrument",
     ]
-    assert rows[4]["geo_bh_q_value"] == ""
+    assert rows[5]["geo_bh_q_value"] == "" and rows[7]["geo_bh_q_value"] == ""
+    assert [r["geo_corrected_pass"] for r in rows] == [True, True] + [False] * 6
 
 
 def test_evaluate_geo_fold():
     assert bv.evaluate_geo_fold(0.05, 100, 0.02, 100, False) == "pass"
     assert bv.evaluate_geo_fold(0.05, 100, -0.02, 100, False) == "fail"
     assert bv.evaluate_geo_fold(0.05, 10, 0.02, 100, False) == "below-n"
+    assert bv.evaluate_geo_fold(0.05, math.nan, 0.02, 100, False) == "below-n"
     assert bv.evaluate_geo_fold(math.nan, 100, 0.02, 100, False) == "no-baseline"
     assert bv.evaluate_geo_fold(0.05, 100, 0.02, 100, True) == "diagnostic"
 
@@ -203,7 +284,7 @@ def test_determine_geo_verdict():
     assert determine_geo_verdict("above-baseline", 0.05, 0.01, 100) == "confirmed"
     assert determine_geo_verdict("above-baseline", 0.05, -0.01, 100) == "not-confirmed"
     assert determine_geo_verdict("below-baseline", -0.05, -0.01, 10) == "not-confirmed"
-    assert determine_geo_verdict("not-significant", 0.05, 0.01, 100) == "not-significant"
+    assert determine_geo_verdict("inconclusive", 0.05, 0.01, 100) == "inconclusive"
     assert determine_geo_verdict(float("nan"), 0.05, 0.01, 100) == "no-baseline"
 
 
@@ -241,3 +322,51 @@ def test_load_1m_accepts_utc_schema_and_pins_the_window(tmp_path):
     assert list(out.columns) == ["open", "high", "low", "close", "volume"]
     # 14:00 UTC = 10:00 EDT; 21:59 UTC = 16:59 EST; 2025-11-22 01:00 EST is past DATA_END
     assert list(out.index) == [pd.Timestamp("2020-08-31 10:00"), pd.Timestamp("2025-11-21 16:59")]
+
+
+# ── Fresh holdout + pooled rows downstream ────────────────────────────────────
+
+def test_slice_holdout_starts_the_day_after_data_end():
+    idx = pd.DatetimeIndex(["2025-11-21 16:59", "2025-11-23 18:00", "2026-07-17 16:59"])
+    df = pd.DataFrame({"close": [1.0, 2.0, 3.0]}, index=idx)
+    assert list(bv.slice_holdout(df).index) == list(idx[1:])
+
+
+def _geo_manifests(tmp_path, pooled_lift_oos: float):
+    from unittest.mock import patch
+    import scripts.build_post_cisd_verdict as verdict_mod
+    base = {"analysis": "post_cisd_context", "timeframe": "15min", "direction": "bullish",
+            "bucket": "failed_gap_with"}
+    disc, oos, wf = [], [], []
+    for inst, verdict in (("NQ", "per-instrument"), ("ES", "per-instrument"),
+                          (bv.POOLED, "above-baseline")):
+        key = base | {"instrument": inst}
+        disc.append(key | {"rate": 0.6, "n": 400, "corrected_pass": inst != bv.POOLED,
+                           "geo_verdict": verdict, "geo_lift": 0.04})
+        oos.append(key | {"rate": 0.6, "n": 200, "geo_lift": pooled_lift_oos, "geo_n": 200,
+                          "geo_n_eff": 120.0})
+        wf.append(key | {"fold_index": 1, "wf_verdict": "wf-robust", "geo_wf_verdict": "wf-robust"})
+    paths = {n: tmp_path / f"{n}.csv" for n in ("disc", "oos", "wf", "buckets", "rollup")}
+    for n, rows in (("disc", disc), ("oos", oos), ("wf", wf)):
+        pd.DataFrame(rows).to_csv(paths[n], index=False)
+    with (
+        patch.object(verdict_mod, "DISCOVERY_MANIFEST_PATH", paths["disc"]),
+        patch.object(verdict_mod, "OOS_MANIFEST_PATH", paths["oos"]),
+        patch.object(verdict_mod, "WALKFORWARD_MANIFEST_PATH", paths["wf"]),
+        patch.object(verdict_mod, "VERDICT_BUCKETS_PATH", paths["buckets"]),
+        patch.object(verdict_mod, "VERDICT_ROLLUP_PATH", paths["rollup"]),
+    ):
+        verdict_mod.build_verdict()
+    return pd.read_csv(paths["buckets"]), pd.read_csv(paths["rollup"])
+
+
+def test_post_cisd_legacy_rollup_ignores_pooled_rows_and_geo_rollup_uses_only_them(tmp_path):
+    buckets, rollup = _geo_manifests(tmp_path, pooled_lift_oos=0.02)
+    assert "oos_geo_n_eff" in buckets.columns
+    pooled = buckets[buckets["instrument"] == bv.POOLED].iloc[0]
+    assert not pooled["clears_bar"] and pooled["geo_clears_bar"]
+    r = rollup.iloc[0]
+    assert (r["n_buckets"], r["n_cleared"], r["verdict"]) == (2, 2, "cleared")
+    assert (r["geo_n_buckets"], r["geo_n_cleared"], r["geo_verdict"]) == (1, 1, "cleared")
+    _, rollup = _geo_manifests(tmp_path, pooled_lift_oos=-0.02)
+    assert rollup.iloc[0]["geo_verdict"] == "not-cleared"
