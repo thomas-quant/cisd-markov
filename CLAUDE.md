@@ -15,7 +15,7 @@ python3 cisd_analysis.py basic wick combined smt_cisd
 python3 cisd_analysis.py cisd_fvg fvg_hold cisd_fvg_interaction sweep sssf_swing
 ```
 
-All output goes to `output/`. Data must be in `data/nq_1m.parquet` and `data/es_1m.parquet` (1-minute OHLCV, `DateTime_ET` index column).
+All output goes to `output/`. Data must be in `data/nq_1m.parquet` and `data/es_1m.parquet` (1-minute OHLCV with a `DateTime_ET` or UTC `datetime_utc` column; `load_1m` converts to ET and pins `DATA_START..DATA_END` = 2020-08-31..2025-11-21).
 
 ## Architecture
 
@@ -80,7 +80,7 @@ A quantitative research engine that tests **CISD** (Change in State of Delivery)
 ### Constraints
 
 - **Tech stack**: Python 3.10+, pandas / numpy / matplotlib / pyarrow (plotly via CDN for the HTML report). Keep dependencies minimal — research must run offline and deterministically.
-- **Data**: 1-minute OHLCV parquet for NQ + ES in `data/` (`DateTime_ET` index). A fixed data snapshot is assumed so the OOS boundary date is stable across runs.
+- **Data**: 1-minute OHLCV parquet for NQ + ES in `data/` (`DateTime_ET` or UTC `datetime_utc`). The window is pinned by `DATA_START`/`DATA_END` in `cisd_data.py` so the OOS boundary and walk-forward folds stay stable; bars after `DATA_END` are an untouched holdout.
 - **External dependency**: SMT package (currently a hardcoded WSL path) is optional — every entry point must degrade gracefully when it is absent.
 - **Determinism**: results must be reproducible — pinned dependencies, no wall-clock or RNG dependence in computed numbers.
 - **Behavior-preserving**: the refactor and the validation harness must not silently alter existing computed numbers. Characterization tests lock current behavior *before* those changes land.
@@ -141,7 +141,7 @@ A quantitative research engine that tests **CISD** (Change in State of Delivery)
 ## Platform Requirements
 - Python 3.12+ (3.12.3 confirmed)
 - Local SMT package at `/mnt/e/backup/code/Finance/Misc/SMT` (required only for `smt_cisd` analysis)
-- Data files at `data/nq_1m.parquet` and `data/es_1m.parquet` (1-minute OHLCV with `DateTime_ET` column; excluded from git)
+- Data files at `data/nq_1m.parquet` and `data/es_1m.parquet` (1-minute OHLCV with `DateTime_ET` or `datetime_utc` column; excluded from git)
 - No deployment target; pure local research tool run as CLI scripts
 <!-- GSD:stack-end -->
 

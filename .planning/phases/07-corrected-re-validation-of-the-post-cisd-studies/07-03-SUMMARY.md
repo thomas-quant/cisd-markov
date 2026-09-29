@@ -78,6 +78,8 @@ status: complete
 
 # Phase 07 Plan 03: Regenerate + Publish Corrected Evidence Summary
 
+> **⚠ RETRACTED / REOPENED 2026-09-29 (quick task 260929-mkg).** The verdicts below were earned against the 0.5 coin-flip null, which mostly measures where the CISD close sits between its own stop and target. `candle1_followthrough` `*_inwindow` tags are outcome-leaking (now diagnostic) and `candle2_past_candle1_wick` read close[t+2] inside its window (now scored from close[t+2]). Corrected evidence: `geo_*` columns and README → *Corrected Null & Leakage Fixes*. Do not feed the verdicts below into the Phase 11 gate.
+
 **Regenerated all three validation manifests against real NQ/ES data (closing the concrete gap where all 160 post-CISD bucket-rows read "not-confirmed" purely for lack of OOS data), ran the D-09 verdict script, and published the go/no-go verdict plus the reversal-barrier reading in README — 11 of 12 post-CISD tags clear the corrected bar.**
 
 ## Performance

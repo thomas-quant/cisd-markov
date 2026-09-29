@@ -5,10 +5,10 @@ milestone_name: Rigorous Validation & Post-CISD Modeling
 current_phase: 11
 current_phase_name: Conditional Post-CISD Model
 status: executing
-stopped_at: Completed 10-03-PLAN.md (session analysis + D-14 TF-scoping)
-last_updated: "2026-07-13T00:23:54.776Z"
-last_activity: 2026-07-13
-last_activity_desc: Phase 10 complete, transitioned to Phase 11
+stopped_at: Quick task 260929-mkg (leakage / corridor null / session / loader fixes) complete; Phase 11 gate must re-read geo_* evidence
+last_updated: "2026-09-29T17:30:00.000Z"
+last_activity: 2026-09-29
+last_activity_desc: Quick task 260929-mkg — review fixes; Phase 7/10 verdicts reopened
 progress:
   total_phases: 6
   completed_phases: 5
@@ -24,16 +24,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-10)
 
 **Core value:** A reported edge can be trusted — every published rate is sample-size gated, carries a confidence interval, and is confirmed out-of-sample.
-**Current focus:** Phase 10 — New Conditioning Features — Magnitude, Session & Volume Anomaly
+**Current focus:** Phase 11 — Conditional Post-CISD Model (gate evidence corrected by quick task 260929-mkg)
 
 ## Current Position
 
 Phase: 11 — Conditional Post-CISD Model
 Plan: Not started
-Status: Ready to execute 10-04-PLAN.md
-Last activity: 2026-07-13 — Phase 10 complete, transitioned to Phase 11
+Status: Ready to plan Phase 11 — after the OOS decision below
+Last activity: 2026-09-29 — quick task 260929-mkg (look-ahead leakage, corridor-position null, 1H session, data loader)
 
-Progress: [███░░░░░░░] 33% (2 of 6 phases complete)
+Progress: [████████░░] 83% (5 of 6 phases complete)
 
 ## Performance Metrics
 
@@ -109,6 +109,11 @@ None yet.
 [Issues that affect future work]
 
 - SMT integration path remains untested in CI (hardcoded WSL path); known limitation carried from v1.0
+- [2026-09-29] SMT package is MISSING from `_SMT_PKG_PATH` (and the lowercase `finance/` path) — regenerated manifests have no smt_* rows; Phase 9 SMT verdicts cannot be re-evaluated under the corridor null until it is restored
+- [2026-09-29] Original DateTime_ET parquet snapshot is gone (replaced by a UTC vendor history); window pinned to 2020-08-31..2025-11-21, bars differ slightly (characterization re-pinned)
+- [2026-09-29] Sacred OOS NOT re-run under the corrected method; OOS manifest, validation_findings.csv and post_cisd_verdict*.csv in output/ are STALE (old method/old data). Decision needed: re-run the sacred OOS for the frozen geo discovery verdicts, and/or use the untouched 2025-11-22..2026-07-17 bars as a fresh holdout
+- [2026-09-29] tests/golden/*.csv.gz are stale (pre-fix, with SMT rows); only the opt-in CISD_PERF_CHAR test reads them — refresh after SMT + OOS decisions
+- [2026-09-29] geo_z assumes independent events; effective-n (overlapping windows, NQ/ES duplication, nested buckets) still uncorrected
 - Phase 6 correction/walk-forward math is net-new (no prior MHT/walk-forward code in `scripts/build_validation.py`); needs its own characterization tests
 
 ### Roadmap Evolution
@@ -117,6 +122,12 @@ None yet.
 - Phase 9 inserted after Phase 8: SMT Geometry & Invalidation Honesty — carry SMT price/lifecycle fields, fix invalidated-SMT tagging bug, add role/magnitude/CISD-in-block/survived-vs-broke (RES-06)
 - Phase 10 inserted after Phase 9: New Conditioning Features — magnitude versions of binary flags, session/time-of-day, CISD volume anomaly (RES-07)
 - Phase 11 moved: Conditional Post-CISD Model moved from Phase 8 to Phase 11 and broadened to consume qualifying feature families (post-CISD tags, SMT geometry, session, volume); ML-01 gate now spans Phases 7/9/10
+
+### Quick Tasks Completed
+
+| Date | ID | Task | Commits |
+|------|----|------|---------|
+| 2026-09-29 | 260929-mkg | Remove look-ahead leakage (confirm-then-enter), corridor-position null (geo_* columns), 1H session midpoint, UTC data loader + window pin | 56addde + docs |
 
 ## Deferred Items
 
@@ -133,11 +144,12 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-12T16:05:00.000Z
-Stopped at: Completed 10-03-PLAN.md (session analysis + D-14 TF-scoping)
-Resume file: .planning/phases/10-new-conditioning-features-magnitude-session-volume-anomaly/10-04-PLAN.md
+Last session: 2026-09-29T17:30:00.000Z
+Stopped at: Quick task 260929-mkg complete
+Resume file: .planning/quick/260929-mkg-fix-critical-review-leakage-null-session/260929-mkg-SUMMARY.md
 
 ## Operator Next Steps
 
-- Execute Phase 10 Plan 04 (graceful column tolerance, byte-stability drift gate, end-to-end manifest regen, refreshed golden fixtures, README writeup): /gsd-execute-phase 10
-- Phase 11 (conditional model) last, gated on corrected evidence from Phases 7/9/10
+- Decide the OOS question (re-run sacred OOS for frozen geo verdicts and/or fresh 2025-11-22..2026-07-17 holdout), then run build_reconcile_findings.py + build_post_cisd_verdict.py
+- Restore the SMT package to re-evaluate Phase 9 SMT buckets under the corridor null
+- Phase 11 gate must read geo_verdict / geo_wf_verdict / OOS geo verdicts, NOT corrected_pass / wf_verdict (0.5 null). Surviving discovery families: candle body size, size_cross, wick / wick_distance, low-volume penalty (rvol / volume_zscore), post-CISD gap buckets. Retracted: cisd_fvg, fvg_size, sssf_swing CISD-bar swing, Reading B, session (except one cell)
