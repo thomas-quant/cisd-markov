@@ -276,7 +276,7 @@ def test_compute_cisd_fvg_splits_mid_buckets_and_baseline():
 
     assert stats["bullish"]["mid0_fvg"]["total"] == 1
     assert stats["bullish"]["mid0_fvg"]["runs"] == 1
-    assert stats["bullish"]["mid1_fvg"]["total"] == 0
+    assert "mid1_fvg" not in stats["bullish"]   # never enterable at close[t+2]
     assert stats["bullish"]["no_fvg"]["total"] == 0
     # resolved (target touched on t+1) before entry -> excluded, not a loss
     assert stats["bearish"]["no_fvg"]["total"] == 0

@@ -17,7 +17,12 @@ Verdict tokens (D-03):
 
 Usage::
 
-    python3 scripts/build_reconcile_findings.py
+    python3 scripts/build_reconcile_findings.py             # old OOS slice
+    python3 scripts/build_reconcile_findings.py --holdout   # fresh holdout ->
+                                                  # validation_findings_holdout.csv
+
+Pooled NQ+ES rows (build_validation.POOLED) carry only the geo verdict; their
+legacy 0.5-null verdict is "pooled-geo-only" so legacy counts do not move.
 """
 from __future__ import annotations
 
@@ -32,12 +37,15 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from cisd_analysis import MIN_N
+from scripts.build_validation import POOLED
 
 # ── Path constants (patched in unit tests via patch.object) ───────────────────
 
 DISCOVERY_MANIFEST_PATH = REPO_ROOT / "output" / "validation_manifest_discovery.csv"
 OOS_MANIFEST_PATH       = REPO_ROOT / "output" / "validation_manifest_oos.csv"
 FINDINGS_PATH           = REPO_ROOT / "output" / "validation_findings.csv"
+HOLDOUT_MANIFEST_PATH   = REPO_ROOT / "output" / "validation_manifest_holdout.csv"
+HOLDOUT_FINDINGS_PATH   = REPO_ROOT / "output" / "validation_findings_holdout.csv"
 
 # ── Merge keys ────────────────────────────────────────────────────────────────
 
@@ -121,9 +129,10 @@ def determine_geo_verdict(
 ) -> str:
     """OOS verdict on the corridor-position null (quick task 260929-mkg).
 
-    Only buckets that passed the discovery geo gate (BH-corrected, geo_n >=
-    MIN_N, verdict above-/below-baseline) are eligible. Confirmed iff the OOS
-    slice carries >= MIN_N baselined events and its lift has the same
+    Only buckets that passed the discovery geo gate (BH-corrected, geo_n_eff
+    >= MIN_N, verdict above-/below-baseline) are eligible. Confirmed iff the
+    OOS slice carries effective n (geo_n_eff; geo_n on older manifests) >=
+    MIN_N and its lift has the same
     non-zero sign. Non-eligible buckets pass their discovery geo_verdict
     through unchanged ("not-significant", "below-n", "diagnostic", ...).
     """
@@ -195,27 +204,30 @@ def reconcile() -> None:
         ),
         axis=1,
     )
+    merged.loc[merged["instrument"] == POOLED, "verdict"] = "pooled-geo-only"
 
     # Corridor-position null (quick task 260929-mkg): additive columns, only
     # when both manifests carry them (older manifests reconcile unchanged).
     output_cols = list(_OUTPUT_COLS)
     if {"geo_lift", "geo_verdict"} <= set(disc.columns) and {"geo_lift", "geo_n"} <= set(oos.columns):
+        # Gate the OOS side on effective n when the manifest carries it.
+        n_col = "geo_n_eff" if "geo_n_eff" in oos.columns else "geo_n"
         geo = disc[_MERGE_KEYS + ["geo_lift", "geo_verdict"]].rename(columns={
             "geo_lift": "discovery_geo_lift", "geo_verdict": "discovery_geo_verdict"})
         geo = geo.merge(
-            oos[_MERGE_KEYS + ["geo_lift", "geo_n"]].rename(columns={
-                "geo_lift": "oos_geo_lift", "geo_n": "oos_geo_n"}),
+            oos[_MERGE_KEYS + ["geo_lift", n_col]].rename(columns={
+                "geo_lift": "oos_geo_lift", n_col: f"oos_{n_col}"}),
             on=_MERGE_KEYS, how="outer")
         merged = merged.merge(geo, on=_MERGE_KEYS, how="left")
         merged["geo_verdict"] = merged.apply(
             lambda row: determine_geo_verdict(
                 row["discovery_geo_verdict"], row["discovery_geo_lift"],
-                row["oos_geo_lift"], row["oos_geo_n"],
+                row["oos_geo_lift"], row[f"oos_{n_col}"],
             ),
             axis=1,
         )
         output_cols += ["discovery_geo_lift", "discovery_geo_verdict",
-                        "oos_geo_lift", "oos_geo_n", "geo_verdict"]
+                        "oos_geo_lift", f"oos_{n_col}", "geo_verdict"]
 
     # Enforce D-09 column order
     result = merged[output_cols]
@@ -235,4 +247,7 @@ def reconcile() -> None:
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    if "--holdout" in sys.argv[1:]:
+        OOS_MANIFEST_PATH = HOLDOUT_MANIFEST_PATH
+        FINDINGS_PATH     = HOLDOUT_FINDINGS_PATH
     reconcile()

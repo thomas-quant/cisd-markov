@@ -40,6 +40,7 @@ from cisd_data import (
     WALK_FORWARD_FOLDS,
     DATA_START,
     DATA_END,
+    HOLDOUT_END,
     load_1m,
     _normalize_resample_rule,
     resample_ohlcv,
@@ -156,7 +157,7 @@ __all__ = [
     "DATA_DIR", "INSTRUMENTS", "TIMEFRAMES", "LOOKAHEAD", "MAX_CONSEC",
     "SMT_LOOKBACK", "FVG_HOLD_LOOKAHEAD", "SWEEP_TOLERANCE", "SWEEP_SWING_LOOKBACK",
     "_SMT_PKG_PATH", "OOS_START", "MIN_N", "CI_LEVEL", "WALK_FORWARD_FOLDS",
-    "DATA_START", "DATA_END",
+    "DATA_START", "DATA_END", "HOLDOUT_END",
     "load_1m", "_normalize_resample_rule", "resample_ohlcv", "prepare",
     "_compute_three_bar_swings", "_has_directional_fvg", "_classify_fvg_hold",
     "_has_directional_sweep", "_annotate_cisd_research",
@@ -230,6 +231,8 @@ def main() -> None:
     for tf_label, tf_rule in TIMEFRAMES.items():
         print(f"\nComputing {tf_label} ...", end=" ", flush=True)
         df_nq, df_es = prepare_pair(dfs_1m["NQ"], dfs_1m["ES"], tf_rule, with_swing_smt=needs_swing_smt)
+        # Corridor/ATR-regime baseline over the charted window (white tick per bar)
+        df_nq, df_es = attach_geo_baseline(df_nq), attach_geo_baseline(df_es)
         prepared["NQ"][tf_label] = df_nq
         prepared["ES"][tf_label] = df_es
 

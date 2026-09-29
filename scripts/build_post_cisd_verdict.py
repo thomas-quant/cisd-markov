@@ -1,4 +1,12 @@
-"""Build corrected-bar verdicts for the two post-CISD studies."""
+"""Build corrected-bar verdicts for the two post-CISD studies.
+
+    python3 scripts/build_post_cisd_verdict.py             # old OOS slice
+    python3 scripts/build_post_cisd_verdict.py --holdout   # fresh holdout ->
+                                          # post_cisd_verdict_holdout*.csv
+
+Legacy (0.5-null) verdicts and rollups use per-instrument rows only; geo
+verdicts and the geo rollup use pooled NQ+ES rows only.
+"""
 from __future__ import annotations
 
 import sys
@@ -13,6 +21,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from cisd_analysis import MIN_N
 from scripts.build_reconcile_findings import _side
+from scripts.build_validation import POOLED
 
 
 # ── Path constants (patched in unit tests via patch.object) ──────────────────
@@ -22,6 +31,9 @@ OOS_MANIFEST_PATH       = REPO_ROOT / "output" / "validation_manifest_oos.csv"
 WALKFORWARD_MANIFEST_PATH = REPO_ROOT / "output" / "validation_manifest_walkforward.csv"
 VERDICT_BUCKETS_PATH    = REPO_ROOT / "output" / "post_cisd_verdict.csv"
 VERDICT_ROLLUP_PATH     = REPO_ROOT / "output" / "post_cisd_verdict_rollup.csv"
+HOLDOUT_MANIFEST_PATH   = REPO_ROOT / "output" / "validation_manifest_holdout.csv"
+HOLDOUT_BUCKETS_PATH    = REPO_ROOT / "output" / "post_cisd_verdict_holdout.csv"
+HOLDOUT_ROLLUP_PATH     = REPO_ROOT / "output" / "post_cisd_verdict_holdout_rollup.csv"
 
 POST_CISD_ANALYSES = ("post_cisd_context", "candle1_followthrough")
 
@@ -65,7 +77,7 @@ def _bucket_clears_geo(
     """Corridor-position null version of _bucket_clears (quick task 260929-mkg):
     discovery geo_verdict above-/below-baseline (BH-corrected, geo_n >= MIN_N),
     geo walk-forward wf-robust, and an OOS lift of the same non-zero sign on
-    >= MIN_N baselined events. Diagnostic buckets never clear."""
+    effective n (geo_n_eff; geo_n on older manifests) >= MIN_N. Diagnostic buckets never clear."""
     if pd.isna(geo_verdict) or str(geo_verdict) not in ("above-baseline", "below-baseline"):
         return False
     if geo_wf_verdict != "wf-robust":
@@ -161,33 +173,36 @@ def build_verdict() -> None:
     has_geo = ({"geo_verdict", "geo_lift"} <= set(disc.columns)
                and {"geo_lift", "geo_n"} <= set(oos.columns) and "geo_wf_verdict" in wf.columns)
     if has_geo:
+        # Gate the OOS side on effective n when the manifest carries it.
+        n_col = "geo_n_eff" if "geo_n_eff" in oos.columns else "geo_n"
         geo = disc[_MERGE_KEYS + ["geo_verdict", "geo_lift"]].rename(columns={"geo_lift": "discovery_geo_lift"})
-        geo = geo.merge(oos[_MERGE_KEYS + ["geo_lift", "geo_n"]].rename(
-            columns={"geo_lift": "oos_geo_lift", "geo_n": "oos_geo_n"}), on=_MERGE_KEYS, how="outer")
+        geo = geo.merge(oos[_MERGE_KEYS + ["geo_lift", n_col]].rename(
+            columns={"geo_lift": "oos_geo_lift", n_col: f"oos_{n_col}"}), on=_MERGE_KEYS, how="outer")
         geo = geo.merge(wf[_MERGE_KEYS + ["geo_wf_verdict"]].drop_duplicates(subset=_MERGE_KEYS),
                         on=_MERGE_KEYS, how="outer")
         merged = merged.merge(geo, on=_MERGE_KEYS, how="left")
         merged["geo_clears_bar"] = merged.apply(
             lambda row: _bucket_clears_geo(
                 row["geo_verdict"], row["discovery_geo_lift"], row["geo_wf_verdict"],
-                row["oos_geo_lift"], row["oos_geo_n"],
+                row["oos_geo_lift"], row[f"oos_{n_col}"],
             ),
             axis=1,
         )
         bucket_cols += ["geo_verdict", "discovery_geo_lift", "geo_wf_verdict",
-                        "oos_geo_lift", "oos_geo_n", "geo_clears_bar"]
+                        "oos_geo_lift", f"oos_{n_col}", "geo_clears_bar"]
     bucket_result = merged[bucket_cols]
 
-    rollup_rows = rollup_by_tag(bucket_result.to_dict(orient="records"))
+    pooled = bucket_result["instrument"] == POOLED
+    rollup_rows = rollup_by_tag(bucket_result[~pooled].to_dict(orient="records"))
     rollup_result = pd.DataFrame(rollup_rows, columns=_ROLLUP_OUTPUT_COLS)
     if has_geo:
         geo_rollup = pd.DataFrame(
-            rollup_by_tag(bucket_result.to_dict(orient="records"), flag="geo_clears_bar"),
+            rollup_by_tag(bucket_result[pooled].to_dict(orient="records"), flag="geo_clears_bar"),
             columns=_ROLLUP_OUTPUT_COLS,
-        )
-        rollup_result["geo_n_cleared"] = geo_rollup["n_cleared"].to_numpy()
-        rollup_result["geo_verdict"] = geo_rollup["verdict"].to_numpy()
-        rollup_cols += ["geo_n_cleared", "geo_verdict"]
+        ).rename(columns={"n_buckets": "geo_n_buckets", "n_cleared": "geo_n_cleared",
+                          "verdict": "geo_verdict"})
+        rollup_result = rollup_result.merge(geo_rollup, on=["analysis", "tag"], how="outer")
+        rollup_cols += ["geo_n_buckets", "geo_n_cleared", "geo_verdict"]
     rollup_result = rollup_result[rollup_cols]
 
     VERDICT_BUCKETS_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -204,4 +219,8 @@ def build_verdict() -> None:
 # ── Entry point ──────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    if "--holdout" in sys.argv[1:]:
+        OOS_MANIFEST_PATH    = HOLDOUT_MANIFEST_PATH
+        VERDICT_BUCKETS_PATH = HOLDOUT_BUCKETS_PATH
+        VERDICT_ROLLUP_PATH  = HOLDOUT_ROLLUP_PATH
     build_verdict()

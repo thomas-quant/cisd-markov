@@ -145,6 +145,53 @@ def barrier_hit_after(df: pd.DataFrame, idx: int, row: pd.Series, ct: str, k: in
 # not against 0.5. GEO_BINS fixed-width bins, frozen (never tuned).
 GEO_BINS = 10
 GEO_FRAMES = ("k0", "k1", "k2", "fwd")
+# Volatility strata: the corridor baseline is also split by ATR-regime tercile
+# (atr_regime, cisd_data), cut at the tercile points of the CISD events in the
+# slice being baselined — the baseline is re-estimated within every slice, so
+# the cut points are too. NaN regime (warm-up) is its own stratum.
+GEO_REGIME_QUANTILES = (1 / 3, 2 / 3)
+
+
+class GeoArr(NamedTuple):
+    """Per-row corridor baseline (p) and effective-n cluster id for one frame."""
+    p:       np.ndarray
+    cluster: np.ndarray
+
+
+def geo_cluster_ids(index: pd.DatetimeIndex) -> np.ndarray:
+    """Cluster id per bar for the effective-n correction.
+
+    Intraday bars cluster by CME session date (the 18:00 ET roll, so ts + 6h);
+    Daily/4H bars cluster by session week (ts + 30h so the Sunday-evening
+    session joins the following week) because their 2-bar windows span days.
+    Ids are integer day numbers, identical across NQ and ES, so pooled NQ+ES
+    cells merge same-day events into one cluster.
+    """
+    if len(index) == 0:
+        return np.zeros(0, dtype=np.int64)
+    diffs = pd.Series(index[1:] - index[:-1])
+    span = diffs.mode().iloc[0] if len(diffs) else pd.Timedelta(0)
+    if span >= pd.Timedelta(hours=4):
+        day = (index + pd.Timedelta(hours=30)).normalize()
+        day = day - pd.to_timedelta(day.dayofweek, unit="D")
+    else:
+        day = (index + pd.Timedelta(hours=6)).normalize()
+    return day.to_numpy().astype("datetime64[D]").astype(np.int64)
+
+
+def _regime_codes(df: pd.DataFrame) -> np.ndarray:
+    """ATR-regime tercile per row (0/1/2), -1 where undefined; all 0 when the
+    frame carries no atr_regime column (minimal synthetic frames)."""
+    if "atr_regime" not in df.columns:
+        return np.zeros(len(df), dtype=int)
+    reg = df["atr_regime"].to_numpy(dtype=float)
+    is_cisd = df["cisd_type"].isin(("bullish", "bearish")).to_numpy()
+    ref = reg[is_cisd & np.isfinite(reg)]
+    if len(ref) == 0:
+        return np.full(len(df), -1, dtype=int)
+    cuts = np.quantile(ref, GEO_REGIME_QUANTILES)
+    codes = np.searchsorted(cuts, reg, side="right")
+    return np.where(np.isfinite(reg), codes, -1).astype(int)
 
 
 def _event_outcomes(df: pd.DataFrame, frame: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -205,36 +252,45 @@ def _event_outcomes(df: pd.DataFrame, frame: str) -> tuple[np.ndarray, np.ndarra
 
 def attach_geo_baseline(df: pd.DataFrame) -> pd.DataFrame:
     """Return a copy of *df* with per-event expected hit probability columns
-    geo_p_k0 / geo_p_k1 / geo_p_k2 / geo_p_fwd.
+    geo_p_k0 / geo_p_k1 / geo_p_k2 / geo_p_fwd, plus geo_cluster.
 
     geo_p = the hit rate, on THIS frame (call it once per slice / fold chunk),
-    of all CISDs with the same direction and corridor bin under the same
-    scoring frame. The event itself is included (indirect standardization),
-    which shrinks lift toward zero — conservative. NaN where the event is not
-    scored under that frame.
+    of all CISDs with the same direction, ATR-regime tercile and corridor bin
+    under the same scoring frame. The event itself is included (indirect
+    standardization), which shrinks lift toward zero — conservative. NaN where
+    the event is not scored under that frame. geo_cluster is the effective-n
+    cluster id (geo_cluster_ids).
     """
     out = df.copy()
+    regime = _regime_codes(df)
     for frame in GEO_FRAMES:
         outcome, bins, dcode = _event_outcomes(df, frame)
         scored = ~np.isnan(outcome)
-        key = pd.Series(dcode[scored] * 100 + bins[scored])
+        key = pd.Series((dcode[scored] + 1) * 100_000 + (regime[scored] + 1) * 1_000 + (bins[scored] + 1))
         rate = pd.Series(outcome[scored]).groupby(key).mean()
         p = np.full(len(df), np.nan)
         p[scored] = key.map(rate).to_numpy(dtype=float)
         out[f"geo_p_{frame}"] = p
+    out["geo_cluster"] = geo_cluster_ids(df.index) if isinstance(df.index, pd.DatetimeIndex) \
+        else np.arange(len(df), dtype=np.int64)
     return out
 
 
-def _geo_arr(df: pd.DataFrame, frame: str) -> np.ndarray | None:
+def _geo_arr(df: pd.DataFrame, frame: str) -> GeoArr | None:
     col = f"geo_p_{frame}"
-    return df[col].to_numpy(dtype=float) if col in df.columns else None
+    if col not in df.columns:
+        return None
+    cluster = df["geo_cluster"].to_numpy(dtype=np.int64) if "geo_cluster" in df.columns \
+        else np.arange(len(df), dtype=np.int64)
+    return GeoArr(df[col].to_numpy(dtype=float), cluster)
 
 
-def _tally(cell: dict, hit: bool | None, geo: np.ndarray | None, pos: int) -> None:
+def _tally(cell: dict, hit: bool | None, geo: GeoArr | None, pos: int) -> None:
     """Count one event into a {total, runs} cell. hit=None = not scored
     (confirm-then-enter exclusion). When geo baselines are attached the cell
     also accumulates geo_n / geo_runs / expected / expected_var over events
-    with a defined baseline — the corridor-position null's sufficient stats."""
+    with a defined baseline — the corridor-position null's sufficient stats —
+    and clusters: {cluster id: sum of (hit - p)} for the effective-n variance."""
     if hit is None:
         return
     cell["total"] += 1
@@ -243,12 +299,15 @@ def _tally(cell: dict, hit: bool | None, geo: np.ndarray | None, pos: int) -> No
     if geo is not None:
         for key in ("geo_n", "geo_runs", "expected", "expected_var"):
             cell.setdefault(key, 0)
-        p = geo[pos]
+        clusters = cell.setdefault("clusters", {})
+        p = geo.p[pos]
         if np.isfinite(p):
             cell["geo_n"] += 1
             cell["geo_runs"] += int(bool(hit))
             cell["expected"] += float(p)
             cell["expected_var"] += float(p * (1.0 - p))
+            cid = int(geo.cluster[pos])
+            clusters[cid] = clusters.get(cid, 0.0) + float(bool(hit)) - float(p)
 
 
 def _count_consecutive(idx: int, directions: pd.Series, target: str, max_n: int) -> int:
@@ -949,21 +1008,21 @@ def compute_smt_in_block(df: pd.DataFrame) -> dict:
 
 
 def compute_cisd_fvg(df: pd.DataFrame) -> dict:
-    """Barrier run rate split by directional FVG presence at CISD bar (mid0) or next bar (mid1).
+    """Barrier run rate split by directional FVG presence at the CISD bar (mid0).
 
     Scored confirm-then-enter from close[t+2] (barrier_hit_after, k=2): mid0
-    needs bar t+1 and mid1 / no_fvg need bar t+2, all inside barrier_hit's
-    window. Every bucket shares the k=2 frame (quick task 260929-mkg).
+    needs bar t+1 and no_fvg (no mid0 and no mid1 FVG) needs bar t+2, all
+    inside barrier_hit's window. Every bucket shares the k=2 frame (quick task
+    260929-mkg). There is no mid1 bucket: a mid1 FVG needs bar t+2 to trade
+    entirely beyond the target, so it is never enterable at close[t+2].
     """
     stats = {
         "bullish": {
             "mid0_fvg": {"total": 0, "runs": 0},
-            "mid1_fvg": {"total": 0, "runs": 0},
             "no_fvg": {"total": 0, "runs": 0},
         },
         "bearish": {
             "mid0_fvg": {"total": 0, "runs": 0},
-            "mid1_fvg": {"total": 0, "runs": 0},
             "no_fvg": {"total": 0, "runs": 0},
         },
     }
@@ -977,8 +1036,6 @@ def compute_cisd_fvg(df: pd.DataFrame) -> dict:
         hit = barrier_hit_after(df, pos, df.iloc[pos], ct, 2)
         if mid0_arr[pos]:
             _tally(stats[ct]["mid0_fvg"], hit, geo, pos)
-        if mid1_arr[pos]:
-            _tally(stats[ct]["mid1_fvg"], hit, geo, pos)
         if not mid0_arr[pos] and not mid1_arr[pos]:
             _tally(stats[ct]["no_fvg"], hit, geo, pos)
     return stats

@@ -58,19 +58,46 @@ def pv(num: int, den: int) -> float:
     return (num / den * 100) if den > 0 else 0.0
 
 
+def baseline_pct(d: dict) -> float | None:
+    """Corridor/ATR-regime baseline (%) of a compute cell, None without one."""
+    n = d.get("geo_n", 0)
+    return d["expected"] / n * 100 if n else None
+
+
+# Baselines of the bars being built, in bar order: pvg() pushes one per bar and
+# _bar_label() pops one per bar, so no chart_* signature has to change.
+# _style_ax() closes each chart and clears any leftovers.
+_BASELINES: list = []
+
+
+def pvg(d: dict) -> float:
+    """pv(d["runs"], d["total"]) that also queues the cell's baseline marker."""
+    _BASELINES.append(baseline_pct(d))
+    return pv(d["runs"], d["total"])
+
+
 def _bar_label(ax, bars):
     for bar in bars:
         w = bar.get_width()
+        y, h = bar.get_y(), bar.get_height()
+        base = _BASELINES.pop(0) if _BASELINES else None
+        if base is not None:
+            ax.plot([base, base], [y - 0.1 * h, y + 1.1 * h], color="#ffffff", lw=1.4,
+                    solid_capstyle="butt", zorder=3)
+            ax._cisd_has_baseline = True
         if w > 0:
             ax.text(
-                min(w + 0.5, 103), bar.get_y() + bar.get_height() / 2,
+                min(w + 0.5, 103), y + h / 2,
                 f"{w:.1f}%", va="center", ha="left", fontsize=7.5, color="#c0c4d0",
             )
 
 
 def _style_ax(ax, title: str):
+    _BASELINES.clear()
     ax.set_title(title, fontsize=10, fontweight="bold", pad=6)
-    ax.set_xlabel("Success Rate (%) — target hit before stop")
+    ax.set_xlabel("Success Rate (%) — target hit before stop"
+                  + ("   |   white tick = corridor/ATR-regime baseline"
+                     if getattr(ax, "_cisd_has_baseline", False) else ""))
     ax.set_xlim(0, 108)
     ax.xaxis.set_major_formatter(mticker.FormatStrFormatter("%g%%"))
     ax.spines[["top", "right"]].set_visible(False)
@@ -114,7 +141,7 @@ def chart_mc(ax, data_nq, data_es):
             for instr, data, h in (("NQ", data_nq, 0.35), ("ES", data_es, 0.35)):
                 d = data[ct][n]
                 y_labels.append(f"{instr} {ct.capitalize()} {n}c  (n={d['total']:,})")
-                y_vals.append(pv(d["runs"], d["total"]))
+                y_vals.append(pvg(d))
                 y_colors.append(COLORS[instr][ct])
                 y_pos.append(y)
                 y += 1
@@ -151,7 +178,7 @@ def chart_wick(ax, data_nq, data_es):
             for grp, glabel in (("past_wick", "past wick"), ("within_wick", "within wick")):
                 d = data[ct][grp]
                 rows.append((f"{instr} {ct.capitalize()} {glabel}  (n={d['total']:,})",
-                             pv(d["runs"], d["total"]),
+                             pvg(d),
                              COLORS[instr][ct],
                              1.0 if grp == "past_wick" else 0.55))
     bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55) for r in rows]
@@ -170,7 +197,7 @@ def chart_combined(ax, data_nq, data_es):
                                             ("within_wick", "within wick", 0.55)):
                     d = data[ct][n][grp]
                     y_labels.append(f"{instr} {ct.capitalize()} {n}c {glabel}  (n={d['total']:,})")
-                    y_vals.append(pv(d["runs"], d["total"]))
+                    y_vals.append(pvg(d))
                     y_colors.append(COLORS[instr][ct])
                     y_alphas.append(alpha)
                     y_pos.append(y)
@@ -194,7 +221,7 @@ def chart_volume(ax, data_nq, data_es):
             for lbl in all_labels:
                 d = data[ct][lbl]
                 rows.append((f"{instr} {ct.capitalize()} {lbl}  (n={d['total']:,})",
-                             pv(d["runs"], d["total"]), COLORS[instr][ct]))
+                             pvg(d), COLORS[instr][ct]))
     bars = [ax.barh(r[0], r[1], color=r[2], height=0.55) for r in rows]
     for b in bars:
         _bar_label(ax, b)
@@ -211,7 +238,7 @@ def chart_wick_distance(ax, data_nq, data_es):
             for lbl, alpha in zip(bucket_labels, alphas):
                 d = data[ct][lbl]
                 rows.append((f"{instr} {ct.capitalize()} {lbl}  (n={d['total']:,})",
-                             pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+                             pvg(d), COLORS[instr][ct], alpha))
     bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55)
             for r in rows]
     for b in bars:
@@ -228,7 +255,7 @@ def chart_sweep_depth(ax, data_nq, data_es):
             for lbl, alpha in zip(bucket_labels, alphas):
                 d = data[ct][lbl]
                 rows.append((f"{instr} {ct.capitalize()} {lbl}  (n={d['total']:,})",
-                             pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+                             pvg(d), COLORS[instr][ct], alpha))
     bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55)
             for r in rows]
     for b in bars:
@@ -245,7 +272,7 @@ def chart_fvg_size(ax, data_nq, data_es):
             for lbl, alpha in zip(bucket_labels, alphas):
                 d = data[ct][lbl]
                 rows.append((f"{instr} {ct.capitalize()} {lbl}  (n={d['total']:,})",
-                             pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+                             pvg(d), COLORS[instr][ct], alpha))
     bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55)
             for r in rows]
     for b in bars:
@@ -261,7 +288,7 @@ def chart_effort_result(ax, data_nq, data_es):
             for lbl in bucket_labels:
                 d = data[ct][lbl]
                 rows.append((f"{instr} {ct.capitalize()} {lbl}  (n={d['total']:,})",
-                             pv(d["runs"], d["total"]), COLORS[instr][ct]))
+                             pvg(d), COLORS[instr][ct]))
     bars = [ax.barh(r[0], r[1], color=r[2], height=0.55) for r in rows]
     for b in bars:
         _bar_label(ax, b)
@@ -277,7 +304,7 @@ def chart_rvol(ax, data_nq, data_es):
             for lbl, alpha in zip(bucket_labels, alphas):
                 d = data[ct][lbl]
                 rows.append((f"{instr} {ct.capitalize()} {lbl}  (n={d['total']:,})",
-                             pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+                             pvg(d), COLORS[instr][ct], alpha))
     bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55)
             for r in rows]
     for b in bars:
@@ -294,7 +321,7 @@ def chart_volume_zscore(ax, data_nq, data_es):
             for lbl, alpha in zip(bucket_labels, alphas):
                 d = data[ct][lbl]
                 rows.append((f"{instr} {ct.capitalize()} {lbl}  (n={d['total']:,})",
-                             pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+                             pvg(d), COLORS[instr][ct], alpha))
     bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55)
             for r in rows]
     for b in bars:
@@ -309,7 +336,7 @@ def chart_session(ax, data_nq, data_es):
             for tag, alpha in (("rth_open", 1.0), ("rth", 0.75), ("overnight", 0.45)):
                 d = data[ct][tag]
                 rows.append((f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})",
-                             pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+                             pvg(d), COLORS[instr][ct], alpha))
     bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55)
             for r in rows]
     for b in bars:
@@ -327,7 +354,7 @@ def chart_candle_size(ax, data_nq, data_es):
             for lbl in all_labels:
                 d = data[ct][lbl]
                 rows.append((f"{instr} {ct.capitalize()} {lbl}  (n={d['total']:,})",
-                             pv(d["runs"], d["total"]), COLORS[instr][ct]))
+                             pvg(d), COLORS[instr][ct]))
     bars = [ax.barh(r[0], r[1], color=r[2], height=0.55) for r in rows]
     for b in bars:
         _bar_label(ax, b)
@@ -345,7 +372,7 @@ def chart_size_cross(ax, data_nq, data_es):
             for lbl, alpha in zip(bucket_labels, alphas):
                 d = data[ct][lbl]
                 rows.append((f"{instr} {ct.capitalize()} — {lbl}  (n={d['total']:,})",
-                             pv(d["runs"], d["total"]),
+                             pvg(d),
                              COLORS[instr][ct], alpha))
     bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55)
             for r in rows]
@@ -364,7 +391,7 @@ def chart_smt_cisd(ax, data_nq, data_es):
             for tag, alpha in (("w/ SMT", 1.0), ("expired SMT", 0.75), ("no SMT", 0.45)):
                 d = data[ct][tag]
                 rows.append((f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})",
-                             pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+                             pvg(d), COLORS[instr][ct], alpha))
     bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55)
             for r in rows]
     for b in bars:
@@ -379,7 +406,7 @@ def chart_smt_role(ax, data_nq, data_es):
             for tag, alpha in (("swept", 1.0), ("failed_to_sweep", 0.6)):
                 d = data[ct][tag]
                 rows.append((f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})",
-                             pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+                             pvg(d), COLORS[instr][ct], alpha))
     bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55)
             for r in rows]
     for b in bars:
@@ -396,7 +423,7 @@ def chart_smt_block_size(ax, data_nq, data_es):
             for lbl, alpha in zip(bucket_labels, alphas):
                 d = data[ct][lbl]
                 rows.append((f"{instr} {ct.capitalize()} {lbl}  (n={d['total']:,})",
-                             pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+                             pvg(d), COLORS[instr][ct], alpha))
     bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55)
             for r in rows]
     for b in bars:
@@ -411,7 +438,7 @@ def chart_smt_in_block(ax, data_nq, data_es):
             for tag, alpha in (("cisd_in_block", 1.0), ("cisd_out_block", 0.55)):
                 d = data[ct][tag]
                 rows.append((f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})",
-                             pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+                             pvg(d), COLORS[instr][ct], alpha))
     bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55)
             for r in rows]
     for b in bars:
@@ -423,10 +450,10 @@ def chart_cisd_fvg(ax, data_nq, data_es):
     rows = []
     for instr, data in (("NQ", data_nq), ("ES", data_es)):
         for ct in ("bullish", "bearish"):
-            for tag, alpha in (("mid0_fvg", 1.0), ("mid1_fvg", 0.75), ("no_fvg", 0.45)):
+            for tag, alpha in (("mid0_fvg", 1.0), ("no_fvg", 0.45)):
                 d = data[ct][tag]
                 rows.append(
-                    (f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})", pv(d["runs"], d["total"]), COLORS[instr][ct], alpha)
+                    (f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})", pvg(d), COLORS[instr][ct], alpha)
                 )
     bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55) for r in rows]
     for b in bars:
@@ -462,7 +489,7 @@ def chart_cisd_fvg_interaction(ax, data_nq, data_es):
                         rows.append(
                             (
                                 f"{instr} {ct.capitalize()} {bucket} {label} {state}  (n={d['total']:,})",
-                                pv(d["runs"], d["total"]),
+                                pvg(d),
                                 COLORS[instr][ct],
                                 alpha,
                             )
@@ -479,7 +506,7 @@ def chart_sweep(ax, data_nq, data_es):
         for ct in ("bullish", "bearish"):
             for tag, alpha in (("w/ sweep", 1.0), ("no sweep", 0.55)):
                 d = data[ct][tag]
-                rows.append((f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})", pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+                rows.append((f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})", pvg(d), COLORS[instr][ct], alpha))
     bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55) for r in rows]
     for b in bars:
         _bar_label(ax, b)
@@ -492,7 +519,7 @@ def chart_sssf_swing(ax, data_nq, data_es):
         for ct in ("bullish", "bearish"):
             for tag, alpha in (("prev_bar_is_swing", 1.0), ("cisd_bar_is_swing", 0.75), ("neither", 0.45)):
                 d = data[ct][tag]
-                rows.append((f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})", pv(d["runs"], d["total"]), COLORS[instr][ct], alpha))
+                rows.append((f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})", pvg(d), COLORS[instr][ct], alpha))
     bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55) for r in rows]
     for b in bars:
         _bar_label(ax, b)
@@ -515,7 +542,7 @@ def chart_post_cisd_context(ax, data_nq, data_es):
             for tag, alpha in _TAGS:
                 d = data[ct][tag]
                 rows.append((f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})",
-                             pv(d["runs"], d["total"]),
+                             pvg(d),
                              COLORS[instr][ct],
                              alpha))
     bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55) for r in rows]
@@ -541,7 +568,7 @@ def chart_candle1_followthrough(ax, data_nq, data_es):
             for tag, alpha in _TAGS:
                 d = data[ct][tag]
                 rows.append((f"{instr} {ct.capitalize()} {tag}  (n={d['total']:,})",
-                             pv(d["runs"], d["total"]),
+                             pvg(d),
                              COLORS[instr][ct],
                              alpha))
     bars = [ax.barh(r[0], r[1], color=r[2], alpha=r[3], height=0.55) for r in rows]
@@ -558,15 +585,17 @@ def build_csv_rows(keys: list, df_nq: pd.DataFrame, df_es: pd.DataFrame) -> pd.D
 
     rows = []
 
-    def add(analysis, instr, direction, category, n, runs):
+    def add(analysis, instr, direction, category, n, runs, d=None):
+        base = baseline_pct(d) if d else None
         rows.append({
-            "Analysis":   analysis,
-            "Instrument": instr,
-            "Direction":  direction,
-            "Category":   category,
-            "N":          n,
-            "Runs":       runs,
-            "Rate_pct":   round(pv(runs, n), 2),
+            "Analysis":     analysis,
+            "Instrument":   instr,
+            "Direction":    direction,
+            "Category":     category,
+            "N":            n,
+            "Runs":         runs,
+            "Rate_pct":     round(pv(runs, n), 2),
+            "Baseline_pct": round(base, 2) if base is not None else None,
         })
 
     for key in keys:
@@ -584,13 +613,13 @@ def build_csv_rows(keys: list, df_nq: pd.DataFrame, df_es: pd.DataFrame) -> pd.D
                     for n in range(1, MAX_CONSEC + 1):
                         d = data[ct][n]
                         add(label, instr, ct, f"{n}_consecutive",
-                            d["total"], d["runs"])
+                            d["total"], d["runs"], d)
 
             elif key == "wick":
                 for ct in ("bullish", "bearish"):
                     for grp in ("past_wick", "within_wick"):
                         d = data[ct][grp]
-                        add(label, instr, ct, grp, d["total"], d["runs"])
+                        add(label, instr, ct, grp, d["total"], d["runs"], d)
 
             elif key == "combined":
                 for ct in ("bullish", "bearish"):
@@ -598,23 +627,23 @@ def build_csv_rows(keys: list, df_nq: pd.DataFrame, df_es: pd.DataFrame) -> pd.D
                         for grp in ("past_wick", "within_wick"):
                             d = data[ct][n][grp]
                             add(label, instr, ct, f"{n}c_{grp}",
-                                d["total"], d["runs"])
+                                d["total"], d["runs"], d)
 
             elif key in ("volume", "candle_size", "size_cross"):
                 # Generic: data[ct] is a dict of label -> {total, runs}
                 for ct in ("bullish", "bearish"):
                     for bucket_lbl, d in data[ct].items():
-                        add(label, instr, ct, bucket_lbl, d["total"], d["runs"])
+                        add(label, instr, ct, bucket_lbl, d["total"], d["runs"], d)
 
             elif key in ("smt_cisd", "smt_role", "smt_block_size", "smt_in_block"):
                 for ct in ("bullish", "bearish"):
                     for tag, d in data[ct].items():
-                        add(label, instr, ct, tag, d["total"], d["runs"])
+                        add(label, instr, ct, tag, d["total"], d["runs"], d)
 
             elif key == "cisd_fvg":
                 for ct in ("bullish", "bearish"):
                     for tag, d in data[ct].items():
-                        add(label, instr, ct, tag, d["total"], d["runs"])
+                        add(label, instr, ct, tag, d["total"], d["runs"], d)
 
             elif key == "fvg_hold":
                 for ct in ("bullish", "bearish"):
@@ -627,14 +656,14 @@ def build_csv_rows(keys: list, df_nq: pd.DataFrame, df_es: pd.DataFrame) -> pd.D
                     for bucket in ("mid0", "mid1"):
                         for mode, state_map in data[ct][bucket].items():
                             for state, d in state_map.items():
-                                add(label, instr, ct, f"{bucket}_{mode}_{state}", d["total"], d["runs"])
+                                add(label, instr, ct, f"{bucket}_{mode}_{state}", d["total"], d["runs"], d)
 
             elif key in ("sweep", "sssf_swing", "candle1_followthrough", "post_cisd_context",
                          "wick_distance", "sweep_depth", "fvg_size",
                          "effort_result", "rvol", "volume_zscore", "session"):
                 for ct in ("bullish", "bearish"):
                     for tag, d in data[ct].items():
-                        add(label, instr, ct, tag, d["total"], d["runs"])
+                        add(label, instr, ct, tag, d["total"], d["runs"], d)
 
     return pd.DataFrame(rows)
 

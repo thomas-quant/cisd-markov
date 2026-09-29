@@ -254,24 +254,33 @@ def test_wick_daily_es_bearish_within(es_frames):
 #   ES 1H:     Bull=60.8 n=641, Bear=55.8 n=733
 #   ES 15min:  Bull=63.9 n=2494, Bear=60.7 n=2633
 
+#
+# Re-pinned 2026-09-29 (quick task 260929-mkg follow-up): the UTC vendor
+# snapshot replaced the lost DateTime_ET files and the SMT package was
+# restored from github.com/thomas-quant/SMT @ 6300e0c (the local copy was
+# lost). Drift vs the 2026-07-12 capture above: n within -4..+7, rates within
+# +/-0.7pp, except ES Daily bull (one event of 53, 60.4 -> 58.5). The data
+# change and any SMT-version difference cannot be separated from these
+# numbers; both are small against the cell sizes.
+
 _SMT_EXPECTED = {
     # (timeframe, instrument, direction): (rate_1dp, n)
     ("Daily",  "NQ", "bullish"): (68.0, 50),
     ("Daily",  "NQ", "bearish"): (61.1, 36),
-    ("Daily",  "ES", "bullish"): (60.4, 53),
+    ("Daily",  "ES", "bullish"): (58.5, 53),
     ("Daily",  "ES", "bearish"): (51.1, 45),
-    ("4H",     "NQ", "bullish"): (57.7, 213),
-    ("4H",     "NQ", "bearish"): (51.3, 230),
-    ("4H",     "ES", "bullish"): (64.5, 203),
-    ("4H",     "ES", "bearish"): (52.0, 227),
-    ("1H",     "NQ", "bullish"): (60.6, 675),
-    ("1H",     "NQ", "bearish"): (55.2, 774),
-    ("1H",     "ES", "bullish"): (60.8, 641),
-    ("1H",     "ES", "bearish"): (55.8, 733),
-    ("15min",  "NQ", "bullish"): (64.7, 2603),
-    ("15min",  "NQ", "bearish"): (61.3, 2772),
-    ("15min",  "ES", "bullish"): (63.9, 2494),
-    ("15min",  "ES", "bearish"): (60.7, 2633),
+    ("4H",     "NQ", "bullish"): (58.3, 211),
+    ("4H",     "NQ", "bearish"): (50.9, 226),
+    ("4H",     "ES", "bullish"): (63.8, 199),
+    ("4H",     "ES", "bearish"): (52.0, 225),
+    ("1H",     "NQ", "bullish"): (60.7, 677),
+    ("1H",     "NQ", "bearish"): (54.9, 778),
+    ("1H",     "ES", "bullish"): (61.0, 644),
+    ("1H",     "ES", "bearish"): (55.9, 735),
+    ("15min",  "NQ", "bullish"): (64.7, 2610),
+    ("15min",  "NQ", "bearish"): (61.5, 2771),
+    ("15min",  "ES", "bullish"): (64.1, 2498),
+    ("15min",  "ES", "bearish"): (60.8, 2636),
 }
 
 
