@@ -105,6 +105,152 @@ def barrier_outcome_forward(df: pd.DataFrame, idx: int, row: pd.Series, ct: str)
     return "neither"
 
 
+def barrier_hit_after(df: pd.DataFrame, idx: int, row: pd.Series, ct: str, k: int) -> bool | None:
+    """Confirm-then-enter barrier (quick task 260929-mkg).
+
+    For a conditioner that is only known at the close of bar idx+k: entry is
+    close[idx+k], target/stop are candle[0]'s (same as barrier_hit), and the
+    LOOKAHEAD-bar window is idx+k+1 .. idx+k+LOOKAHEAD. Returns None — event
+    excluded, not a loss — when target or stop was already touched on bars
+    idx+1 .. idx+k (the setup is resolved before it can be entered) or when
+    the window runs past the end of the data. k=0 is barrier_hit except that
+    a truncated window is None rather than False.
+    """
+    n = len(df)
+    if idx + k >= n:
+        return None
+    high = df["high"].to_numpy(dtype=float)
+    low  = df["low"].to_numpy(dtype=float)
+    hi0, lo0 = float(row["high"]), float(row["low"])
+    for j in range(1, k + 1):
+        if high[idx + j] >= hi0 or low[idx + j] <= lo0:
+            return None
+    for j in range(k + 1, k + LOOKAHEAD + 1):
+        if idx + j >= n:
+            return None   # window truncated by end of data before resolving
+        if ct == "bullish":
+            if low[idx + j] <= lo0:   return False   # stop
+            if high[idx + j] >= hi0:  return True    # target
+        else:
+            if high[idx + j] >= hi0:  return False   # stop
+            if low[idx + j] <= lo0:   return True    # target
+    return False
+
+
+# ── Corridor-position null (quick task 260929-mkg) ───────────────────────────
+# The barrier's target and stop are candle[0]'s own extremes, so the hit rate
+# is dominated by where the entry sits in the stop->target corridor (NQ 1H:
+# 31% in the bottom CLV quintile vs 81% in the top). A bucket is therefore
+# tested against the hit rate expected from its events' corridor positions,
+# not against 0.5. GEO_BINS fixed-width bins, frozen (never tuned).
+GEO_BINS = 10
+GEO_FRAMES = ("k0", "k1", "k2", "fwd")
+
+
+def _event_outcomes(df: pd.DataFrame, frame: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Per-row (outcome, corridor_bin, direction_code) for one scoring frame.
+
+    outcome: 1.0 hit / 0.0 miss / NaN not scored. frame "k0" reproduces
+    barrier_hit exactly (truncated window = miss), "k1"/"k2" reproduce
+    barrier_hit_after(k), "fwd" reproduces barrier_hit_forward (entry proxy
+    close[t+1], no unresolved filter; its corridor bins are clipped to
+    -1 / GEO_BINS for entries already beyond stop / target).
+    """
+    n = len(df)
+    high  = df["high"].to_numpy(dtype=float)
+    low   = df["low"].to_numpy(dtype=float)
+    close = df["close"].to_numpy(dtype=float)
+    ct    = df["cisd_type"].to_numpy(dtype=object)
+    outcome = np.full(n, np.nan)
+    bins    = np.full(n, -99, dtype=int)
+    dcode   = np.where(ct == "bullish", 1, np.where(ct == "bearish", -1, 0))
+
+    if frame == "fwd":
+        k, start, filt, trunc_is_miss = 1, 2, False, True
+    else:
+        k = int(frame[1:])
+        start, filt, trunc_is_miss = k + 1, k > 0, k == 0
+
+    for i in np.flatnonzero(dcode != 0):
+        bull = dcode[i] == 1
+        hi0, lo0 = high[i], low[i]
+        rng = hi0 - lo0
+        if not rng > 0 or i + k >= n:
+            continue
+        if filt and ((high[i + 1:i + k + 1] >= hi0).any() or (low[i + 1:i + k + 1] <= lo0).any()):
+            continue
+        res = np.nan
+        for j in range(start, start + LOOKAHEAD):
+            if i + j >= n:
+                break
+            if bull:
+                if low[i + j] <= lo0:   res = 0.0; break
+                if high[i + j] >= hi0:  res = 1.0; break
+            else:
+                if high[i + j] >= hi0:  res = 0.0; break
+                if low[i + j] <= lo0:   res = 1.0; break
+        else:
+            res = 0.0
+        if np.isnan(res):
+            if not trunc_is_miss:
+                continue
+            res = 0.0
+        entry = close[i + k]
+        pos = (entry - lo0) / rng if bull else (hi0 - entry) / rng
+        outcome[i] = res
+        bins[i] = int(np.clip(np.floor(pos * GEO_BINS), -1, GEO_BINS)) if frame == "fwd" \
+            else int(min(max(np.floor(pos * GEO_BINS), 0), GEO_BINS - 1))
+    return outcome, bins, dcode
+
+
+def attach_geo_baseline(df: pd.DataFrame) -> pd.DataFrame:
+    """Return a copy of *df* with per-event expected hit probability columns
+    geo_p_k0 / geo_p_k1 / geo_p_k2 / geo_p_fwd.
+
+    geo_p = the hit rate, on THIS frame (call it once per slice / fold chunk),
+    of all CISDs with the same direction and corridor bin under the same
+    scoring frame. The event itself is included (indirect standardization),
+    which shrinks lift toward zero — conservative. NaN where the event is not
+    scored under that frame.
+    """
+    out = df.copy()
+    for frame in GEO_FRAMES:
+        outcome, bins, dcode = _event_outcomes(df, frame)
+        scored = ~np.isnan(outcome)
+        key = pd.Series(dcode[scored] * 100 + bins[scored])
+        rate = pd.Series(outcome[scored]).groupby(key).mean()
+        p = np.full(len(df), np.nan)
+        p[scored] = key.map(rate).to_numpy(dtype=float)
+        out[f"geo_p_{frame}"] = p
+    return out
+
+
+def _geo_arr(df: pd.DataFrame, frame: str) -> np.ndarray | None:
+    col = f"geo_p_{frame}"
+    return df[col].to_numpy(dtype=float) if col in df.columns else None
+
+
+def _tally(cell: dict, hit: bool | None, geo: np.ndarray | None, pos: int) -> None:
+    """Count one event into a {total, runs} cell. hit=None = not scored
+    (confirm-then-enter exclusion). When geo baselines are attached the cell
+    also accumulates geo_n / geo_runs / expected / expected_var over events
+    with a defined baseline — the corridor-position null's sufficient stats."""
+    if hit is None:
+        return
+    cell["total"] += 1
+    if hit:
+        cell["runs"] += 1
+    if geo is not None:
+        for key in ("geo_n", "geo_runs", "expected", "expected_var"):
+            cell.setdefault(key, 0)
+        p = geo[pos]
+        if np.isfinite(p):
+            cell["geo_n"] += 1
+            cell["geo_runs"] += int(bool(hit))
+            cell["expected"] += float(p)
+            cell["expected_var"] += float(p * (1.0 - p))
+
+
 def _count_consecutive(idx: int, directions: pd.Series, target: str, max_n: int) -> int:
     count = 0
     for i in range(1, max_n + 1):
@@ -121,14 +267,16 @@ def compute_basic(df: pd.DataFrame) -> dict:
     """Barrier run rate across all CISDs."""
     ct_arr    = df["cisd_type"].to_numpy(dtype=object)
     event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
-    totals = {"bullish": 0, "bearish": 0}
-    runs   = {"bullish": 0, "bearish": 0}
+    geo = _geo_arr(df, "k0")
+    cells = {ct: {"total": 0, "runs": 0} for ct in ("bullish", "bearish")}
     for pos in event_pos:
         ct = ct_arr[pos]
-        totals[ct] += 1
-        if barrier_hit(df, pos, df.iloc[pos], ct):
-            runs[ct] += 1
-    return {"totals": totals, "runs": runs}
+        _tally(cells[ct], barrier_hit(df, pos, df.iloc[pos], ct), geo, pos)
+    out = {"totals": {ct: c["total"] for ct, c in cells.items()},
+           "runs":   {ct: c["runs"] for ct, c in cells.items()}}
+    if geo is not None:
+        out["geo"] = cells
+    return out
 
 
 def compute_mc(df: pd.DataFrame) -> dict:
@@ -138,15 +286,14 @@ def compute_mc(df: pd.DataFrame) -> dict:
     event_pos  = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
     stats = {ct: {n: {"total": 0, "runs": 0} for n in range(1, MAX_CONSEC + 1)}
              for ct in ("bullish", "bearish")}
+    geo = _geo_arr(df, "k0")
     for pos in event_pos:
         ct     = ct_arr[pos]
         tgt    = "bearish" if ct == "bullish" else "bullish"
         consec = _count_consecutive(pos, directions, tgt, MAX_CONSEC)
         if consec < 1 or consec > MAX_CONSEC:
             continue
-        stats[ct][consec]["total"] += 1
-        if barrier_hit(df, pos, df.iloc[pos], ct):
-            stats[ct][consec]["runs"] += 1
+        _tally(stats[ct][consec], barrier_hit(df, pos, df.iloc[pos], ct), geo, pos)
     return stats
 
 
@@ -202,6 +349,7 @@ def compute_wick(df: pd.DataFrame) -> dict:
     prev_close_arr = df["prev_close"].to_numpy(dtype=float)
     prev_high_arr  = df["prev_high"].to_numpy(dtype=float)
     prev_low_arr   = df["prev_low"].to_numpy(dtype=float)
+    geo = _geo_arr(df, "k0")
 
     bull_mask = (
         np.isin(prev_dir, ["bearish"]) &
@@ -209,9 +357,7 @@ def compute_wick(df: pd.DataFrame) -> dict:
     )
     for pos in np.flatnonzero(bull_mask):
         grp = "past_wick" if close_arr[pos] > prev_high_arr[pos] else "within_wick"
-        stats["bullish"][grp]["total"] += 1
-        if barrier_hit(df, pos, df.iloc[pos], "bullish"):
-            stats["bullish"][grp]["runs"] += 1
+        _tally(stats["bullish"][grp], barrier_hit(df, pos, df.iloc[pos], "bullish"), geo, pos)
 
     bear_mask = (
         np.isin(prev_dir, ["bullish"]) &
@@ -219,9 +365,7 @@ def compute_wick(df: pd.DataFrame) -> dict:
     )
     for pos in np.flatnonzero(bear_mask):
         grp = "past_wick" if close_arr[pos] < prev_low_arr[pos] else "within_wick"
-        stats["bearish"][grp]["total"] += 1
-        if barrier_hit(df, pos, df.iloc[pos], "bearish"):
-            stats["bearish"][grp]["runs"] += 1
+        _tally(stats["bearish"][grp], barrier_hit(df, pos, df.iloc[pos], "bearish"), geo, pos)
 
     return stats
 
@@ -261,6 +405,7 @@ def compute_wick_distance(df: pd.DataFrame) -> dict:
     event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
     stats = {ct: {lbl: {"total": 0, "runs": 0} for _, _, lbl in BINS}
              for ct in ("bullish", "bearish")}
+    geo = _geo_arr(df, "k0")
     for pos in event_pos:
         ratio = ratio_arr[pos]
         if pd.isna(ratio):
@@ -268,9 +413,7 @@ def compute_wick_distance(df: pd.DataFrame) -> dict:
         ct = ct_arr[pos]
         for lo, hi, lbl in BINS:
             if lo < ratio <= hi:
-                stats[ct][lbl]["total"] += 1
-                if barrier_hit(df, pos, df.iloc[pos], ct):
-                    stats[ct][lbl]["runs"] += 1
+                _tally(stats[ct][lbl], barrier_hit(df, pos, df.iloc[pos], ct), geo, pos)
                 break
     return stats
 
@@ -300,6 +443,7 @@ def compute_sweep_depth(df: pd.DataFrame) -> dict:
     event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
     stats = {ct: {lbl: {"total": 0, "runs": 0} for _, _, lbl in BINS}
              for ct in ("bullish", "bearish")}
+    geo = _geo_arr(df, "k0")
     for pos in event_pos:
         ratio = ratio_arr[pos]
         if pd.isna(ratio):
@@ -307,9 +451,7 @@ def compute_sweep_depth(df: pd.DataFrame) -> dict:
         ct = ct_arr[pos]
         for lo, hi, lbl in BINS:
             if lo <= ratio < hi:
-                stats[ct][lbl]["total"] += 1
-                if barrier_hit(df, pos, df.iloc[pos], ct):
-                    stats[ct][lbl]["runs"] += 1
+                _tally(stats[ct][lbl], barrier_hit(df, pos, df.iloc[pos], ct), geo, pos)
                 break
     return stats
 
@@ -322,8 +464,13 @@ def compute_fvg_size(df: pd.DataFrame) -> dict:
     fvg_size_atr == NaN and are excluded via the same pd.isna(ratio) skip as
     compute_sweep_depth / compute_smt_block_size. Single flat population
     (mid0-priority per the Plan 01 frozen decision) — not split mid0/mid1,
-    keeping the flat {dir: {tag: {total, runs}}} shape. compute_cisd_fvg (the
-    existing mid0/mid1/no_fvg presence analysis) is left untouched (D-10/D-12).
+    keeping the flat {dir: {tag: {total, runs}}} shape.
+
+    Scored confirm-then-enter from close[t+2] (barrier_hit_after, k=2): the
+    FVG — and therefore its size — is only known once bar t+1 (mid0) or t+2
+    (mid1) has closed, and those bars sit inside barrier_hit's t+1..t+2
+    window (quick task 260929-mkg: NQ 1H mid0 FVG events had a 0.1% stop-at-
+    t+1 rate by construction).
     """
     if "fvg_size_atr" not in df.columns:
         raise ValueError("df must contain fvg_size_atr column")
@@ -339,6 +486,7 @@ def compute_fvg_size(df: pd.DataFrame) -> dict:
     event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
     stats = {ct: {lbl: {"total": 0, "runs": 0} for _, _, lbl in BINS}
              for ct in ("bullish", "bearish")}
+    geo = _geo_arr(df, "k2")
     for pos in event_pos:
         ratio = ratio_arr[pos]
         if pd.isna(ratio):
@@ -346,9 +494,7 @@ def compute_fvg_size(df: pd.DataFrame) -> dict:
         ct = ct_arr[pos]
         for lo, hi, lbl in BINS:
             if lo <= ratio < hi:
-                stats[ct][lbl]["total"] += 1
-                if barrier_hit(df, pos, df.iloc[pos], ct):
-                    stats[ct][lbl]["runs"] += 1
+                _tally(stats[ct][lbl], barrier_hit_after(df, pos, df.iloc[pos], ct, 2), geo, pos)
                 break
     return stats
 
@@ -364,6 +510,7 @@ def compute_combined(df: pd.DataFrame) -> dict:
     stats = {ct: {n: {"past_wick": {"total": 0, "runs": 0},
                        "within_wick": {"total": 0, "runs": 0}}
                   for n in range(1, MAX_CONSEC + 1)} for ct in ("bullish", "bearish")}
+    geo = _geo_arr(df, "k0")
     for pos in event_pos:
         ct     = ct_arr[pos]
         tgt    = "bearish" if ct == "bullish" else "bullish"
@@ -372,9 +519,7 @@ def compute_combined(df: pd.DataFrame) -> dict:
             continue
         above = close_arr[pos] > prev_high_arr[pos] if ct == "bullish" else close_arr[pos] < prev_low_arr[pos]
         grp = "past_wick" if above else "within_wick"
-        stats[ct][consec][grp]["total"] += 1
-        if barrier_hit(df, pos, df.iloc[pos], ct):
-            stats[ct][consec][grp]["runs"] += 1
+        _tally(stats[ct][consec][grp], barrier_hit(df, pos, df.iloc[pos], ct), geo, pos)
     return stats
 
 
@@ -396,6 +541,7 @@ def compute_volume(df: pd.DataFrame) -> dict:
     event_pos  = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
     stats = {ct: {lbl: {"total": 0, "runs": 0} for _, _, lbl in BINS}
              for ct in ("bullish", "bearish")}
+    geo = _geo_arr(df, "k0")
     for pos in event_pos:
         pv = prev_vol_arr[pos]
         if not pv or pd.isna(pv) or pv <= 0:
@@ -404,9 +550,7 @@ def compute_volume(df: pd.DataFrame) -> dict:
         ct    = ct_arr[pos]
         for lo, hi, lbl in BINS:
             if lo <= ratio < hi:
-                stats[ct][lbl]["total"] += 1
-                if barrier_hit(df, pos, df.iloc[pos], ct):
-                    stats[ct][lbl]["runs"] += 1
+                _tally(stats[ct][lbl], barrier_hit(df, pos, df.iloc[pos], ct), geo, pos)
                 break
     return stats
 
@@ -443,6 +587,7 @@ def compute_effort_result(df: pd.DataFrame) -> dict:
     event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
     stats = {ct: {lbl: {"total": 0, "runs": 0} for _, _, lbl in BINS}
              for ct in ("bullish", "bearish")}
+    geo = _geo_arr(df, "k0")
     for pos in event_pos:
         ratio = ratio_arr[pos]
         if pd.isna(ratio):
@@ -450,9 +595,7 @@ def compute_effort_result(df: pd.DataFrame) -> dict:
         ct = ct_arr[pos]
         for lo, hi, lbl in BINS:
             if lo <= ratio < hi:
-                stats[ct][lbl]["total"] += 1
-                if barrier_hit(df, pos, df.iloc[pos], ct):
-                    stats[ct][lbl]["runs"] += 1
+                _tally(stats[ct][lbl], barrier_hit(df, pos, df.iloc[pos], ct), geo, pos)
                 break
     return stats
 
@@ -485,6 +628,7 @@ def compute_rvol(df: pd.DataFrame) -> dict:
     event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
     stats = {ct: {lbl: {"total": 0, "runs": 0} for _, _, lbl in BINS}
              for ct in ("bullish", "bearish")}
+    geo = _geo_arr(df, "k0")
     for pos in event_pos:
         ratio = ratio_arr[pos]
         if pd.isna(ratio):
@@ -492,9 +636,7 @@ def compute_rvol(df: pd.DataFrame) -> dict:
         ct = ct_arr[pos]
         for lo, hi, lbl in BINS:
             if lo <= ratio < hi:
-                stats[ct][lbl]["total"] += 1
-                if barrier_hit(df, pos, df.iloc[pos], ct):
-                    stats[ct][lbl]["runs"] += 1
+                _tally(stats[ct][lbl], barrier_hit(df, pos, df.iloc[pos], ct), geo, pos)
                 break
     return stats
 
@@ -526,6 +668,7 @@ def compute_volume_zscore(df: pd.DataFrame) -> dict:
     event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
     stats = {ct: {lbl: {"total": 0, "runs": 0} for _, _, lbl in BINS}
              for ct in ("bullish", "bearish")}
+    geo = _geo_arr(df, "k0")
     for pos in event_pos:
         ratio = ratio_arr[pos]
         if pd.isna(ratio):
@@ -533,9 +676,7 @@ def compute_volume_zscore(df: pd.DataFrame) -> dict:
         ct = ct_arr[pos]
         for lo, hi, lbl in BINS:
             if lo <= ratio < hi:
-                stats[ct][lbl]["total"] += 1
-                if barrier_hit(df, pos, df.iloc[pos], ct):
-                    stats[ct][lbl]["runs"] += 1
+                _tally(stats[ct][lbl], barrier_hit(df, pos, df.iloc[pos], ct), geo, pos)
                 break
     return stats
 
@@ -568,14 +709,13 @@ def compute_session(df: pd.DataFrame) -> dict:
     ct_arr    = df["cisd_type"].to_numpy(dtype=object)
     tag_arr   = df["session_tag"].to_numpy(dtype=object)
     event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    geo = _geo_arr(df, "k0")
     for pos in event_pos:
         ct  = ct_arr[pos]
         tag = tag_arr[pos]
         if ct not in stats or tag not in stats[ct]:
             continue
-        stats[ct][tag]["total"] += 1
-        if barrier_hit(df, pos, df.iloc[pos], ct):
-            stats[ct][tag]["runs"] += 1
+        _tally(stats[ct][tag], barrier_hit(df, pos, df.iloc[pos], ct), geo, pos)
     return stats
 
 
@@ -598,6 +738,7 @@ def compute_candle_size(df: pd.DataFrame) -> dict:
     event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
     stats = {ct: {lbl: {"total": 0, "runs": 0} for _, _, lbl in BINS}
              for ct in ("bullish", "bearish")}
+    geo = _geo_arr(df, "k0")
     for pos in event_pos:
         atr_val = atr_arr[pos]
         if pd.isna(atr_val) or atr_val <= 0:
@@ -607,9 +748,7 @@ def compute_candle_size(df: pd.DataFrame) -> dict:
         ct    = ct_arr[pos]
         for lo, hi, lbl in BINS:
             if lo <= ratio < hi:
-                stats[ct][lbl]["total"] += 1
-                if barrier_hit(df, pos, df.iloc[pos], ct):
-                    stats[ct][lbl]["runs"] += 1
+                _tally(stats[ct][lbl], barrier_hit(df, pos, df.iloc[pos], ct), geo, pos)
                 break
     return stats
 
@@ -643,6 +782,7 @@ def compute_size_cross(df: pd.DataFrame) -> dict:
                   for _, _, lbl in BUCKETS}
              for ct in ("bullish", "bearish")}
 
+    geo = _geo_arr(df, "k0")
     for pos in event_pos:
         atr_val = atr_arr[pos]
         if pd.isna(atr_val) or atr_val <= 0:
@@ -652,9 +792,7 @@ def compute_size_cross(df: pd.DataFrame) -> dict:
         ct = ct_arr[pos]
         for bc, bp, lbl in BUCKETS:
             if cisd_big == bc and prev_big == bp:
-                stats[ct][lbl]["total"] += 1
-                if barrier_hit(df, pos, df.iloc[pos], ct):
-                    stats[ct][lbl]["runs"] += 1
+                _tally(stats[ct][lbl], barrier_hit(df, pos, df.iloc[pos], ct), geo, pos)
                 break
     return stats
 
@@ -668,6 +806,10 @@ def compute_smt_cisd(df: pd.DataFrame) -> dict:
     split by smt_broke_in_window (D-06/D-07) — the aggregate "w/ SMT"
     bucket is NEVER filtered on survival; the sub-buckets are reported
     alongside it, not instead of it.
+
+    The survived/broke sub-buckets are defined by whether the SMT broke on
+    bars t+1..t+2 — the barrier window itself — so they are outcome-leaking
+    diagnostics (DIAGNOSTIC_BUCKETS): reported, never tested or gated.
     """
     if "swing_smt_tag" not in df.columns:
         raise ValueError("df must contain swing_smt_tag column")
@@ -687,6 +829,7 @@ def compute_smt_cisd(df: pd.DataFrame) -> dict:
     ct_arr    = df["cisd_type"].to_numpy(dtype=object)
     tag_arr   = df["swing_smt_tag"].to_numpy(dtype=object)
     broke_arr = df["smt_broke_in_window"].to_numpy(dtype=bool) if has_broke_col else None
+    geo       = _geo_arr(df, "k0")
     event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
     for pos in event_pos:
         ct  = ct_arr[pos]
@@ -694,14 +837,10 @@ def compute_smt_cisd(df: pd.DataFrame) -> dict:
         if ct not in stats or tag not in stats[ct]:
             continue
         run = barrier_hit(df, pos, df.iloc[pos], ct)
-        stats[ct][tag]["total"] += 1
-        if run:
-            stats[ct][tag]["runs"] += 1
+        _tally(stats[ct][tag], run, geo, pos)
         if tag == "w/ SMT" and has_broke_col:
             sub = "w/ SMT & broke" if broke_arr[pos] else "w/ SMT & survived"
-            stats[ct][sub]["total"] += 1
-            if run:
-                stats[ct][sub]["runs"] += 1
+            _tally(stats[ct][sub], run, geo, pos)
     return stats
 
 
@@ -730,6 +869,7 @@ def compute_smt_role(df: pd.DataFrame) -> dict:
     tag_arr   = df["swing_smt_tag"].to_numpy(dtype=object)
     role_arr  = df["swing_smt_role"].to_numpy(dtype=object)
     event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    geo = _geo_arr(df, "k0")
     for pos in event_pos:
         if tag_arr[pos] != "w/ SMT":
             continue
@@ -737,9 +877,7 @@ def compute_smt_role(df: pd.DataFrame) -> dict:
         role = role_arr[pos]
         if ct not in stats or role not in stats[ct]:
             continue
-        stats[ct][role]["total"] += 1
-        if barrier_hit(df, pos, df.iloc[pos], ct):
-            stats[ct][role]["runs"] += 1
+        _tally(stats[ct][role], barrier_hit(df, pos, df.iloc[pos], ct), geo, pos)
     return stats
 
 
@@ -764,6 +902,7 @@ def compute_smt_block_size(df: pd.DataFrame) -> dict:
     event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
     stats = {ct: {lbl: {"total": 0, "runs": 0} for _, _, lbl in BINS}
              for ct in ("bullish", "bearish")}
+    geo = _geo_arr(df, "k0")
     for pos in event_pos:
         ratio = ratio_arr[pos]
         if pd.isna(ratio):
@@ -771,9 +910,7 @@ def compute_smt_block_size(df: pd.DataFrame) -> dict:
         ct = ct_arr[pos]
         for lo, hi, lbl in BINS:
             if lo <= ratio < hi:
-                stats[ct][lbl]["total"] += 1
-                if barrier_hit(df, pos, df.iloc[pos], ct):
-                    stats[ct][lbl]["runs"] += 1
+                _tally(stats[ct][lbl], barrier_hit(df, pos, df.iloc[pos], ct), geo, pos)
                 break
     return stats
 
@@ -800,20 +937,24 @@ def compute_smt_in_block(df: pd.DataFrame) -> dict:
     tag_arr      = df["swing_smt_tag"].to_numpy(dtype=object)
     in_block_arr = df["cisd_in_smt_block"].to_numpy(dtype=bool)
     event_pos    = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    geo = _geo_arr(df, "k0")
     for pos in event_pos:
         tag = tag_arr[pos]
         if tag not in ("w/ SMT", "expired SMT"):
             continue
         ct  = ct_arr[pos]
         lbl = "cisd_in_block" if in_block_arr[pos] else "cisd_out_block"
-        stats[ct][lbl]["total"] += 1
-        if barrier_hit(df, pos, df.iloc[pos], ct):
-            stats[ct][lbl]["runs"] += 1
+        _tally(stats[ct][lbl], barrier_hit(df, pos, df.iloc[pos], ct), geo, pos)
     return stats
 
 
 def compute_cisd_fvg(df: pd.DataFrame) -> dict:
-    """Barrier run rate split by directional FVG presence at CISD bar (mid0) or next bar (mid1)."""
+    """Barrier run rate split by directional FVG presence at CISD bar (mid0) or next bar (mid1).
+
+    Scored confirm-then-enter from close[t+2] (barrier_hit_after, k=2): mid0
+    needs bar t+1 and mid1 / no_fvg need bar t+2, all inside barrier_hit's
+    window. Every bucket shares the k=2 frame (quick task 260929-mkg).
+    """
     stats = {
         "bullish": {
             "mid0_fvg": {"total": 0, "runs": 0},
@@ -830,21 +971,16 @@ def compute_cisd_fvg(df: pd.DataFrame) -> dict:
     mid0_arr = df["has_dir_fvg_mid0"].to_numpy(dtype=bool)
     mid1_arr = df["has_dir_fvg_mid1"].to_numpy(dtype=bool)
     event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    geo = _geo_arr(df, "k2")
     for pos in event_pos:
         ct  = ct_arr[pos]
-        hit = barrier_hit(df, pos, df.iloc[pos], ct)
+        hit = barrier_hit_after(df, pos, df.iloc[pos], ct, 2)
         if mid0_arr[pos]:
-            stats[ct]["mid0_fvg"]["total"] += 1
-            if hit:
-                stats[ct]["mid0_fvg"]["runs"] += 1
+            _tally(stats[ct]["mid0_fvg"], hit, geo, pos)
         if mid1_arr[pos]:
-            stats[ct]["mid1_fvg"]["total"] += 1
-            if hit:
-                stats[ct]["mid1_fvg"]["runs"] += 1
+            _tally(stats[ct]["mid1_fvg"], hit, geo, pos)
         if not mid0_arr[pos] and not mid1_arr[pos]:
-            stats[ct]["no_fvg"]["total"] += 1
-            if hit:
-                stats[ct]["no_fvg"]["runs"] += 1
+            _tally(stats[ct]["no_fvg"], hit, geo, pos)
     return stats
 
 
@@ -896,7 +1032,12 @@ def compute_fvg_hold(df: pd.DataFrame) -> dict:
 
 
 def compute_cisd_fvg_interaction(df: pd.DataFrame) -> dict:
-    """Barrier run rate cross-tabulated by FVG hold state (held/failed) x mode x bucket."""
+    """Barrier run rate cross-tabulated by FVG hold state (held/failed) x mode x bucket.
+
+    Hold state is classified over the FVG_HOLD_LOOKAHEAD bars after the FVG,
+    which contain the barrier window — every bucket here is outcome-leaking and
+    listed in DIAGNOSTIC_BUCKETS (reported, never tested or gated).
+    """
     stats = {
         "bullish": {
             "mid0": {
@@ -925,6 +1066,7 @@ def compute_cisd_fvg_interaction(df: pd.DataFrame) -> dict:
     mid1_close_arr      = df["fvg_mid1_hold_close_near"].to_numpy(dtype=object)
     mid1_wick_arr       = df["fvg_mid1_hold_wick_far"].to_numpy(dtype=object)
     event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    geo = _geo_arr(df, "k0")
     for pos in event_pos:
         ct  = ct_arr[pos]
         hit = barrier_hit(df, pos, df.iloc[pos], ct)
@@ -933,13 +1075,9 @@ def compute_cisd_fvg_interaction(df: pd.DataFrame) -> dict:
             ("mid1", mid1_close_arr[pos], mid1_wick_arr[pos]),
         ):
             if close_state in ("held", "failed"):
-                stats[ct][bucket]["close_through_near_edge"][close_state]["total"] += 1
-                if hit:
-                    stats[ct][bucket]["close_through_near_edge"][close_state]["runs"] += 1
+                _tally(stats[ct][bucket]["close_through_near_edge"][close_state], hit, geo, pos)
             if wick_state in ("held", "failed"):
-                stats[ct][bucket]["wick_break_far_extreme"][wick_state]["total"] += 1
-                if hit:
-                    stats[ct][bucket]["wick_break_far_extreme"][wick_state]["runs"] += 1
+                _tally(stats[ct][bucket]["wick_break_far_extreme"][wick_state], hit, geo, pos)
     return stats
 
 
@@ -952,17 +1090,22 @@ def compute_sweep(df: pd.DataFrame) -> dict:
     ct_arr    = df["cisd_type"].to_numpy(dtype=object)
     sweep_arr = df["has_dir_sweep"].to_numpy(dtype=bool)
     event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    geo = _geo_arr(df, "k0")
     for pos in event_pos:
         ct  = ct_arr[pos]
         tag = "w/ sweep" if sweep_arr[pos] else "no sweep"
-        stats[ct][tag]["total"] += 1
-        if barrier_hit(df, pos, df.iloc[pos], ct):
-            stats[ct][tag]["runs"] += 1
+        _tally(stats[ct][tag], barrier_hit(df, pos, df.iloc[pos], ct), geo, pos)
     return stats
 
 
 def compute_sssf_swing(df: pd.DataFrame) -> dict:
-    """Barrier run rate split by whether prev bar or CISD bar is a directional swing."""
+    """Barrier run rate split by whether prev bar or CISD bar is a directional swing.
+
+    Scored confirm-then-enter from close[t+1] (barrier_hit_after, k=1): a
+    3-bar swing at the CISD bar needs bar t+1 to confirm it, and t+1 is inside
+    barrier_hit's window (a bullish CISD-bar swing low cannot be stopped at
+    t+1 by construction). All three buckets share the k=1 frame.
+    """
     stats = {
         "bullish": {
             "prev_bar_is_swing": {"total": 0, "runs": 0},
@@ -979,6 +1122,7 @@ def compute_sssf_swing(df: pd.DataFrame) -> dict:
     prev_swing   = df["prev_bar_is_dir_swing"].to_numpy(dtype=bool)
     cisd_swing   = df["cisd_bar_is_dir_swing"].to_numpy(dtype=bool)
     event_pos = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    geo = _geo_arr(df, "k1")
     for pos in event_pos:
         ct = ct_arr[pos]
         if prev_swing[pos]:
@@ -987,9 +1131,7 @@ def compute_sssf_swing(df: pd.DataFrame) -> dict:
             tag = "cisd_bar_is_swing"
         else:
             tag = "neither"
-        stats[ct][tag]["total"] += 1
-        if barrier_hit(df, pos, df.iloc[pos], ct):
-            stats[ct][tag]["runs"] += 1
+        _tally(stats[ct][tag], barrier_hit_after(df, pos, df.iloc[pos], ct, 1), geo, pos)
     return stats
 
 
@@ -1015,6 +1157,8 @@ def compute_candle1_followthrough(df: pd.DataFrame) -> dict:
     c1dir_arr   = df["candle1_close_dir"].to_numpy(dtype=object)
     c1wick_arr  = df["candle1_past_candle0_wick"].to_numpy(dtype=bool)
     event_pos   = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    geo_k0      = _geo_arr(df, "k0")
+    geo_fwd     = _geo_arr(df, "fwd")
 
     for pos in event_pos:
         ct = ct_arr[pos]
@@ -1029,15 +1173,12 @@ def compute_candle1_followthrough(df: pd.DataFrame) -> dict:
 
         row = df.iloc[pos]
 
-        # In-window count (barrier_hit unchanged: lookahead over candle[1]+[2])
-        stats[ct][f"{core}_inwindow"]["total"] += 1
-        if barrier_hit(df, pos, row, ct):
-            stats[ct][f"{core}_inwindow"]["runs"] += 1
+        # In-window count (barrier_hit unchanged: lookahead over candle[1]+[2]).
+        # Outcome-leaking (candle[1] is in the window) -> DIAGNOSTIC_BUCKETS.
+        _tally(stats[ct][f"{core}_inwindow"], barrier_hit(df, pos, row, ct), geo_k0, pos)
 
         # Forward count (re-anchored: lookahead over candle[2]+[3])
-        stats[ct][f"{core}_forward"]["total"] += 1
-        if barrier_hit_forward(df, pos, row, ct):
-            stats[ct][f"{core}_forward"]["runs"] += 1
+        _tally(stats[ct][f"{core}_forward"], barrier_hit_forward(df, pos, row, ct), geo_fwd, pos)
 
     return stats
 
@@ -1078,6 +1219,8 @@ def compute_post_cisd_context(df: pd.DataFrame) -> dict:
     gap_dir_arr = df["candle2_gap_dir"].to_numpy(dtype=object)
     c2wick_arr  = df["candle2_past_candle1_wick"].to_numpy(dtype=bool)
     event_pos   = np.flatnonzero(pd.notna(df["cisd_type"]).to_numpy())
+    geo_fwd     = _geo_arr(df, "fwd")
+    geo_k2      = _geo_arr(df, "k2")
 
     for pos in event_pos:
         ct = ct_arr[pos]
@@ -1089,27 +1232,27 @@ def compute_post_cisd_context(df: pd.DataFrame) -> dict:
         # Gap buckets — only if candle[1] failed (precondition)
         if failed_arr[pos]:
             gap_tag = _GAP_TAGS.get(gap_dir_arr[pos], "failed_gap_flat")
-            stats[ct][gap_tag]["total"] += 1
             if gap_tag == "failed_gap_against":
                 reversal = stats[ct]["failed_gap_against_reversal"]
                 neither = stats[ct]["failed_gap_against_neither"]
                 reversal["total"] += 1
                 neither["total"] += 1
                 outcome = barrier_outcome_forward(df, pos, row, ct)
-                if outcome == "continuation":
-                    stats[ct][gap_tag]["runs"] += 1
-                elif outcome == "reversal":
+                _tally(stats[ct][gap_tag], outcome == "continuation", geo_fwd, pos)
+                if outcome == "reversal":
                     reversal["runs"] += 1
-                else:
+                elif outcome == "neither":
                     neither["runs"] += 1
-            elif barrier_hit_forward(df, pos, row, ct):
-                stats[ct][gap_tag]["runs"] += 1
+            else:
+                _tally(stats[ct][gap_tag], barrier_hit_forward(df, pos, row, ct), geo_fwd, pos)
 
-        # Reading B — separate, no precondition on failed
+        # Reading B — separate, no precondition on failed. candle2_past_
+        # candle1_wick reads close[t+2], inside barrier_hit_forward's
+        # t+2..t+3 window, so it is scored confirm-then-enter from close[t+2]
+        # (barrier_hit_after, k=2; quick task 260929-mkg).
         if c2wick_arr[pos]:
-            stats[ct]["candle2_past_candle1_wick"]["total"] += 1
-            if barrier_hit_forward(df, pos, row, ct):
-                stats[ct]["candle2_past_candle1_wick"]["runs"] += 1
+            _tally(stats[ct]["candle2_past_candle1_wick"],
+                   barrier_hit_after(df, pos, row, ct, 2), geo_k2, pos)
 
     return stats
 
@@ -1144,6 +1287,22 @@ ANALYSES = {
     "volume_zscore":  ("Volume Z-Score (Slot-Normalized)",   compute_volume_zscore,  chart_volume_zscore),
     "session":        ("Session / Time-of-Day",              compute_session,        chart_session),
 }
+
+
+# ── Outcome-leaking diagnostic buckets (quick task 260929-mkg) ────────────────
+# Buckets whose DEFINITION reads bars inside their own scoring window. They
+# cannot be made tradeable by shifting entry (the conditioner is the outcome
+# horizon itself), so they are still reported but carry diagnostic=True and
+# are excluded from the corrected (geo) BH family and every geo verdict.
+
+def is_diagnostic(analysis: str, bucket: str) -> bool:
+    if analysis == "cisd_fvg_interaction":
+        return True   # FVG hold state over t+1..t+FVG_HOLD_LOOKAHEAD
+    if analysis == "smt_cisd" and bucket in ("w/ SMT & survived", "w/ SMT & broke"):
+        return True   # SMT broke on t+1..t+2
+    if analysis == "candle1_followthrough" and bucket.endswith("_inwindow"):
+        return True   # candle[1] close is inside barrier_hit's window
+    return False
 
 
 # ── ANALYSIS_META Registry ────────────────────────────────────────────────────
@@ -1202,7 +1361,13 @@ ANALYSIS_META: dict[str, _AnalysisMeta] = {
 __all__ = [
     # Barrier logic
     "barrier_hit",
+    "barrier_hit_after",
     "_count_consecutive",
+    # Corridor-position null (quick task 260929-mkg)
+    "GEO_BINS",
+    "GEO_FRAMES",
+    "attach_geo_baseline",
+    "is_diagnostic",
     # Compute functions
     "compute_basic",
     "compute_mc",

@@ -11,6 +11,7 @@ REPO_ROOT  = SCRIPT_DIR.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from cisd_analysis import MIN_N
 from scripts.build_reconcile_findings import _side
 
 
@@ -54,12 +55,32 @@ def _bucket_clears(
     return bool(discovery_side != 0 and discovery_side == _side(oos_rate))
 
 
-def rollup_by_tag(bucket_rows: list[dict]) -> list[dict]:
+def _bucket_clears_geo(
+    geo_verdict: object,
+    discovery_geo_lift: float,
+    geo_wf_verdict: object,
+    oos_geo_lift: float,
+    oos_geo_n: float | None,
+) -> bool:
+    """Corridor-position null version of _bucket_clears (quick task 260929-mkg):
+    discovery geo_verdict above-/below-baseline (BH-corrected, geo_n >= MIN_N),
+    geo walk-forward wf-robust, and an OOS lift of the same non-zero sign on
+    >= MIN_N baselined events. Diagnostic buckets never clear."""
+    if pd.isna(geo_verdict) or str(geo_verdict) not in ("above-baseline", "below-baseline"):
+        return False
+    if geo_wf_verdict != "wf-robust":
+        return False
+    if pd.isna(oos_geo_n) or float(oos_geo_n) < MIN_N or pd.isna(oos_geo_lift) or oos_geo_lift == 0:
+        return False
+    return (float(discovery_geo_lift) > 0) == (float(oos_geo_lift) > 0)
+
+
+def rollup_by_tag(bucket_rows: list[dict], flag: str = "clears_bar") -> list[dict]:
     """Roll bucket verdicts up by analysis and tag using a strict majority."""
     grouped: dict[tuple[object, object], list[object]] = {}
     for row in bucket_rows:
         key = (row["analysis"], row["bucket"])
-        grouped.setdefault(key, []).append(row["clears_bar"])
+        grouped.setdefault(key, []).append(row[flag])
 
     rollups: list[dict] = []
     for (analysis, tag), clears_flags in sorted(grouped.items()):
@@ -135,10 +156,39 @@ def build_verdict() -> None:
         ),
         axis=1,
     )
-    bucket_result = merged[_BUCKET_OUTPUT_COLS]
+    bucket_cols = list(_BUCKET_OUTPUT_COLS)
+    rollup_cols = list(_ROLLUP_OUTPUT_COLS)
+    has_geo = ({"geo_verdict", "geo_lift"} <= set(disc.columns)
+               and {"geo_lift", "geo_n"} <= set(oos.columns) and "geo_wf_verdict" in wf.columns)
+    if has_geo:
+        geo = disc[_MERGE_KEYS + ["geo_verdict", "geo_lift"]].rename(columns={"geo_lift": "discovery_geo_lift"})
+        geo = geo.merge(oos[_MERGE_KEYS + ["geo_lift", "geo_n"]].rename(
+            columns={"geo_lift": "oos_geo_lift", "geo_n": "oos_geo_n"}), on=_MERGE_KEYS, how="outer")
+        geo = geo.merge(wf[_MERGE_KEYS + ["geo_wf_verdict"]].drop_duplicates(subset=_MERGE_KEYS),
+                        on=_MERGE_KEYS, how="outer")
+        merged = merged.merge(geo, on=_MERGE_KEYS, how="left")
+        merged["geo_clears_bar"] = merged.apply(
+            lambda row: _bucket_clears_geo(
+                row["geo_verdict"], row["discovery_geo_lift"], row["geo_wf_verdict"],
+                row["oos_geo_lift"], row["oos_geo_n"],
+            ),
+            axis=1,
+        )
+        bucket_cols += ["geo_verdict", "discovery_geo_lift", "geo_wf_verdict",
+                        "oos_geo_lift", "oos_geo_n", "geo_clears_bar"]
+    bucket_result = merged[bucket_cols]
 
     rollup_rows = rollup_by_tag(bucket_result.to_dict(orient="records"))
     rollup_result = pd.DataFrame(rollup_rows, columns=_ROLLUP_OUTPUT_COLS)
+    if has_geo:
+        geo_rollup = pd.DataFrame(
+            rollup_by_tag(bucket_result.to_dict(orient="records"), flag="geo_clears_bar"),
+            columns=_ROLLUP_OUTPUT_COLS,
+        )
+        rollup_result["geo_n_cleared"] = geo_rollup["n_cleared"].to_numpy()
+        rollup_result["geo_verdict"] = geo_rollup["verdict"].to_numpy()
+        rollup_cols += ["geo_n_cleared", "geo_verdict"]
+    rollup_result = rollup_result[rollup_cols]
 
     VERDICT_BUCKETS_PATH.parent.mkdir(parents=True, exist_ok=True)
     VERDICT_ROLLUP_PATH.parent.mkdir(parents=True, exist_ok=True)

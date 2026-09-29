@@ -341,13 +341,20 @@ def test_sweep_depth_and_fvg_size_gate_on_nan_ratio():
     rows with a non-CISD cisd_type are excluded regardless of ratio."""
     from cisd_barriers import compute_sweep_depth, compute_fvg_size
 
-    n = 6
+    # Rows 1 and 4 (the FVG events) are wide bars and the rest stay inside
+    # them, so both are still unresolved at the confirm-then-enter entry
+    # close[t+2] that compute_fvg_size scores from (quick task 260929-mkg).
+    n = 10
+    wide = {1, 4}
     idx = pd.date_range("2026-01-01", periods=n, freq="1h")
     df = pd.DataFrame({
-        "open": [100.0] * n, "high": [101.0] * n, "low": [99.0] * n, "close": [100.0] * n,
-        "cisd_type": ["bullish", "bearish", None, "bullish", "bearish", None],
-        "sweep_depth_atr": [0.8, np.nan, 999.0, 1.2, np.nan, np.nan],
-        "fvg_size_atr":    [np.nan, 0.3, 999.0, np.nan, 1.8, np.nan],
+        "open": [100.0] * n,
+        "high": [105.0 if i in wide else 101.0 for i in range(n)],
+        "low":  [95.0 if i in wide else 99.0 for i in range(n)],
+        "close": [100.0] * n,
+        "cisd_type": ["bullish", "bearish", None, "bullish", "bearish"] + [None] * 5,
+        "sweep_depth_atr": [0.8, np.nan, 999.0, 1.2, np.nan] + [np.nan] * 5,
+        "fvg_size_atr":    [np.nan, 0.3, 999.0, np.nan, 1.8] + [np.nan] * 5,
     }, index=idx)
 
     sweep_stats = compute_sweep_depth(df)

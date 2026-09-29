@@ -72,12 +72,30 @@ CI_LEVEL   = 0.95           # Wilson score CI confidence level
 # fold boundaries, mirroring the OOS_START convention above.
 WALK_FORWARD_FOLDS = ("2021-05-25", "2022-02-16", "2022-11-09", "2023-08-04")
 
+# DATA_START / DATA_END: the frozen data snapshot every constant above was
+# derived from (inclusive ET calendar dates). The parquet files were replaced
+# on 2025-07-18 by a longer UTC-stamped history (2010-06 .. 2026-07); pinning
+# the window reproduces the shared-calendar derivation exactly (len=1627,
+# idx 1138 = OOS_START, fold dates as above). Bars after DATA_END are an
+# untouched holdout — do not widen this window without re-deriving OOS_START
+# and WALK_FORWARD_FOLDS and recording the decision.
+DATA_START = "2020-08-31"
+DATA_END   = "2025-11-21"
+
 
 # ── Data Loading & Resampling ─────────────────────────────────────────────────
 
 def load_1m(path: Path) -> pd.DataFrame:
     df = pd.read_parquet(path)
-    df = df.set_index("DateTime_ET").sort_index()
+    if "DateTime_ET" in df.columns:
+        df = df.set_index("DateTime_ET")
+    elif "datetime_utc" in df.columns:
+        ts = pd.to_datetime(df.pop("datetime_utc"), utc=True)
+        df.index = pd.DatetimeIndex(ts.dt.tz_convert("America/New_York").dt.tz_localize(None), name="DateTime_ET")
+    else:
+        raise ValueError(f"{path}: expected a 'DateTime_ET' or 'datetime_utc' column")
+    df = df.sort_index()
+    df = df.loc[pd.Timestamp(DATA_START):pd.Timestamp(DATA_END) + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1)]
     df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
     df.columns = [c.lower() for c in df.columns]
     return df
@@ -400,11 +418,26 @@ def _annotate_cisd_research(df: pd.DataFrame) -> pd.DataFrame:
     # TF-scoping to 15min/1H (D-02) is enforced in the registry/dispatch
     # layer (Plan 03), NOT here — compute_session stays TF-agnostic per
     # D-14's preferred mechanism, so session_tag is populated on every frame.
+    #
+    # Bars are labeled by their START (resample default), so the tag is taken
+    # at the bar MIDPOINT (label + span/2, span = modal bar spacing). Tagging
+    # the label itself put the 1H 09:00-10:00 bar — the one containing the
+    # 09:30 open — in "overnight" and called the 10:00-11:00 bar "rth_open"
+    # (quick task 260929-mkg). 15min tags are unchanged by this.
+    # minute_of_day (label-based) is still the rvol/zscore slot key below.
     minute_of_day = idx_ax.hour.to_numpy() * 60 + idx_ax.minute.to_numpy()
+    span = pd.Timedelta(0)
+    if len(idx_ax) > 1:
+        diffs = pd.Series(idx_ax[1:] - idx_ax[:-1])
+        counts = diffs[diffs > pd.Timedelta(0)].value_counts()
+        if len(counts):
+            span = counts[counts == counts.max()].index.min()
+    mid_ax = idx_ax + span / 2
+    mid_minute = mid_ax.hour.to_numpy() * 60 + mid_ax.minute.to_numpy()
     session_tag = np.select(
         [
-            (minute_of_day >= RTH_OPEN_START_MIN) & (minute_of_day < RTH_OPEN_END_MIN),
-            (minute_of_day >= RTH_OPEN_END_MIN) & (minute_of_day < RTH_END_MIN),
+            (mid_minute >= RTH_OPEN_START_MIN) & (mid_minute < RTH_OPEN_END_MIN),
+            (mid_minute >= RTH_OPEN_END_MIN) & (mid_minute < RTH_END_MIN),
         ],
         ["rth_open", "rth"],
         default="overnight",
@@ -927,6 +960,8 @@ __all__ = [
     "MIN_N",
     "CI_LEVEL",
     "WALK_FORWARD_FOLDS",
+    "DATA_START",
+    "DATA_END",
     # Data loading & resampling
     "load_1m",
     "_normalize_resample_rule",

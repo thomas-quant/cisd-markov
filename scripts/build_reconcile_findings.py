@@ -113,6 +113,32 @@ def determine_verdict(
     return "not-confirmed"
 
 
+def determine_geo_verdict(
+    discovery_geo_verdict: object,
+    discovery_geo_lift: float,
+    oos_geo_lift: float,
+    oos_geo_n: float | None,
+) -> str:
+    """OOS verdict on the corridor-position null (quick task 260929-mkg).
+
+    Only buckets that passed the discovery geo gate (BH-corrected, geo_n >=
+    MIN_N, verdict above-/below-baseline) are eligible. Confirmed iff the OOS
+    slice carries >= MIN_N baselined events and its lift has the same
+    non-zero sign. Non-eligible buckets pass their discovery geo_verdict
+    through unchanged ("not-significant", "below-n", "diagnostic", ...).
+    """
+    if pd.isna(discovery_geo_verdict):
+        return "no-baseline"
+    verdict = str(discovery_geo_verdict)
+    if verdict not in ("above-baseline", "below-baseline"):
+        return verdict
+    if pd.isna(oos_geo_n) or float(oos_geo_n) < MIN_N or pd.isna(oos_geo_lift) or oos_geo_lift == 0:
+        return "not-confirmed"
+    if (float(discovery_geo_lift) > 0) == (float(oos_geo_lift) > 0):
+        return "confirmed"
+    return "not-confirmed"
+
+
 # ── Reconciliation ────────────────────────────────────────────────────────────
 
 def reconcile() -> None:
@@ -170,8 +196,29 @@ def reconcile() -> None:
         axis=1,
     )
 
+    # Corridor-position null (quick task 260929-mkg): additive columns, only
+    # when both manifests carry them (older manifests reconcile unchanged).
+    output_cols = list(_OUTPUT_COLS)
+    if {"geo_lift", "geo_verdict"} <= set(disc.columns) and {"geo_lift", "geo_n"} <= set(oos.columns):
+        geo = disc[_MERGE_KEYS + ["geo_lift", "geo_verdict"]].rename(columns={
+            "geo_lift": "discovery_geo_lift", "geo_verdict": "discovery_geo_verdict"})
+        geo = geo.merge(
+            oos[_MERGE_KEYS + ["geo_lift", "geo_n"]].rename(columns={
+                "geo_lift": "oos_geo_lift", "geo_n": "oos_geo_n"}),
+            on=_MERGE_KEYS, how="outer")
+        merged = merged.merge(geo, on=_MERGE_KEYS, how="left")
+        merged["geo_verdict"] = merged.apply(
+            lambda row: determine_geo_verdict(
+                row["discovery_geo_verdict"], row["discovery_geo_lift"],
+                row["oos_geo_lift"], row["oos_geo_n"],
+            ),
+            axis=1,
+        )
+        output_cols += ["discovery_geo_lift", "discovery_geo_verdict",
+                        "oos_geo_lift", "oos_geo_n", "geo_verdict"]
+
     # Enforce D-09 column order
-    result = merged[_OUTPUT_COLS]
+    result = merged[output_cols]
 
     # Write output
     FINDINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
