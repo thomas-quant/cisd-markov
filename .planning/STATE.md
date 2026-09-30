@@ -109,11 +109,12 @@ None yet.
 [Issues that affect future work]
 
 - SMT integration path remains untested in CI (hardcoded WSL path); known limitation carried from v1.0
-- [2026-09-29] SMT package is MISSING from `_SMT_PKG_PATH` (and the lowercase `finance/` path) — regenerated manifests have no smt_* rows; Phase 9 SMT verdicts cannot be re-evaluated under the corridor null until it is restored
+- [2026-09-30] SMT package lost locally; restored on node from github.com/thomas-quant/SMT @ 6300e0c (SMT_PKG_PATH). SMT rows regenerated; characterization re-pinned (small drift, data vs version inseparable). Local runs still have no SMT unless SMT_PKG_PATH is set
 - [2026-09-29] Original DateTime_ET parquet snapshot is gone (replaced by a UTC vendor history); window pinned to 2020-08-31..2025-11-21, bars differ slightly (characterization re-pinned)
-- [2026-09-29] Sacred OOS NOT re-run under the corrected method; OOS manifest, validation_findings.csv and post_cisd_verdict*.csv in output/ are STALE (old method/old data). Decision needed: re-run the sacred OOS for the frozen geo discovery verdicts, and/or use the untouched 2025-11-22..2026-07-17 bars as a fresh holdout
+- [2026-09-30] RESOLVED: geo discovery + walk-forward frozen (66cfb21), then fresh holdout 2025-11-22..2026-07-17 run (primary) + old OOS slice (secondary). Holdout: 51/52 same sign, 23/52 |z|>=1.96, lift ratio ~0.85. Findings/post-CISD regenerated for both
 - [2026-09-29] tests/golden/*.csv.gz are stale (pre-fix, with SMT rows); only the opt-in CISD_PERF_CHAR test reads them — refresh after SMT + OOS decisions
-- [2026-09-29] geo_z assumes independent events; effective-n (overlapping windows, NQ/ES duplication, nested buckets) still uncorrected
+- [2026-09-30] geo_z now cluster-robust (session day / week), pooled NQ+ES one-test-per-bucket, ATR-regime strata, 3pp TOST. Still open: nested/overlapping buckets not independent; windows straddling cluster boundaries not merged
+- Open: expectancy study not re-run on the surviving buckets (win-rate lift != payoff); conditioning_features_report.csv, smt_invalidation_report.csv and tests/golden are stale
 - Phase 6 correction/walk-forward math is net-new (no prior MHT/walk-forward code in `scripts/build_validation.py`); needs its own characterization tests
 
 ### Roadmap Evolution
@@ -150,6 +151,5 @@ Resume file: .planning/quick/260929-mkg-fix-critical-review-leakage-null-session
 
 ## Operator Next Steps
 
-- Decide the OOS question (re-run sacred OOS for frozen geo verdicts and/or fresh 2025-11-22..2026-07-17 holdout), then run build_reconcile_findings.py + build_post_cisd_verdict.py
-- Restore the SMT package to re-evaluate Phase 9 SMT buckets under the corridor null
-- Phase 11 gate must read geo_verdict / geo_wf_verdict / OOS geo verdicts, NOT corrected_pass / wf_verdict (0.5 null). Surviving discovery families: candle body size, size_cross, wick / wick_distance, low-volume penalty (rvol / volume_zscore), post-CISD gap buckets. Retracted: cisd_fvg, fvg_size, sssf_swing CISD-bar swing, Reading B, session (except one cell)
+- Phase 11 gate reads pooled NQ+ES rows: geo_verdict (discovery), geo_wf_verdict, and validation_findings_holdout.csv / post_cisd_verdict_holdout*.csv — NOT corrected_pass / wf_verdict (0.5 null) and not per-instrument rows.
+- Before any tradability claim: re-run the expectancy study on the surviving buckets (win-rate lift is not payoff). Surviving discovery families: candle body size, size_cross, wick / wick_distance, low-volume penalty (rvol / volume_zscore), post-CISD gap buckets. Retracted: cisd_fvg, fvg_size, sssf_swing CISD-bar swing, Reading B, session (except one cell)

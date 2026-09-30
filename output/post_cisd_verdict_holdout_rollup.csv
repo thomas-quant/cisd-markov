@@ -1,0 +1,13 @@
+analysis,tag,n_buckets,n_cleared,verdict,geo_n_buckets,geo_n_cleared,geo_verdict
+candle1_followthrough,against_forward,16,12,cleared,8,0,not-cleared
+candle1_followthrough,against_inwindow,16,12,cleared,8,0,not-cleared
+candle1_followthrough,with_past_wick_forward,16,12,cleared,8,0,not-cleared
+candle1_followthrough,with_past_wick_inwindow,16,12,cleared,8,0,not-cleared
+candle1_followthrough,with_within_wick_forward,16,8,not-cleared,8,0,not-cleared
+candle1_followthrough,with_within_wick_inwindow,16,9,cleared,8,0,not-cleared
+post_cisd_context,candle2_past_candle1_wick,16,0,not-cleared,8,0,not-cleared
+post_cisd_context,failed_gap_against,16,10,cleared,8,2,not-cleared
+post_cisd_context,failed_gap_against_neither,16,10,cleared,8,0,not-cleared
+post_cisd_context,failed_gap_against_reversal,16,10,cleared,8,0,not-cleared
+post_cisd_context,failed_gap_flat,16,10,cleared,8,0,not-cleared
+post_cisd_context,failed_gap_with,16,10,cleared,8,2,not-cleared

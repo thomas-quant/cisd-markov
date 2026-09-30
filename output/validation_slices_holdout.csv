@@ -1,0 +1,9 @@
+timeframe,instrument,slice,n_bars,start_date,end_date
+Daily,NQ,holdout,204,2025-11-23,2026-07-17
+Daily,ES,holdout,204,2025-11-23,2026-07-17
+4H,NQ,holdout,1036,2025-11-23,2026-07-17
+4H,ES,holdout,1036,2025-11-23,2026-07-17
+1H,NQ,holdout,3817,2025-11-23,2026-07-17
+1H,ES,holdout,3817,2025-11-23,2026-07-17
+15min,NQ,holdout,15255,2025-11-23,2026-07-17
+15min,ES,holdout,15255,2025-11-23,2026-07-17
