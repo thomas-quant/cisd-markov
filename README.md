@@ -15,6 +15,7 @@ The current research surface also includes standalone analyses for CISD-linked F
 
 > **⚠ Methodology correction — 2026-09-29 (quick task 260929-mkg). Read [Corrected Null & Leakage Fixes](#corrected-null--leakage-fixes-2026-09-29) before trusting any badge below.**
 > Every `✓ CONFIRMED` / `corrected` / `wf-robust` / `CORRECTED-BAR CLEARED` badge in this README was earned against a **coin-flip null (rate = 0.5)**. Because the barrier's target and stop are the CISD candle's own extremes, the hit rate is set mostly by where the close sits inside that candle (31% → 81% across close-location quintiles on NQ 1H), so those badges largely certify barrier geometry, not an edge. Separately, the FVG, CISD-bar-swing, FVG-size, FVG-interaction and post-CISD Reading-B buckets **read bars inside their own scoring window** and are retracted in their published form. The tables below are kept for provenance; the `geo_*` manifest columns are the corrected evidence.
+> **2026-09-30:** the corrected null now also controls the ATR regime and uses effective n (day/week clusters, pooled NQ+ES, one test per bucket). Discovery verdicts were frozen and then tested on a fresh 8-month holdout: 51 of 52 testable significant buckets kept their sign, and lifts shrank ~15–20%. See [Corrected results](#corrected-results-regenerated-2026-09-30-discovery-walk-forward-fresh-holdout).
 
 ### How to read these tables
 
@@ -620,34 +621,70 @@ Quick task `260929-mkg` (`.planning/quick/260929-mkg-*`). Everything here is add
 - `cisd_fvg_interaction` (hold state over the next 10 bars), `smt_cisd` "w/ SMT & survived/broke" (SMT broke on `t+1..t+2`) and `candle1_followthrough` `*_inwindow` are defined by the outcome window itself and cannot be fixed by moving entry: they carry `diagnostic = True` and are excluded from the corrected BH family and every geo verdict.
 - `tests/test_leakage_and_geo.py` perturbs every bar after each tag's known-at bar on a random walk and asserts the tag does not change — a standing guard against new look-ahead.
 
-**2. Corridor-position null.** A bucket is tested against what its events' **entry position in the stop→target corridor** predicts, not against 0.5. `attach_geo_baseline()` gives each CISD the hit rate of all same-slice CISDs with the same direction, scoring frame and 10%-corridor bin (frozen fixed-width bins); a bucket's expected hits are the sum of those rates. New manifest columns: `diagnostic`, `geo_n`, `geo_expected_rate`, `geo_lift` (observed − expected rate), `geo_z`, `geo_p_value`; discovery adds a separate global BH family (`geo_bh_q_value`, `geo_bh_significant`, `geo_corrected_pass`, `geo_verdict` ∈ above-baseline / below-baseline / not-significant / below-n / diagnostic / no-baseline); walk-forward adds `geo_fold_verdict` / `geo_wf_verdict` (same-sign lift, per-fold `MIN_N`); `validation_findings.csv` and `post_cisd_verdict*.csv` add geo verdicts.
-- **What it controls:** corridor position only. Volatility / timeout differences between buckets are *not* removed (e.g. RTH bars time out more often than overnight bars).
-- **What it does not fix:** `geo_z` assumes independent events. Overlapping 2-bar windows, NQ/ES near-duplication and nested buckets are not corrected, so `geo_z` overstates evidence; no effective-n is reported yet. `not-significant` is a statement about this sample, not evidence of no effect.
-- The baseline includes the bucket's own events (indirect standardization), which shrinks lift toward zero — conservative. Over the whole population lift is exactly 0 (`basic` always reads `not-significant`, by construction).
+**2. Corridor-position null (with volatility strata and effective n).** A bucket is tested against what its events' **entry position in the stop→target corridor** and **volatility regime** predict, not against 0.5. `attach_geo_baseline()` gives each CISD the hit rate of all same-slice CISDs with the same direction, scoring frame, **ATR-regime tercile** and 10%-corridor bin; a bucket's expected hits are the sum of those rates. `atr_regime` = ATR(14) as of `t-1` ÷ its trailing 100-bar median. It is lagged one bar so the CISD candle's own range never feeds it, since that would co-vary with the body-size buckets. Terciles are cut within each baselined slice, and the warm-up NaN is its own stratum.
+- **Effective n.** Events are clustered by CME session day (18:00 ET roll) on 15min/1H and by session week on 4H/Daily. The z-test uses a cluster-robust variance `V = max(V_cluster, V_iid)`, which never credits negative within-cluster correlation. Manifests carry `geo_clusters`, `geo_deff` (design effect), `geo_n_eff`, `geo_se`, `geo_z` (clustered) and `geo_z_iid` (old independence z, provenance only). Every `MIN_N` gate on the geo path uses `geo_n_eff`.
+- **One test per bucket.** Each bucket also gets a pooled `NQ+ES` row, in which same-day NQ and ES events share a cluster. The geo BH family and all geo verdicts use pooled rows only, so NQ and ES never count as two confirmations. Per-instrument rows keep clustered stats as description (`geo_verdict = per-instrument`). Pooled rows are excluded from the legacy 0.5-null family, so legacy numbers do not move.
+- **Equivalence, minimum effect 3 pp.** `geo_mde` is the lift detectable with 80% power (two-sided 5%, uncorrected), and `geo_equiv` is a per-bucket TOST: the 90% CI of the lift lies inside ±3 pp. Pooled verdicts are `above-baseline` / `below-baseline` (BH-significant, `geo_n_eff ≥ 50`), `within-3pp` (not significant and TOST-equivalent), `inconclusive` (neither), `below-n`, `diagnostic` or `no-baseline`. `inconclusive` means the sample cannot tell, not that the effect is absent.
+- **What it still does not fix.** Windows that straddle a cluster boundary are not merged. Few-cluster cells (Daily/4H weeks) have noisy variance estimates. The baseline includes the bucket's own events (indirect standardization), which shrinks lift toward zero. Nested and overlapping buckets (`wick` / `wick_distance` / `combined`, `candle_size` / `size_cross`, `rvol` / `volume_zscore`) are **not** independent findings. Over the whole population lift is 0 by construction, so `basic` always reads `within-3pp`.
 
 **3. Session tagging.** Session was tagged at the bar *label*; 1H bars are labeled by their start, so the 09:00–10:00 bar (containing the open) was `overnight` and the 10:00–11:00 bar was `rth_open`. Tags are now taken at the bar midpoint (15min tags unchanged). Session cases/filters are intraday-only in the expectancy study and forward-returns explorer (review WR-01).
 
-**4. Data snapshot.** The parquet files were replaced by a UTC-stamped vendor history (2010-06 → 2026-07-17). `load_1m` converts to ET and pins `DATA_START..DATA_END = 2020-08-31..2025-11-21`, which reproduces `OOS_START` and all four `WALK_FORWARD_FOLDS` exactly; the bars differ slightly from the lost original (characterization values re-pinned: intraday n ≤ 0.3%, rates ≤ 0.2 pp). **2025-11-22 → 2026-07-17 is untouched data** and can serve as a fresh holdout.
+**4. Data snapshot.** The parquet files were replaced by a UTC-stamped vendor history (2010-06 → 2026-07-17). `load_1m` converts to ET and pins `DATA_START..DATA_END = 2020-08-31..2025-11-21`, which reproduces `OOS_START` and all four `WALK_FORWARD_FOLDS` exactly; the bars differ slightly from the lost original (characterization values re-pinned: intraday n ≤ 0.3%, rates ≤ 0.2 pp). **2025-11-22 → 2026-07-17** (`HOLDOUT_END`) was held out until the 2026-09-30 run below (`build_validation.py --holdout`).
 
-### Corrected discovery results (regenerated 2026-09-29, discovery slice only)
+### Corrected results (regenerated 2026-09-30: discovery, walk-forward, fresh holdout)
 
-Regenerated **without the SMT package** (it is no longer at `_SMT_PKG_PATH`), so no `smt_*` rows; the sacred OOS slice has **not** been re-run (see below). 1,320 buckets; under the legacy 0.5 null 851 were `corrected_pass`. Under the corridor null (separate global BH family over 1,069 non-diagnostic buckets with a baseline): **48 above-baseline, 38 below-baseline**, 703 not-significant, 193 below-n, 176 diagnostic, 162 no-baseline (non-barrier outcomes, significance's own event set, empty mid1 cells).
+Regenerated with SMT restored from `github.com/thomas-quant/SMT @ 6300e0c`. The original local copy was lost, so SMT numbers may differ slightly from the Phase 9 versions: characterization cells moved n −4..+7 and rates ≤ 0.7 pp, and that change cannot be split between the new data and the SMT version. Discovery and walk-forward verdicts were committed (`66cfb21`) **before** the holdout was run.
 
-| Family | What the old harness said | Corrected (discovery, lift = observed − corridor baseline) |
-|---|---|---|
-| `cisd_fvg` / `fvg_size` | FVG CISDs ≈90–95%, "STRONG" | **Retracted.** Enterable mid0-FVG setups are rare (NQ 15min bull n=198 vs 2,581) and run **below** baseline (NQ 15min: −10 to −12 pp, geo-significant); mid1 empty by construction; no FVG-size bin clears. |
-| `sssf_swing` | CISD-bar swing ≈86–91% | **Retracted.** At baseline in every cell (lifts within ±3 pp, none significant). |
-| `post_cisd_context` Reading B | ≈87–89%, cleared | **Retracted.** n drops to 36–64 per 15min cell, lifts not significant. |
-| `wick` / `wick_distance` | 55% → 76% monotonic, "standout" | **Real but ~5–10× smaller.** Past-wick +2 to +5 pp on 15min (NQ/ES), within-wick −1 to −2 pp; far-past-wick +5 to +9 pp on 15min ES / 1H ES bear. |
-| `candle_size` / `size_cross` | mixed | **Clearest residual effect.** Big-body CISDs +4 to +8 pp, small-body (<0.5× ATR) −1 to −3 pp on 15min; ">1.5× ATR" +8 pp on 1H. |
-| `rvol` / `volume_zscore` | "MODEST, monotonic" | **Low-volume penalty, not a high-volume edge.** <0.7× slot / <−0.5σ: −2 to −3.5 pp on 15min/1H (−17 to −22 pp on Daily, n≈53–75). Elevated volume: isolated +2.5 to +5 pp cells. |
-| `session` | "rth_open > rth > overnight, STRONG" | **Mostly not significant** once corridor position is controlled; one cell (15min NQ bull `rth_open`, +4.5 pp) clears. |
-| `post_cisd_context` gap buckets | cleared | `failed_gap_with` +2 to +4 pp, `failed_gap_against` −2 to −5.5 pp (15min, all four cells each). |
-| `mc`, `sweep`, `sweep_depth` | confirmed | Nothing clears; lifts ≤ 7 pp (`mc`, `sweep`) — not evidence of absence. |
+**Discovery (pooled NQ+ES, 756 buckets):**
 
-**Caveats that travel with these numbers.** (1) `geo_z` assumes independent events — overlapping windows, NQ/ES near-duplicates and nested buckets are not corrected, so the 86 are an upper bound on what survives an effective-n correction; NQ and ES cells of the same bucket are not independent confirmations. (2) Effects are 2–8 pp on a ~60% base; nothing here has been checked for costs or tradability. (3) "not-significant" rows are underpowered at their n, not shown to be zero — no equivalence test has been run. (4) OOS: the sacred slice was already consumed under the old method; re-running it for these frozen discovery verdicts, or using the untouched 2025-11-22 → 2026-07-17 data as a fresh holdout, is an open decision.
+| Verdict | Buckets |
+|---|---|
+| above-baseline | 37 |
+| below-baseline | 25 |
+| within-3pp | 146 |
+| inconclusive | 283 |
+| below-n | 88 |
+| diagnostic | 104 |
+| no-baseline | 73 |
 
-**Walk-forward (corridor null, 4 anchored folds inside discovery).** Of the 86 geo-significant discovery buckets, **73 are `geo_wf_verdict = wf-robust`** (same-sign lift in > 50% of folds, per-fold `MIN_N`): all of `candle_size` 15min (14/15), `size_cross` (6/6), `wick` (6/6), `wick_distance` (8/9), `combined` (7/7), the `post_cisd_context` gap buckets (9/9) and `candle1_followthrough` forward buckets (3/3); `rvol` 8/12 and `volume_zscore` 5/9 (the Daily low-volume cells are not robust); both negative `cisd_fvg` cells are fragile. Over all 1,320 buckets: 290 geo wf-robust vs 644 legacy wf-robust. Walk-forward folds share the discovery data and are not independent of the discovery verdict.
+The median design effect is 1.31 (IQR 1.17–1.44), so clustering removes ~25% of nominal n. It removes ~45% on Daily. The median MDE is 4.5 pp, which is why most untested-looking cells are `inconclusive`, not `within-3pp`. Of the 62 significant buckets, 52 are geo `wf-robust` across the 4 discovery folds. Those folds share the discovery data, so this is not independent confirmation.
+
+**Fresh holdout (2025-11-22 → 2026-07-17, never touched before this run):** 52 of the 62 significant buckets have `geo_n_eff ≥ 50` in the holdout.
+- **51/52 keep the sign of their discovery lift**, and 0 reverse significantly.
+- 23/52 are individually significant (|z| ≥ 1.96) on 8 months of data.
+- Lifts shrink: the median holdout/discovery ratio is 0.79 and the inverse-variance-weighted ratio is 0.85, the expected winner's-curse haircut.
+- The old OOS slice (2024-04-30 → 2025-11-21, secondary check) agrees: 53/54 same sign, 31/54 significant, weighted ratio 0.82.
+- **The 51/52 is not 52 independent confirmations.** The buckets nest and overlap heavily; the distinct families are roughly the eight in the table below.
+
+| Family (15min unless noted) | Discovery lift | Holdout lift (±95% CI) | Read |
+|---|---|---|---|
+| Candle body `1x–1.5x` / `>1.5x ATR` | +4.7 to +6.6 pp | +3.5 to +7.6 (±3.7–5.4) | holds; 1H `>1.5x` +8.5 / +11.7 (±9) |
+| Candle body `<0.5x ATR` | −1.8 / −2.4 | −2.3 / −2.0 (±1.8) | holds |
+| `size_cross` Big CISD / Small prev | +4.7 / +6.6 | +5.1 / +5.5 (±3.5) | holds |
+| Past-wick (`wick`, `wick_distance`, `combined` 1c) | +2.5 to +4.3 | +2.2 to +3.5 (±2–3) | holds, smaller |
+| `post_cisd_context` failed_gap_with / against | +3.0 / −3.6 (bull), +2.9 / −3.2 (bear) | +2.4 / −3.6, +1.2 / −2.5 (±2) | holds, bear side weaker |
+| Low volume (`rvol <0.7x`, `volume_zscore <−0.5σ`) | −2.1 to −2.4 | −0.6 to −3.3 (±2) | mixed: bearish holds, bullish fades |
+| `session` rth_open | +3.6 / +3.8 | +7.5 / +5.7 (±5.5) | survives the ATR-regime control; wide CI |
+| `cisd_fvg` mid0 (enterable at `close[t+2]`) | −7.9 to −11.2 **below** baseline | −3.2 (±12), n_eff ≈ 51 | untestable in holdout |
+
+**Within ±3 pp (equivalence, discovery).** These buckets add less than 3 pp over corridor position and volatility (90% CI inside ±3 pp):
+- `sweep` w/ sweep (15min and 1H): +0.7 to +1.5 pp.
+- `sssf_swing` swing tags (15min): −0.7 to −0.1 pp.
+- **15min `smt_cisd` w/ SMT: +1.5 pp (95% CI ±1.7).**
+- `session` rth / overnight.
+- Most `mc` and `effort_result` cells.
+
+On 4H/1H/Daily the same tags are `inconclusive` (MDE 5–16 pp), so nothing is claimed there.
+
+**Implication check.** A 3–6 pp lift on a ~60–75% base, over a 2-bar hold with the CISD candle's own extremes as target and stop, changes the win rate but says nothing yet about payoff. The R-multiple depends on where entry sits in the corridor, and that same corridor position is what the baseline controls for. None of this is cost- or slippage-checked. A tradability verdict needs the expectancy study (`scripts/build_expectancy.py`) re-run on these buckets.
+
+**Caveats that travel with these numbers.** (1) Nested and overlapping buckets are not independent. (2) The holdout is 8 months; Daily/4H cells are mostly below n there. (3) `inconclusive` is a statement about power, not about the market. (4) The baseline controls corridor position and ATR regime only. (5) Walk-forward folds share discovery data. (6) The per-bucket TOST is uncorrected for multiplicity.
+
+Artifacts:
+- `output/validation_manifest_{discovery,walkforward,holdout,oos}.csv`
+- `output/validation_findings_holdout.csv`, `output/post_cisd_verdict_holdout*.csv` (primary)
+- `output/validation_findings.csv`, `output/post_cisd_verdict*.csv` (old OOS, secondary)
+- Charts: the white tick on every bar is the corridor/ATR-regime baseline for that bucket.
 
 
 ## Configuration
