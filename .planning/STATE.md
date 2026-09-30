@@ -114,7 +114,8 @@ None yet.
 - [2026-09-30] RESOLVED: geo discovery + walk-forward frozen (66cfb21), then fresh holdout 2025-11-22..2026-07-17 run (primary) + old OOS slice (secondary). Holdout: 51/52 same sign, 23/52 |z|>=1.96, lift ratio ~0.85. Findings/post-CISD regenerated for both
 - [2026-09-29] tests/golden/*.csv.gz are stale (pre-fix, with SMT rows); only the opt-in CISD_PERF_CHAR test reads them — refresh after SMT + OOS decisions
 - [2026-09-30] geo_z now cluster-robust (session day / week), pooled NQ+ES one-test-per-bucket, ATR-regime strata, 3pp TOST. Still open: nested/overlapping buckets not independent; windows straddling cluster boundaries not merged
-- Open: expectancy study not re-run on the surviving buckets (win-rate lift != payoff); conditioning_features_report.csv, smt_invalidation_report.csv and tests/golden are stale
+- [2026-09-30] Payoff (scripts/build_barrier_payoff.py): the 2-bar CISD-candle barrier trade loses before costs (all CISDs mean R -0.12..-0.20 gross); surviving buckets lift R +0.05..+0.19 (45/45 replicate in holdout) but no bucket has net-mean-R CI above 0 — breakeven at best in this frame. Phase 11 gate must weigh this: features may still inform a different execution frame (new hypothesis)
+- Open: conditioning_features_report.csv, smt_invalidation_report.csv and tests/golden are stale; cisd_expectancy (single-barrier) has no CI / costs / baseline
 - Phase 6 correction/walk-forward math is net-new (no prior MHT/walk-forward code in `scripts/build_validation.py`); needs its own characterization tests
 
 ### Roadmap Evolution
