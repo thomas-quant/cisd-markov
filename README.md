@@ -676,7 +676,20 @@ The median design effect is 1.31 (IQR 1.17–1.44), so clustering removes ~25% o
 
 On 4H/1H/Daily the same tags are `inconclusive` (MDE 5–16 pp), so nothing is claimed there.
 
-**Implication check.** A 3–6 pp lift on a ~60–75% base, over a 2-bar hold with the CISD candle's own extremes as target and stop, changes the win rate but says nothing yet about payoff. The R-multiple depends on where entry sits in the corridor, and that same corridor position is what the baseline controls for. None of this is cost- or slippage-checked. A tradability verdict needs the expectancy study (`scripts/build_expectancy.py`) re-run on these buckets.
+**Payoff of the same trade (`scripts/build_barrier_payoff.py` → `output/barrier_payoff.{csv,md}`).** A rate lift is not a payoff lift: a higher hit rate usually means entry sits closer to the target, which makes the reward smaller in R. So the surviving buckets were re-scored on the trade the rate was measured on:
+- **The trade:** entry at `close[t+k]`, stop at the CISD candle's opposite extreme (−1R), target at its near extreme, 2 bars, otherwise marked at the close.
+- **What's reported:** mean R, and the lift in mean R over the same corridor-bin × ATR-regime baseline, with cluster-robust 95% CIs.
+- **Costs** are subtracted, not tested. The assumption is 1 tick of slippage per side plus ~$4 commission round trip, i.e. 0.70 pt NQ / 0.58 pt ES.
+
+Results:
+- **The trade itself loses money before costs.** All CISDs: mean R gross −0.12 (15min, 1H), −0.17 (4H), −0.20 (Daily). Net on 15min: −0.29 discovery, −0.23 holdout; costs are ~0.1R at a 6–11 pt median risk. Winners are small (entry near the target) and losers are the full candle.
+- **The surviving buckets make it less bad, not good.** Their R lifts are real and replicate: 45/45 buckets with holdout n ≥ 100 keep the sign of their net R lift. For example, 15min `>1.5x ATR` body is +0.11 to +0.19 R over baseline, and past-wick is +0.05 to +0.10 R.
+- **But absolute expectancy stays ≤ 0.**
+  - In discovery, 55 of 62 buckets have a net-mean-R CI entirely below zero, and **no bucket has a CI entirely above zero** in either slice.
+  - The best cells are roughly breakeven: 1H `>1.5x ATR` bearish −0.007 ± 0.031 R (holdout +0.009 ± 0.058), 1H far-past-wick bearish −0.005 ± 0.034 R, and 15min `>1.5x ATR` body −0.06 ± 0.02 R net in discovery (upper bound −0.04 R).
+  - The Daily cells (+0.04 to +0.05 R) rest on n = 66–83 with ±0.07 CIs.
+- **Implication.** Within this execution frame (CISD-candle target and stop, 2 bars), the data are consistent with a breakeven-at-best filter on a losing base trade, not with a tradable edge. The lifts may still matter as **features** for a different frame: another target/stop geometry, a longer horizon, or a sizing rule. That is a new hypothesis and has not been tested here.
+- `cisd_expectancy.{csv,md}` (single barrier, open upside to 7 bars) was re-run with SMT. Its small positive gross R on NQ (+0.03 to +0.11 at 7 bars) has **no CI, no costs, no corridor baseline, and runs over a strongly trending 2020–25 NQ**. Read it as descriptive, not as an edge.
 
 **Caveats that travel with these numbers.** (1) Nested and overlapping buckets are not independent. (2) The holdout is 8 months; Daily/4H cells are mostly below n there. (3) `inconclusive` is a statement about power, not about the market. (4) The baseline controls corridor position and ATR regime only. (5) Walk-forward folds share discovery data. (6) The per-bucket TOST is uncorrected for multiplicity.
 
@@ -684,6 +697,7 @@ Artifacts:
 - `output/validation_manifest_{discovery,walkforward,holdout,oos}.csv`
 - `output/validation_findings_holdout.csv`, `output/post_cisd_verdict_holdout*.csv` (primary)
 - `output/validation_findings.csv`, `output/post_cisd_verdict*.csv` (old OOS, secondary)
+- `output/barrier_payoff.{csv,md}` (payoff of the same barrier trade, discovery + holdout)
 - Charts: the white tick on every bar is the corridor/ATR-regime baseline for that bucket.
 
 
